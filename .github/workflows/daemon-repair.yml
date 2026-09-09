@@ -20,29 +20,17 @@ jobs:
     if: github.repository == 'dandibbert/paseo'
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    permissions:
-      contents: write
     outputs:
       revision: ${{ steps.revision.outputs.sha }}
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.ref }}
-      - name: Apply verified sandbox repair and commit source
-        shell: bash
-        run: |
-          set -euo pipefail
-          if test -f .github/patches/daemon-repair.gz.00; then
-            cat .github/patches/daemon-repair.gz.0[0-5] | gzip -dc > "$RUNNER_TEMP/daemon-repair.patch"
-            echo "46f5d4dfdc68dc92fe783428e55027081eab3b7dba7462665aa37dab21fa23f4  $RUNNER_TEMP/daemon-repair.patch" | sha256sum -c -
-            git apply --check "$RUNNER_TEMP/daemon-repair.patch"
-            git apply --index "$RUNNER_TEMP/daemon-repair.patch"
-            git rm .github/patches/daemon-repair.gz.0[0-5]
-            git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m 'fix(server): bound timeline payload retention and recover relay attachments'
-            git push origin HEAD:refs/heads/fix/daemon-memory-relay-recovery
-          fi
+          ref: ${{ github.sha }}
+          persist-credentials: false
       - id: revision
         run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+      - name: Regression check for personal signing policy
+        run: python3 packages/desktop/scripts/verify-repair-signature.py --self-test
 
   validate:
     needs: source
@@ -104,7 +92,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - runner: macos-14
+          - runner: macos-15
             arch: arm64
           - runner: macos-15-intel
             arch: x64
@@ -140,18 +128,22 @@ jobs:
           NODE
       - name: Build ad-hoc signed macOS app without publishing
         run: |
-          npm run build:desktop -- --publish never --mac --${{ matrix.arch }} -c.mac.identity=- -c.mac.notarize=false -c.publish.owner=dandibbert -c.publish.repo=paseo -c.publish.channel=repair
+          npm run build:desktop -- --publish never --mac --${{ matrix.arch }} \
+            -c.mac.identity=- -c.mac.notarize=false \
+            -c.mac.entitlements=build/entitlements.mac.repair.plist \
+            -c.mac.entitlementsInherit=build/entitlements.mac.repair.plist \
+            -c.publish.owner=dandibbert -c.publish.repo=paseo -c.publish.channel=repair
       - name: Test filesystem and relay recovery on macOS
         working-directory: packages/server
         run: |
           npx vitest run src/server/relay-transport.test.ts src/server/agent/timeline-payload-store.test.ts src/server/agent/agent-timeline-store.test.ts src/server/agent/providers/codex/subagent-preview.test.ts --bail=1
-      - name: Verify the packaged app, daemon, CLI shim and terminal
+      - name: Verify signed entitlements and packaged app
         shell: bash
         run: |
           set -euo pipefail
           app=$(find packages/desktop/release -maxdepth 3 -name Paseo.app -type d | head -1)
           test -n "$app"
-          codesign --verify --deep --strict --verbose=2 "$app"
+          python3 packages/desktop/scripts/verify-repair-signature.py --app "$app" > packages/desktop/release/SIGNATURE_REPORT.json
           node packages/desktop/e2e/packaged-app-smoke.js --app "$app"
       - name: Record source and installer checksums
         shell: bash
@@ -159,7 +151,7 @@ jobs:
           cd packages/desktop/release
           git rev-parse HEAD > SOURCE_REVISION.txt
           shasum -a 256 Paseo-*.dmg Paseo-*.zip > SHA256SUMS.txt
-          printf '%s\n' 'Personal fork build; ad-hoc signed, not Apple notarized.' 'Wait until all agent tasks finish before replacing the installed desktop app.' > BUILD_NOTES.txt
+          printf '%s\n' 'Personal fork build; ad-hoc signed, not Apple notarized.' 'Hardened Runtime retained; personal main and helper signatures include the library-validation exception.' 'Wait until all agent tasks finish before replacing the installed desktop app.' > BUILD_NOTES.txt
       - uses: actions/upload-artifact@v4
         with:
           name: Paseo-repair-macos-${{ matrix.arch }}
@@ -168,6 +160,7 @@ jobs:
             packages/desktop/release/Paseo-*.zip
             packages/desktop/release/SOURCE_REVISION.txt
             packages/desktop/release/SHA256SUMS.txt
+            packages/desktop/release/SIGNATURE_REPORT.json
             packages/desktop/release/BUILD_NOTES.txt
           if-no-files-found: error
           compression-level: 0
@@ -179,4 +172,79 @@ jobs:
           path: |
             repair-smoke-diagnostics
             packages/desktop/release/builder-debug.yml
+            packages/desktop/release/SIGNATURE_REPORT.json
           retention-days: 7
+
+  installed:
+    needs: [source, macos]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            arch: arm64
+          - runner: macos-15-intel
+            arch: x64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      actions: read
+    env:
+      ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
+      ONNXRUNTIME_NODE_INSTALL: skip
+      PASEO_DESKTOP_SMOKE_ARTIFACT_DIR: ${{ github.workspace }}/install-smoke-diagnostics
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.source.outputs.revision }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Install the test harness, not a new app build
+        run: node scripts/npm-retry.mjs ci
+      - uses: actions/download-artifact@v4
+        with:
+          name: Paseo-repair-macos-${{ matrix.arch }}
+          path: install-artifacts
+      - name: Validate final ZIP and DMG on a separate macOS 15 runner
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(cat install-artifacts/SOURCE_REVISION.txt)" = "$(git rev-parse HEAD)"
+          (cd install-artifacts && shasum -a 256 -c SHA256SUMS.txt)
+          mkdir -p install-evidence
+          sw_vers > install-evidence/system.txt
+          csrutil status >> install-evidence/system.txt
+          base=$(mktemp -d "$RUNNER_TEMP/paseo-distribution.XXXXXX")
+          mounted=0
+          cleanup() {
+            if test "$mounted" = 1; then hdiutil detach "$base/mount" || true; fi
+            rm -rf "$base"
+          }
+          trap cleanup EXIT
+          zip=$(find "$PWD/install-artifacts" -maxdepth 1 -name 'Paseo-*.zip' -print -quit)
+          dmg=$(find "$PWD/install-artifacts" -maxdepth 1 -name 'Paseo-*.dmg' -print -quit)
+          test -n "$zip" && test -n "$dmg"
+          mkdir -p "$base/zip" "$base/dmg" "$base/mount"
+          ditto -x -k "$zip" "$base/zip"
+          python3 packages/desktop/scripts/verify-repair-signature.py --app "$base/zip/Paseo.app" > install-evidence/zip-signatures.json
+          node packages/desktop/e2e/packaged-app-smoke.js --app "$base/zip/Paseo.app" 2>&1 | tee install-evidence/zip-smoke.log
+          hdiutil attach "$dmg" -readonly -nobrowse -mountpoint "$base/mount"
+          mounted=1
+          ditto "$base/mount/Paseo.app" "$base/dmg/Paseo.app"
+          hdiutil detach "$base/mount"
+          mounted=0
+          python3 packages/desktop/scripts/verify-repair-signature.py --app "$base/dmg/Paseo.app" > install-evidence/dmg-signatures.json
+          node packages/desktop/e2e/packaged-app-smoke.js --app "$base/dmg/Paseo.app" 2>&1 | tee install-evidence/dmg-smoke.log
+          git rev-parse HEAD > install-evidence/SOURCE_REVISION.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Paseo-repair-install-verification-${{ matrix.arch }}
+          path: |
+            install-evidence
+            install-smoke-diagnostics
+          retention-days: 14
