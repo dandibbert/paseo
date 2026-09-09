@@ -44,7 +44,7 @@ jobs:
           codesign --verify --deep --strict --verbose=2 /Applications/Paseo.app
           python3 packages/desktop/scripts/verify-repair-signature.py --app /Applications/Paseo.app
           log="$base/zip-launch.log"
-          PASEO_HOME="$base/home-zip" /Applications/Paseo.app/Contents/MacOS/Paseo --disable-gpu >"$log" 2>&1 &
+          PASEO_HOME="$base/home-zip" /Applications/Paseo.app/Contents/MacOS/Paseo >"$log" 2>&1 &
           pid=$!
           sleep 8
           if ! kill -0 "$pid" 2>/dev/null; then
@@ -78,7 +78,7 @@ jobs:
           codesign --verify --deep --strict --verbose=2 /Applications/Paseo.app
           python3 packages/desktop/scripts/verify-repair-signature.py --app /Applications/Paseo.app
           log="$base/dmg-launch.log"
-          PASEO_HOME="$base/home-dmg" /Applications/Paseo.app/Contents/MacOS/Paseo --disable-gpu >"$log" 2>&1 &
+          PASEO_HOME="$base/home-dmg" /Applications/Paseo.app/Contents/MacOS/Paseo >"$log" 2>&1 &
           pid=$!
           sleep 8
           if ! kill -0 "$pid" 2>/dev/null; then
