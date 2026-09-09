@@ -33,9 +33,10 @@ jobs:
         run: node scripts/npm-retry.mjs ci
       - name: Build server dependencies
         run: npm run build:server-deps
-      - name: Export dependencies for the isolated offline test workspace
+      - name: Export portable Linux test dependencies
         run: |
-          find node_modules packages \( -name node_modules -o -name dist \) -type d -prune -print0 | tar --null -T - -czf "$RUNNER_TEMP/paseo-test-deps.tar.gz"
+          find node_modules packages \( -name node_modules -o -name dist \) -type d -prune -print0 | tar --exclude='*darwin*' --exclude='*win32*' --exclude='*arm64*' --exclude='*android*' --exclude='*/ios/*' --exclude='*.so*' --exclude='*.dll' --exclude='*.dylib' --exclude='*.onnx' --exclude='*.a' --exclude='*.aar' --exclude='*.jar' --exclude='*/electron/dist/*' --null -T - -czf "$RUNNER_TEMP/paseo-test-deps.tar.gz"
+          ls -lh "$RUNNER_TEMP/paseo-test-deps.tar.gz"
       - uses: actions/upload-artifact@v4
         with:
           name: paseo-repair-test-deps
