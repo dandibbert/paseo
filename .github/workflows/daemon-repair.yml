@@ -1,4 +1,4 @@
-name: Daemon repair validation
+name: Daemon repair validation and macOS builds
 
 on:
   push:
@@ -10,50 +10,173 @@ permissions:
 
 concurrency:
   group: daemon-repair-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 env:
-  ONNXRUNTIME_NODE_INSTALL: skip
-  ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
   LEFTHOOK: "0"
 
 jobs:
-  dependencies:
+  source:
+    if: github.repository == 'dandibbert/paseo'
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    outputs:
+      revision: ${{ steps.revision.outputs.sha }}
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ github.ref }}
+      - name: Apply verified sandbox repair and commit source
+        shell: bash
+        run: |
+          set -euo pipefail
+          if test -f .github/patches/daemon-repair.gz.00; then
+            cat .github/patches/daemon-repair.gz.0[0-5] | gzip -dc > "$RUNNER_TEMP/daemon-repair.patch"
+            echo "46f5d4dfdc68dc92fe783428e55027081eab3b7dba7462665aa37dab21fa23f4  $RUNNER_TEMP/daemon-repair.patch" | sha256sum -c -
+            git apply --check "$RUNNER_TEMP/daemon-repair.patch"
+            git apply --index "$RUNNER_TEMP/daemon-repair.patch"
+            git rm .github/patches/daemon-repair.gz.0[0-5]
+            git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m 'fix(server): bound timeline payload retention and recover relay attachments'
+            git push origin HEAD:refs/heads/fix/daemon-memory-relay-recovery
+          fi
+      - id: revision
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+  validate:
+    needs: source
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
+      ONNXRUNTIME_NODE_INSTALL: skip
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.source.outputs.revision }}
           persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
           cache: npm
-      - name: Install locked dependencies
-        run: node scripts/npm-retry.mjs ci
-      - name: Build server dependencies
-        run: npm run build:server-deps
-      - name: Export portable Linux test dependencies
+      - run: node scripts/npm-retry.mjs ci
+      - run: npm run build:server
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm run format:check
+      - name: Focused daemon, history, provider and wire regression tests
+        working-directory: packages/server
         run: |
-          find node_modules packages \( -name node_modules -o -name dist \) -type d -prune -print0 | tar --exclude='*darwin*' --exclude='*win32*' --exclude='*arm64*' --exclude='*android*' --exclude='*/ios/*' --exclude='*.so*' --exclude='*.dll' --exclude='*.dylib' --exclude='*.onnx' --exclude='*.a' --exclude='*.aar' --exclude='*.jar' --exclude='*/electron/dist/*' --null -T - -czf "$RUNNER_TEMP/paseo-test-deps.tar.gz"
-          split -b 400m -d --additional-suffix=.part "$RUNNER_TEMP/paseo-test-deps.tar.gz" "$RUNNER_TEMP/deps-"
-          ls -lh "$RUNNER_TEMP"/deps-*.part
+          set -o pipefail
+          npx vitest run \
+            src/server/relay-transport.test.ts \
+            src/server/relay-runtime.test.ts \
+            src/server/agent/timeline-payload-store.test.ts \
+            src/server/agent/agent-timeline-store.test.ts \
+            src/server/agent/timeline-projection.test.ts \
+            src/server/agent/provider-subagents/store.test.ts \
+            src/server/agent/providers/codex/subagent-preview.test.ts \
+            src/server/agent/providers/codex-app-server-agent.test.ts \
+            src/server/agent/agent-manager.test.ts \
+            src/server/agent/agent-manager-stream-coalescing.test.ts \
+            src/server/session.test.ts \
+            src/server/session.workspaces.test.ts \
+            src/server/wire-compat.test.ts --bail=1 2>&1 | tee "$RUNNER_TEMP/daemon-repair-tests.log"
+      - name: Reproducible isolated retained-memory benchmark
+        run: |
+          node --expose-gc --import tsx scripts/benchmark-daemon-timeline-memory.mjs packages/server/src/server/agent/agent-timeline-store.ts > "$RUNNER_TEMP/timeline-memory.json"
+          cat "$RUNNER_TEMP/timeline-memory.json"
+          git rev-parse HEAD > "$RUNNER_TEMP/source-revision.txt"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: daemon-repair-validation
+          path: |
+            ${{ runner.temp }}/daemon-repair-tests.log
+            ${{ runner.temp }}/timeline-memory.json
+            ${{ runner.temp }}/source-revision.txt
+          retention-days: 14
+
+  macos:
+    needs: [source, validate]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-14
+            arch: arm64
+          - runner: macos-15-intel
+            arch: x64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      packages: read
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: "false"
+      ONNXRUNTIME_NODE_INSTALL: skip
+      PASEO_DESKTOP_SMOKE_ARTIFACT_DIR: ${{ github.workspace }}/repair-smoke-diagnostics
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.source.outputs.revision }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: node scripts/npm-retry.mjs ci
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Give the personal repair build a distinct version
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const p = 'packages/desktop/package.json';
+          const pkg = JSON.parse(fs.readFileSync(p, 'utf8'));
+          pkg.version = `0.8.0-beta.1.repair.${process.env.GITHUB_RUN_NUMBER}`;
+          fs.writeFileSync(p, JSON.stringify(pkg, null, 2) + '\n');
+          NODE
+      - name: Build ad-hoc signed macOS app without publishing
+        run: |
+          npm run build:desktop -- --publish never --mac --${{ matrix.arch }} -c.mac.identity=- -c.mac.notarize=false -c.publish.owner=dandibbert -c.publish.repo=paseo -c.publish.channel=repair
+      - name: Test filesystem and relay recovery on macOS
+        working-directory: packages/server
+        run: |
+          npx vitest run src/server/relay-transport.test.ts src/server/agent/timeline-payload-store.test.ts src/server/agent/agent-timeline-store.test.ts src/server/agent/providers/codex/subagent-preview.test.ts --bail=1
+      - name: Verify the packaged app, daemon, CLI shim and terminal
+        shell: bash
+        run: |
+          set -euo pipefail
+          app=$(find packages/desktop/release -maxdepth 3 -name Paseo.app -type d | head -1)
+          test -n "$app"
+          codesign --verify --deep --strict --verbose=2 "$app"
+          node packages/desktop/e2e/packaged-app-smoke.js --app "$app"
+      - name: Record source and installer checksums
+        shell: bash
+        run: |
+          cd packages/desktop/release
+          git rev-parse HEAD > SOURCE_REVISION.txt
+          shasum -a 256 Paseo-*.dmg Paseo-*.zip > SHA256SUMS.txt
+          printf '%s\n' 'Personal fork build; ad-hoc signed, not Apple notarized.' 'Wait until all agent tasks finish before replacing the installed desktop app.' > BUILD_NOTES.txt
       - uses: actions/upload-artifact@v4
         with:
-          name: paseo-repair-deps-00
-          path: ${{ runner.temp }}/deps-00.part
-          retention-days: 1
+          name: Paseo-repair-macos-${{ matrix.arch }}
+          path: |
+            packages/desktop/release/Paseo-*.dmg
+            packages/desktop/release/Paseo-*.zip
+            packages/desktop/release/SOURCE_REVISION.txt
+            packages/desktop/release/SHA256SUMS.txt
+            packages/desktop/release/BUILD_NOTES.txt
+          if-no-files-found: error
           compression-level: 0
+          retention-days: 14
       - uses: actions/upload-artifact@v4
+        if: failure()
         with:
-          name: paseo-repair-deps-01
-          path: ${{ runner.temp }}/deps-01.part
-          retention-days: 1
-          compression-level: 0
-      - uses: actions/upload-artifact@v4
-        with:
-          name: paseo-repair-deps-02
-          path: ${{ runner.temp }}/deps-02.part
-          retention-days: 1
-          compression-level: 0
-          if-no-files-found: ignore
+          name: Paseo-repair-macos-diagnostics-${{ matrix.arch }}
+          path: |
+            repair-smoke-diagnostics
+            packages/desktop/release/builder-debug.yml
+          retention-days: 7
