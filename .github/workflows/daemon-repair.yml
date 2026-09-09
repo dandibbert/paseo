@@ -1,0 +1,33 @@
+name: Daemon repair validation
+
+on:
+  push:
+    branches: [fix/daemon-memory-relay-recovery]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: daemon-repair-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Export exact source revision for offline inspection
+        run: |
+          git archive --format=tar.gz HEAD > "$RUNNER_TEMP/paseo-source.tar.gz"
+          git rev-parse HEAD > "$RUNNER_TEMP/paseo-source-revision.txt"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: paseo-repair-source
+          path: |
+            ${{ runner.temp }}/paseo-source.tar.gz
+            ${{ runner.temp }}/paseo-source-revision.txt
+          retention-days: 3
