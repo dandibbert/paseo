@@ -112,6 +112,10 @@ class InMemoryAgentManager {
     return this.timeline.fetch("agent-1", options);
   }
 
+  fetchProjectedTimelinePage(_agentId: string, options?: AgentTimelineFetchOptions) {
+    return this.timeline.fetchProjectedPage("agent-1", options);
+  }
+
   listAgents() {
     return [];
   }

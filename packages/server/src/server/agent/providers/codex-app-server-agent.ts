@@ -51,7 +51,7 @@ import path from "node:path";
 import { z } from "zod";
 import { renderPromptAttachmentAsText } from "../prompt-attachments.js";
 import { composeSystemPromptParts } from "../system-prompt.js";
-import { curateAgentActivity } from "../activity-curator.js";
+import { CodexSubagentPreview } from "./codex/subagent-preview.js";
 import {
   mapCodexToolCallEnvelope,
   mapCodexToolCallFromThreadItem,
@@ -3264,8 +3264,7 @@ interface CodexSubAgentCallState {
   activityItemIds: Set<string>;
   pendingCommandOutputDeltas: Map<string, string[]>;
   pendingFileChangeOutputDeltas: Map<string, string[]>;
-  childItemOrder: string[];
-  childItems: Map<string, AgentTimelineItem>;
+  childPreview: CodexSubagentPreview;
   childThreadIds: Set<string>;
 }
 
@@ -5393,8 +5392,7 @@ export class CodexAppServerAgentSession implements AgentSession {
         activityItemIds: new Set<string>(),
         pendingCommandOutputDeltas: new Map<string, string[]>(),
         pendingFileChangeOutputDeltas: new Map<string, string[]>(),
-        childItemOrder: [],
-        childItems: new Map<string, AgentTimelineItem>(),
+        childPreview: new CodexSubagentPreview(),
         childThreadIds: new Set<string>(),
       } satisfies CodexSubAgentCallState);
 
@@ -5533,10 +5531,7 @@ export class CodexAppServerAgentSession implements AgentSession {
     if (!state) {
       return;
     }
-    if (!state.childItems.has(itemId)) {
-      state.childItemOrder.push(itemId);
-    }
-    state.childItems.set(itemId, item);
+    state.childPreview.upsert(itemId, item);
   }
 
   private emitCodexToolTimelineItem(
@@ -5562,12 +5557,6 @@ export class CodexAppServerAgentSession implements AgentSession {
     );
   }
 
-  private getSubAgentChildTimeline(state: CodexSubAgentCallState): AgentTimelineItem[] {
-    return state.childItemOrder
-      .map((itemId) => state.childItems.get(itemId))
-      .filter((item): item is AgentTimelineItem => Boolean(item));
-  }
-
   private emitSubAgentActivityUpdate(
     callId: string,
     status?: ToolCallTimelineItem["status"],
@@ -5577,11 +5566,7 @@ export class CodexAppServerAgentSession implements AgentSession {
     if (!state || state.toolCall.detail.type !== "sub_agent") {
       return;
     }
-    const childTimeline = this.getSubAgentChildTimeline(state);
-    const log =
-      childTimeline.length > 0
-        ? curateAgentActivity(childTimeline, { labelAssistantMessages: true })
-        : "";
+    const log = state.childPreview.render();
     let resolvedStatus = status ?? state.toolCall.status;
     if (
       status === "running" &&

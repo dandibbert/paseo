@@ -623,3 +623,33 @@ export function selectItemsByProjectedLimit(input: {
     shownProjected: window.projectedEntries.length,
   };
 }
+
+export function hydrateTimelineProjectionEntry(
+  plan: TimelineProjectionEntry,
+  rows: Iterable<AgentTimelineRow>,
+): TimelineProjectionEntry {
+  let item: AgentTimelineItem | null = null;
+  const text: string[] = [];
+  for (const row of rows) {
+    const next = row.item;
+    if (next.type === "assistant_message" || next.type === "reasoning") text.push(next.text);
+    if (item === null) {
+      item = next;
+    } else if (item.type === "tool_call" && next.type === "tool_call") {
+      item = mergeToolCallItems(item, next);
+    } else if (next.type === "plugin") {
+      item = next;
+    }
+  }
+  if (!item) throw new Error("Cannot hydrate an empty timeline projection");
+  if (item.type === "assistant_message" && plan.collapsed.includes("assistant_merge")) {
+    item = {
+      type: item.type,
+      text: text.join(""),
+      ...(item.messageId ? { messageId: item.messageId } : {}),
+    };
+  } else if (item.type === "reasoning") {
+    item = { type: item.type, text: text.join("") };
+  }
+  return { ...plan, item };
+}
