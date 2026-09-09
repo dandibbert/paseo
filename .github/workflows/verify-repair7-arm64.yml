@@ -1,0 +1,93 @@
+name: Verify repair7 arm64 distribution
+
+on:
+  push:
+    branches: [verify/repair7-arm64]
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  verify:
+    runs-on: macos-15
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 4d8341abd92814990d51440ac4d7c14158cc7f3c
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: Paseo-repair-macos-arm64
+          path: artifacts
+          repository: dandibbert/paseo
+          run-id: 34368917852
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Verify checksums and source revision
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(cat artifacts/SOURCE_REVISION.txt)" = "4d8341abd92814990d51440ac4d7c14158cc7f3c"
+          (cd artifacts && shasum -a 256 -c SHA256SUMS.txt)
+      - name: Verify ZIP after copying to Applications and launch it
+        shell: bash
+        run: |
+          set -euo pipefail
+          base=$(mktemp -d "$RUNNER_TEMP/paseo-repair7.XXXXXX")
+          trap 'rm -rf "$base" /Applications/Paseo.app' EXIT
+          zip=$(find "$PWD/artifacts" -maxdepth 1 -name 'Paseo-*.zip' -print -quit)
+          test -n "$zip"
+          ditto -x -k "$zip" "$base/zip"
+          rm -rf /Applications/Paseo.app
+          ditto "$base/zip/Paseo.app" /Applications/Paseo.app
+          codesign --verify --deep --strict --verbose=2 /Applications/Paseo.app
+          python3 packages/desktop/scripts/verify-repair-signature.py --app /Applications/Paseo.app
+          log="$base/zip-launch.log"
+          PASEO_HOME="$base/home-zip" /Applications/Paseo.app/Contents/MacOS/Paseo --disable-gpu >"$log" 2>&1 &
+          pid=$!
+          sleep 8
+          if ! kill -0 "$pid" 2>/dev/null; then
+            cat "$log"
+            wait "$pid" || true
+            echo 'ZIP-installed Paseo exited during launch window' >&2
+            exit 1
+          fi
+          kill "$pid" || true
+          wait "$pid" || true
+      - name: Verify DMG after copying to Applications and launch it
+        shell: bash
+        run: |
+          set -euo pipefail
+          base=$(mktemp -d "$RUNNER_TEMP/paseo-repair7-dmg.XXXXXX")
+          mkdir -p "$base/mount"
+          mounted=0
+          cleanup() {
+            if test "$mounted" = 1; then hdiutil detach "$base/mount" || true; fi
+            rm -rf "$base" /Applications/Paseo.app
+          }
+          trap cleanup EXIT
+          dmg=$(find "$PWD/artifacts" -maxdepth 1 -name 'Paseo-*.dmg' -print -quit)
+          test -n "$dmg"
+          hdiutil attach "$dmg" -readonly -nobrowse -mountpoint "$base/mount"
+          mounted=1
+          rm -rf /Applications/Paseo.app
+          ditto "$base/mount/Paseo.app" /Applications/Paseo.app
+          hdiutil detach "$base/mount"
+          mounted=0
+          codesign --verify --deep --strict --verbose=2 /Applications/Paseo.app
+          python3 packages/desktop/scripts/verify-repair-signature.py --app /Applications/Paseo.app
+          log="$base/dmg-launch.log"
+          PASEO_HOME="$base/home-dmg" /Applications/Paseo.app/Contents/MacOS/Paseo --disable-gpu >"$log" 2>&1 &
+          pid=$!
+          sleep 8
+          if ! kill -0 "$pid" 2>/dev/null; then
+            cat "$log"
+            wait "$pid" || true
+            echo 'DMG-installed Paseo exited during launch window' >&2
+            exit 1
+          fi
+          kill "$pid" || true
+          wait "$pid" || true
+      - name: Record result
+        run: echo 'repair.7 arm64 ZIP and DMG both launched successfully from /Applications on macOS 15.'
