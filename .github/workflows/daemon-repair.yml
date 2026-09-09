@@ -12,22 +12,33 @@ concurrency:
   group: daemon-repair-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  ONNXRUNTIME_NODE_INSTALL: skip
+  ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
+  LEFTHOOK: "0"
+
 jobs:
-  source:
+  dependencies:
+    if: github.event.head_commit.message == 'ci: prepare offline test dependencies'
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-      - name: Export exact source revision for offline inspection
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Install locked dependencies
+        run: node scripts/npm-retry.mjs ci
+      - name: Build server dependencies
+        run: npm run build:server-deps
+      - name: Export dependencies for the isolated offline test workspace
         run: |
-          git archive --format=tar.gz HEAD > "$RUNNER_TEMP/paseo-source.tar.gz"
-          git rev-parse HEAD > "$RUNNER_TEMP/paseo-source-revision.txt"
+          find node_modules packages \( -name node_modules -o -name dist \) -type d -prune -print0 | tar --null -T - -czf "$RUNNER_TEMP/paseo-test-deps.tar.gz"
       - uses: actions/upload-artifact@v4
         with:
-          name: paseo-repair-source
-          path: |
-            ${{ runner.temp }}/paseo-source.tar.gz
-            ${{ runner.temp }}/paseo-source-revision.txt
-          retention-days: 3
+          name: paseo-repair-test-deps
+          path: ${{ runner.temp }}/paseo-test-deps.tar.gz
+          retention-days: 1
