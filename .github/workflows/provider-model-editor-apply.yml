@@ -57,6 +57,8 @@ jobs:
             packages/server/src/server/agent/provider-registry.ts \
             packages/server/src/server/agent/providers/codex-app-server-agent.ts \
             packages/server/src/server/agent/providers/codex-configured-model.test.ts
+      - name: Build server stack
+        run: npm run build:server
       - name: Typecheck
         id: typecheck
         shell: bash
