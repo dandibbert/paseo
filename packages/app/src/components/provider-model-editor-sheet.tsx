@@ -79,59 +79,70 @@ function formatJson(value: unknown): string {
   return value == null ? "" : JSON.stringify(value, null, 2);
 }
 
+function parseContextWindow(value: string): number | undefined {
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+  const parsed = Number(trimmed);
+  if (!Number.isSafeInteger(parsed) || parsed <= 0) {
+    throw new Error("Context window must be a positive whole number of tokens.");
+  }
+  return parsed;
+}
+
+function buildOptionalProfileFields(draft: ModelDraft): Record<string, unknown> {
+  const fields: Record<string, unknown> = {};
+  const description = draft.description.trim();
+  const aliases = parseAliases(draft.aliases);
+  const contextWindowMaxTokens = parseContextWindow(draft.contextWindow);
+  const defaultThinkingOptionId = draft.defaultThinkingOptionId.trim();
+  const thinkingOptions = parseOptionalJson(draft.thinkingOptionsJson, "array");
+  const metadata = parseOptionalJson(draft.metadataJson, "object");
+
+  if (description) fields.description = description;
+  if (aliases) fields.aliases = aliases;
+  if (contextWindowMaxTokens !== undefined) {
+    fields.contextWindowMaxTokens = contextWindowMaxTokens;
+  }
+  if (draft.isDefault !== undefined) fields.isDefault = draft.isDefault;
+  if (draft.isSelectable !== undefined) fields.isSelectable = draft.isSelectable;
+  if (defaultThinkingOptionId) {
+    fields.defaultThinkingOptionId = defaultThinkingOptionId;
+  }
+  if (thinkingOptions !== undefined) fields.thinkingOptions = thinkingOptions;
+  if (metadata !== undefined) fields.metadata = metadata;
+  return fields;
+}
+
+function validateDefaultThinkingOption(model: ProviderProfileModel): void {
+  if (!model.defaultThinkingOptionId || !model.thinkingOptions?.length) return;
+  const optionExists = model.thinkingOptions.some(
+    (option) => option.id === model.defaultThinkingOptionId
+  );
+  if (!optionExists) {
+    throw new Error(
+      "Default thinking option must match one of the configured thinking option IDs."
+    );
+  }
+}
+
 function buildProfileModel(draft: ModelDraft): ProviderProfileModel {
   const id = draft.id.trim();
   if (!id) {
     throw new Error("Model ID is required.");
   }
 
-  const candidate: Record<string, unknown> = {
+  const parsed = ProviderProfileModelSchema.safeParse({
     id,
     label: draft.label.trim() || id,
-  };
-  const description = draft.description.trim();
-  const aliases = parseAliases(draft.aliases);
-  const defaultThinkingOptionId = draft.defaultThinkingOptionId.trim();
-  const thinkingOptions = parseOptionalJson(draft.thinkingOptionsJson, "array");
-  const metadata = parseOptionalJson(draft.metadataJson, "object");
-
-  if (description) candidate.description = description;
-  if (aliases) candidate.aliases = aliases;
-  if (draft.isDefault !== undefined) candidate.isDefault = draft.isDefault;
-  if (draft.isSelectable !== undefined) candidate.isSelectable = draft.isSelectable;
-  if (defaultThinkingOptionId) {
-    candidate.defaultThinkingOptionId = defaultThinkingOptionId;
-  }
-  if (thinkingOptions !== undefined) candidate.thinkingOptions = thinkingOptions;
-  if (metadata !== undefined) candidate.metadata = metadata;
-
-  if (draft.contextWindow.trim()) {
-    const contextWindowMaxTokens = Number(draft.contextWindow.trim());
-    if (!Number.isSafeInteger(contextWindowMaxTokens) || contextWindowMaxTokens <= 0) {
-      throw new Error("Context window must be a positive whole number of tokens.");
-    }
-    candidate.contextWindowMaxTokens = contextWindowMaxTokens;
-  }
-
-  const parsed = ProviderProfileModelSchema.safeParse(candidate);
+    ...buildOptionalProfileFields(draft),
+  });
   if (!parsed.success) {
     const issue = parsed.error.issues[0];
     const path = issue?.path.length ? `${issue.path.join(".")}: ` : "";
     throw new Error(`${path}${issue?.message ?? "Invalid model configuration."}`);
   }
 
-  if (
-    parsed.data.defaultThinkingOptionId &&
-    parsed.data.thinkingOptions?.length &&
-    !parsed.data.thinkingOptions.some(
-      (option) => option.id === parsed.data.defaultThinkingOptionId
-    )
-  ) {
-    throw new Error(
-      "Default thinking option must match one of the configured thinking option IDs."
-    );
-  }
-
+  validateDefaultThinkingOption(parsed.data);
   return parsed.data;
 }
 
