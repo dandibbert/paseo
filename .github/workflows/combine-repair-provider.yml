@@ -1,0 +1,37 @@
+name: Combine repair and provider editor
+
+on:
+  push:
+    branches:
+      - combined/repair-provider-editor
+    paths:
+      - .github/workflows/combine-repair-provider.yml
+
+permissions:
+  contents: write
+
+jobs:
+  inspect-merge:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: combined/repair-provider-editor
+          fetch-depth: 0
+      - name: Inspect repair merge
+        shell: bash
+        run: |
+          set -u
+          git fetch origin fix/daemon-memory-relay-recovery
+          set +e
+          git merge --no-commit --no-ff origin/fix/daemon-memory-relay-recovery
+          status=$?
+          set -e
+          echo "merge_status=$status"
+          echo "--- unresolved paths ---"
+          git diff --name-only --diff-filter=U || true
+          echo "--- status ---"
+          git status --short
+          if [ "$status" -ne 0 ]; then
+            exit "$status"
+          fi
