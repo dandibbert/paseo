@@ -37,14 +37,14 @@ describe("ProviderProfileModelSchema", () => {
         id: "bad",
         label: "Bad",
         contextWindowMaxTokens: 0,
-      })
+      }),
     ).toThrow();
     expect(() =>
       ProviderProfileModelSchema.parse({
         id: "bad",
         label: "Bad",
         contextWindowMaxTokens: 1.5,
-      })
+      }),
     ).toThrow();
   });
 });

@@ -71,24 +71,14 @@ export const ProviderOverrideSchema = z.object({
   order: z.number().optional(),
 });
 
-const BUILTIN_PROVIDER_IDS = [
-  "claude",
-  "codex",
-  "copilot",
-  "opencode",
-  "pi",
-  "omp",
-] as const;
+const BUILTIN_PROVIDER_IDS = ["claude", "codex", "copilot", "opencode", "pi", "omp"] as const;
 const PROVIDER_ID_PATTERN = /^[a-z][a-z0-9-]*$/;
 
 export const ProviderOverridesSchema = z
   .record(z.string(), ProviderOverrideSchema)
   .superRefine((providers, ctx) => {
     const builtinProviderIdSet = new Set<string>(BUILTIN_PROVIDER_IDS);
-    const validExtendsValues = new Set<string>([
-      ...BUILTIN_PROVIDER_IDS,
-      "acp",
-    ]);
+    const validExtendsValues = new Set<string>([...BUILTIN_PROVIDER_IDS, "acp"]);
 
     for (const [providerId, provider] of Object.entries(providers)) {
       if (!PROVIDER_ID_PATTERN.test(providerId)) {
@@ -150,12 +140,8 @@ export const AgentProviderRuntimeSettingsMapSchema = z
   });
 
 export type ProviderCommand = z.infer<typeof ProviderCommandSchema>;
-export type ProviderRuntimeSettings = z.infer<
-  typeof ProviderRuntimeSettingsSchema
->;
-export type ProviderPaseoToolsPolicy = z.infer<
-  typeof ProviderPaseoToolsPolicySchema
->;
+export type ProviderRuntimeSettings = z.infer<typeof ProviderRuntimeSettingsSchema>;
+export type ProviderPaseoToolsPolicy = z.infer<typeof ProviderPaseoToolsPolicySchema>;
 export type ProviderProfileModel = z.infer<typeof ProviderProfileModelSchema>;
 export type ProviderOverride = z.infer<typeof ProviderOverrideSchema>;
 export type ProviderOverrides = z.infer<typeof ProviderOverridesSchema>;

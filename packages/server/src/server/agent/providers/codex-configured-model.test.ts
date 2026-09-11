@@ -10,7 +10,7 @@ describe("resolveCodexConfiguredModelConfig", () => {
           label: "Grok 4 Fast",
           contextWindowMaxTokens: 500000,
         },
-      ])
+      ]),
     ).toEqual({ model_context_window: 500000 });
   });
 

@@ -870,7 +870,7 @@ export class AgentManager {
         continue;
       }
 
-      const len = this.timelineStore.getItems(agent.id).length;
+      const len = this.timelineStore.getItemCount(agent.id);
       totalItems += len;
       if (len > maxItemsPerAgent) {
         maxItemsPerAgent = len;
@@ -1162,6 +1162,16 @@ export class AgentManager {
   fetchTimeline(id: string, options?: AgentTimelineFetchOptions): AgentTimelineFetchResult {
     this.requireAgent(id);
     return this.timelineStore.fetch(id, options);
+  }
+
+  fetchProjectedTimelinePage(id: string, options?: AgentTimelineFetchOptions) {
+    this.requireAgent(id);
+    return this.timelineStore.fetchProjectedPage(id, options);
+  }
+
+  disposeTimelineStorage(): void {
+    this.timelineStore.dispose();
+    this.providerSubagents.dispose();
   }
 
   listProviderSubagents(parentAgentId: string): ProviderSubagentDescriptor[] {
@@ -3176,11 +3186,9 @@ export class AgentManager {
   }
 
   private async getLastAssistantMessageFromStores(agentId: string): Promise<string | null> {
+    if (!this.durableTimelineStore) return this.timelineStore.getLastAssistantMessage(agentId);
     const liveTimeline = this.timelineStore.getItems(agentId);
     const liveSegment = this.getLastAssistantMessageSegmentFromTimeline(liveTimeline);
-    if (!this.durableTimelineStore) {
-      return liveSegment?.text ?? null;
-    }
     if (!liveSegment) {
       return await this.durableTimelineStore.getLastAssistantMessage(agentId);
     }
@@ -4889,7 +4897,7 @@ export class AgentManager {
         this.pluginLifecycle,
         describeHookAgent({ ...agent, title: agent.config.title }),
         event,
-        this.timelineStore.getItems(agentId),
+        isTurnTerminalEvent(event) ? this.timelineStore.getItems(agentId) : [],
       );
     }
   }

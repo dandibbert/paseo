@@ -171,6 +171,8 @@ Enables remote access when the daemon is behind a firewall.
 - Optional E2EE capability negotiation preserves application frame kind: text plaintext uses base64 ciphertext text frames, while binary plaintext uses raw ciphertext binary frames; mixed-version peers remain base64-only
 - Self-hosted relays opt into TLS with `daemon.relay.useTls` or `PASEO_RELAY_USE_TLS=true`; the public (client-facing) TLS setting can be overridden independently via `daemon.relay.publicUseTls` or `PASEO_RELAY_PUBLIC_USE_TLS`
 
+Relay recovery belongs to the transport, not the agent lifecycle. Reconciliation preserves healthy data sockets, removes absent clients, and retries failed attachments with bounded backoff. Old socket callbacks cannot claim a replacement connection. Protocol pongs are not evidence that the relay application is responding; an idle control connection also receives a sparse application probe. A silent data socket is retired independently. Neither path restarts the daemon or its providers.
+
 The production relay server lives in [getpaseo/paseo-relay](https://github.com/getpaseo/paseo-relay). It is a distributed Elixir service. The Cloudflare relay implementation in this monorepo is retained as legacy code and is not deployed.
 
 See [SECURITY.md](../SECURITY.md) for the full threat model.
@@ -346,7 +348,10 @@ initializing → idle ⇄ running
   client-side dedup; the default fetch page is 200 items.
 - Timeline row `timestamp` values are canonical daemon-owned timestamps. Providers may supply original replay timestamps, but clients must not guess timestamp trust or hide time UI based on local clock heuristics.
 - Events stream to connected clients in real time; correctness is backed by authoritative timeline fetches and paged-to-completion catch-up.
-- Agent state persists to `$PASEO_HOME/agents/{cwd-with-dashes}/{agent-id}.json`. Timeline rows are runtime memory; provider history is the durable transcript authority and resumed agents rebuild from it. That storage path is derived from `cwd`, not from workspace id.
+- Agent state persists to `$PASEO_HOME/agents/{cwd-with-dashes}/{agent-id}.json`. Provider history is the durable transcript authority and resumed agents rebuild from it. That storage path is derived from `cwd`, not from workspace id.
+- Runtime timeline payloads use a shared 16 MiB encoded hot set per store (root and provider-subagent stores have independent budgets). Older payloads spill losslessly into private temporary backing; eviction does not remove rows or change epochs/cursors. Projection planning uses a lightweight resident index and decodes only contributing rows. The backing is not a second durable transcript and is disposed at daemon shutdown; POSIX descriptors are unlinked immediately so crashes reclaim them too.
+- The payload budget does not bound the metadata index, provider-owned state, a single large projected entry, or explicit full-history consumers such as fork/export and terminal plugin hooks. Do not interpret it as a global daemon RSS limit. Append/compression and spill reads are synchronous; measure event-loop latency as well as retained heap when changing the budget.
+- A Codex parent tool card contains a bounded child-activity preview, not another complete copy of that child's history. Full child events remain available through the independent provider-subagent timeline.
 
 ## Right-sidebar boundary: directory-backed vs workspace-owned
 
