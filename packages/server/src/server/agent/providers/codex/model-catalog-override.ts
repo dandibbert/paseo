@@ -136,7 +136,7 @@ export function augmentCodexModelCatalog(
     throw new Error("Codex bundled model catalog contained no usable model definitions");
   }
 
-  const models = (rawCatalog.models as Record<string, unknown>[]).map((model) => ({ ...model }));
+  const models = (rawCatalog.models as Record<string, unknown>[]).slice();
   const template =
     models.find(
       (model) => model.shell_type === "unified_exec" && model.supported_in_api !== false,
