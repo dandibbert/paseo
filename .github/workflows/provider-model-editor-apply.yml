@@ -58,7 +58,22 @@ jobs:
             packages/server/src/server/agent/providers/codex-app-server-agent.ts \
             packages/server/src/server/agent/providers/codex-configured-model.test.ts
       - name: Typecheck
-        run: npm run typecheck
+        id: typecheck
+        shell: bash
+        run: |
+          set +e
+          npm run typecheck > typecheck.log 2>&1
+          status=$?
+          echo '--- compact TypeScript diagnostics ---'
+          grep -E 'error TS[0-9]+|^packages/.+\([0-9]+,[0-9]+\)' typecheck.log | tail -250 || true
+          exit "$status"
+      - name: Upload typecheck diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: provider-model-editor-typecheck
+          path: typecheck.log
+          if-no-files-found: warn
       - name: Focused tests
         run: |
           npx vitest run \
