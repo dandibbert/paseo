@@ -28,80 +28,8 @@ jobs:
           cache: npm
       - name: Install dependencies
         run: node scripts/npm-retry.mjs ci
-      - name: Apply lint-safe cleanup
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 - <<'PY'
-          from pathlib import Path
-
-          editor = Path('packages/app/src/components/provider-model-editor-sheet.tsx')
-          text = editor.read_text()
-          text = text.replace(
-              'import { StyleSheet, useUnistyles } from "react-native-unistyles";',
-              'import { StyleSheet } from "react-native-unistyles";',
-          )
-          text = text.replace('  const { theme } = useUnistyles();\n', '')
-          text = text.replace('            placeholderTextColor={theme.colors.foregroundMuted}\n', '')
-          text = text.replace(
-              '  return (\n    <View style={editorStyles.booleanRow}>',
-              '  const handleInherit = useCallback(() => onChange(undefined), [onChange]);\n'
-              '  const handleYes = useCallback(() => onChange(true), [onChange]);\n'
-              '  const handleNo = useCallback(() => onChange(false), [onChange]);\n\n'
-              '  return (\n    <View style={editorStyles.booleanRow}>',
-              1,
-          )
-          text = text.replace('onPress={() => onChange(undefined)}', 'onPress={handleInherit}')
-          text = text.replace('onPress={() => onChange(true)}', 'onPress={handleYes}')
-          text = text.replace('onPress={() => onChange(false)}', 'onPress={handleNo}')
-          text = text.replace(
-              'export function ProviderModelEditorSheet({',
-              '// oxlint-disable-next-line complexity -- this form intentionally mirrors the complete model profile schema.\n'
-              'export function ProviderModelEditorSheet({',
-              1,
-          )
-          editor.write_text(text)
-
-          diagnostic = Path('packages/app/src/components/provider-diagnostic-sheet.tsx')
-          text = diagnostic.read_text()
-          anchor = '''function DiscoveredModelRow({\n  model,\n  onEdit,\n}: {\n  model: AgentModelDefinition;\n  onEdit: (model: AgentModelDefinition) => void;\n}) {\n  const { theme } = useUnistyles();'''
-          replacement = anchor + '''\n  const handleEdit = useCallback(() => onEdit(model), [model, onEdit]);'''
-          if anchor not in text:
-              raise SystemExit('discovered row anchor missing')
-          text = text.replace(anchor, replacement, 1)
-          text = text.replace('        onPress={() => onEdit(model)}', '        onPress={handleEdit}', 1)
-          first_style = '''        style={({\n          hovered,\n          pressed,\n        }: PressableStateCallbackType & { hovered?: boolean }) => [\n          sheetStyles.iconButton,\n          (Boolean(hovered) || pressed) && sheetStyles.iconButtonHovered,\n        ]}'''
-          text = text.replace(first_style, '        style={iconButtonStyle}', 1)
-
-          custom_anchor = '''  const { t } = useTranslation();\n  const { theme } = useUnistyles();\n  const handleDelete = useCallback('''
-          custom_replacement = '''  const { t } = useTranslation();\n  const { theme } = useUnistyles();\n  const handleEdit = useCallback(() => onEdit(model), [model, onEdit]);\n  const handleDelete = useCallback('''
-          if custom_anchor not in text:
-              raise SystemExit('custom row anchor missing')
-          text = text.replace(custom_anchor, custom_replacement, 1)
-          text = text.replace('        onPress={() => onEdit(model)}', '        onPress={handleEdit}', 1)
-          text = text.replace(first_style, '        style={iconButtonStyle}', 1)
-
-          insert_anchor = '''function DiscoveredModelRow({'''
-          helper = '''function iconButtonStyle({\n  hovered,\n  pressed,\n}: PressableStateCallbackType & { hovered?: boolean }) {\n  return [\n    sheetStyles.iconButton,\n    (Boolean(hovered) || pressed) && sheetStyles.iconButtonHovered,\n  ];\n}\n\n'''
-          text = text.replace(insert_anchor, helper + insert_anchor, 1)
-          diagnostic.write_text(text)
-
-          docs = Path('docs/custom-providers.md')
-          d = docs.read_text()
-          old = '- `models` / `additionalModels` — model overrides or additions.'
-          new = ('- `models` / `additionalModels` — model overrides or additions. Model profiles support `id`, '
-                 '`label`, `description`, `aliases`, `isSelectable`, `isDefault`, `contextWindowMaxTokens`, '
-                 '`thinkingOptions`, `defaultThinkingOptionId`, and arbitrary `metadata`. The Provider settings UI '
-                 'can edit these model-profile fields. For Codex-derived providers, an explicit '
-                 '`contextWindowMaxTokens` is forwarded to Codex as `model_context_window`.')
-          if old in d:
-              d = d.replace(old, new, 1)
-          docs.write_text(d)
-          PY
-          npx prettier --write \
-            packages/app/src/components/provider-model-editor-sheet.tsx \
-            packages/app/src/components/provider-diagnostic-sheet.tsx \
-            docs/custom-providers.md
+      - name: Format check
+        run: npm run format:check
       - name: Build server stack
         run: npm run build:server
       - name: Typecheck
@@ -115,16 +43,12 @@ jobs:
             packages/server/src/server/agent/providers/codex-app-server-agent.features.test.ts
       - name: Lint
         run: npm run lint
-      - name: Commit clean feature and remove temporary workflow
+      - name: Remove temporary validation workflow
         shell: bash
         run: |
           set -euo pipefail
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git rm .github/workflows/provider-model-editor-cleanup.yml
-          git add \
-            packages/app/src/components/provider-model-editor-sheet.tsx \
-            packages/app/src/components/provider-diagnostic-sheet.tsx \
-            docs/custom-providers.md
-          git commit -m 'fix(providers): satisfy UI lint and document model overrides'
+          git commit -m 'chore: remove provider editor validation workflow'
           git push origin HEAD:feat/provider-model-editor
