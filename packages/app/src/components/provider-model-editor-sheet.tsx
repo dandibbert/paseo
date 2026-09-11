@@ -84,12 +84,16 @@ function parseContextWindow(value: string): number | undefined {
   if (!trimmed) return undefined;
   const parsed = Number(trimmed);
   if (!Number.isSafeInteger(parsed) || parsed <= 0) {
-    throw new Error("Context window must be a positive whole number of tokens.");
+    throw new Error(
+      "Context window must be a positive whole number of tokens."
+    );
   }
   return parsed;
 }
 
-function buildOptionalProfileFields(draft: ModelDraft): Record<string, unknown> {
+function buildOptionalProfileFields(
+  draft: ModelDraft
+): Record<string, unknown> {
   const fields: Record<string, unknown> = {};
   const description = draft.description.trim();
   const aliases = parseAliases(draft.aliases);
@@ -104,7 +108,8 @@ function buildOptionalProfileFields(draft: ModelDraft): Record<string, unknown> 
     fields.contextWindowMaxTokens = contextWindowMaxTokens;
   }
   if (draft.isDefault !== undefined) fields.isDefault = draft.isDefault;
-  if (draft.isSelectable !== undefined) fields.isSelectable = draft.isSelectable;
+  if (draft.isSelectable !== undefined)
+    fields.isSelectable = draft.isSelectable;
   if (defaultThinkingOptionId) {
     fields.defaultThinkingOptionId = defaultThinkingOptionId;
   }
@@ -139,7 +144,9 @@ function buildProfileModel(draft: ModelDraft): ProviderProfileModel {
   if (!parsed.success) {
     const issue = parsed.error.issues[0];
     const path = issue?.path.length ? `${issue.path.join(".")}: ` : "";
-    throw new Error(`${path}${issue?.message ?? "Invalid model configuration."}`);
+    throw new Error(
+      `${path}${issue?.message ?? "Invalid model configuration."}`
+    );
   }
 
   validateDefaultThinkingOption(parsed.data);
@@ -422,7 +429,10 @@ export function ProviderModelEditorSheet({
             placeholder={t("settings.providers.models.modelIdPlaceholder")}
             autoCapitalize="none"
             autoCorrect={false}
-            style={[editorStyles.input, editingExisting && editorStyles.readOnly]}
+            style={[
+              editorStyles.input,
+              editingExisting && editorStyles.readOnly,
+            ]}
           />
           <Text style={editorStyles.hint}>
             Use an existing discovered ID to override its metadata, or enter a

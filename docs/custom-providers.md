@@ -219,7 +219,9 @@ Paseo passes those variables through to the Codex app-server process **and** map
           "OPENAI_API_KEY": "sk-...",
           "OPENAI_BASE_URL": "https://custom-relay.example.com"
         },
-        "models": [{ "id": "custom-model", "label": "Custom Model", "isDefault": true }]
+        "models": [
+          { "id": "custom-model", "label": "Custom Model", "isDefault": true }
+        ]
       }
     }
   }
@@ -299,12 +301,20 @@ You can also combine profiles with model overrides to pin specific models per pr
       "claude-fast": {
         "extends": "claude",
         "label": "Claude (Fast)",
-        "models": [{ "id": "claude-sonnet-4-6", "label": "Sonnet 4.6", "isDefault": true }]
+        "models": [
+          {
+            "id": "claude-sonnet-4-6",
+            "label": "Sonnet 4.6",
+            "isDefault": true
+          }
+        ]
       },
       "claude-smart": {
         "extends": "claude",
         "label": "Claude (Smart)",
-        "models": [{ "id": "claude-opus-4-6", "label": "Opus 4.6", "isDefault": true }]
+        "models": [
+          { "id": "claude-opus-4-6", "label": "Opus 4.6", "isDefault": true }
+        ]
       }
     }
   }
@@ -644,7 +654,11 @@ Example: add an experimental model while keeping every model the provider discov
         "label": "My Agent",
         "command": ["my-agent", "--acp"],
         "additionalModels": [
-          { "id": "experimental-model", "label": "Experimental", "isDefault": true }
+          {
+            "id": "experimental-model",
+            "label": "Experimental",
+            "isDefault": true
+          }
         ]
       }
     }
@@ -662,7 +676,9 @@ Example: relabel a discovered model without replacing the full list:
         "extends": "acp",
         "label": "My Agent",
         "command": ["my-agent", "--acp"],
-        "additionalModels": [{ "id": "provider/model-id", "label": "My Preferred Label" }]
+        "additionalModels": [
+          { "id": "provider/model-id", "label": "My Preferred Label" }
+        ]
       }
     }
   }

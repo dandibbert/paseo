@@ -75,6 +75,16 @@ function rankModels<T>(
   return scored.map((entry) => entry.item);
 }
 
+function iconButtonStyle({
+  hovered,
+  pressed,
+}: PressableStateCallbackType & { hovered?: boolean }) {
+  return [
+    sheetStyles.iconButton,
+    (Boolean(hovered) || pressed) && sheetStyles.iconButtonHovered,
+  ];
+}
+
 function DiscoveredModelRow({
   model,
   onEdit,
@@ -83,6 +93,7 @@ function DiscoveredModelRow({
   onEdit: (model: AgentModelDefinition) => void;
 }) {
   const { theme } = useUnistyles();
+  const handleEdit = useCallback(() => onEdit(model), [model, onEdit]);
   return (
     <View style={sheetStyles.modelRow}>
       <Text style={sheetStyles.modelTitle} numberOfLines={1}>
@@ -109,15 +120,9 @@ function DiscoveredModelRow({
         <View style={sheetStyles.modelRowFiller} />
       )}
       <Pressable
-        onPress={() => onEdit(model)}
+        onPress={handleEdit}
         hitSlop={8}
-        style={({
-          hovered,
-          pressed,
-        }: PressableStateCallbackType & { hovered?: boolean }) => [
-          sheetStyles.iconButton,
-          (Boolean(hovered) || pressed) && sheetStyles.iconButtonHovered,
-        ]}
+        style={iconButtonStyle}
         accessibilityRole="button"
         accessibilityLabel={`Edit model ${model.id}`}
       >
@@ -140,6 +145,7 @@ function CustomModelRow({
 }) {
   const { t } = useTranslation();
   const { theme } = useUnistyles();
+  const handleEdit = useCallback(() => onEdit(model), [model, onEdit]);
   const handleDelete = useCallback(
     () => onDelete(model.id),
     [model.id, onDelete]
@@ -176,15 +182,9 @@ function CustomModelRow({
       ) : null}
       <View style={sheetStyles.modelRowFiller} />
       <Pressable
-        onPress={() => onEdit(model)}
+        onPress={handleEdit}
         hitSlop={8}
-        style={({
-          hovered,
-          pressed,
-        }: PressableStateCallbackType & { hovered?: boolean }) => [
-          sheetStyles.iconButton,
-          (Boolean(hovered) || pressed) && sheetStyles.iconButtonHovered,
-        ]}
+        style={iconButtonStyle}
         accessibilityRole="button"
         accessibilityLabel={`Edit model ${model.id}`}
       >
