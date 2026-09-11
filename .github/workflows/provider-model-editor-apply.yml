@@ -39,7 +39,12 @@ jobs:
           marker = '\npatch("docs/custom-providers.md"'
           if marker in text:
               text = text[:text.index(marker)] + '\n'
-              path.write_text(text)
+          generated_marker = 'patch("packages/app/src/components/provider-model-editor-sheet.tsx"'
+          head, sep, tail = text.partition(generated_marker)
+          if sep:
+              tail = tail.replace('${', '\\${')
+              text = head + sep + tail
+          path.write_text(text)
           PY
           node scripts/apply-provider-model-editor-patch.mjs
       - name: Format touched sources
