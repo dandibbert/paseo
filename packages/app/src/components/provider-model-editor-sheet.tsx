@@ -1,14 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Text, View } from "react-native";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { StyleSheet } from "react-native-unistyles";
 import {
   AdaptiveModalSheet,
   AdaptiveTextInput,
   type SheetHeader,
 } from "@/components/adaptive-modal-sheet";
 import { Button } from "@/components/ui/button";
-import { isWeb } from "@/constants/platform";
 import { useDaemonConfig } from "@/hooks/use-daemon-config";
 import type {
   AgentModelDefinition,
@@ -27,10 +26,22 @@ interface ProviderModelEditorSheetProps {
   serverId: string;
   visible: boolean;
   model?: EditableModel | null;
-  /** Existing additionalModels id. Omit when adding a new override/model. */
   originalModelId?: string | null;
   onClose: () => void;
   refresh: (providers?: AgentProvider[]) => Promise<void>;
+}
+
+interface ModelDraft {
+  id: string;
+  label: string;
+  description: string;
+  contextWindow: string;
+  aliases: string;
+  isDefault: OptionalBoolean;
+  isSelectable: OptionalBoolean;
+  defaultThinkingOptionId: string;
+  thinkingOptionsJson: string;
+  metadataJson: string;
 }
 
 function parseAliases(value: string): string[] | undefined {
@@ -68,6 +79,62 @@ function formatJson(value: unknown): string {
   return value == null ? "" : JSON.stringify(value, null, 2);
 }
 
+function buildProfileModel(draft: ModelDraft): ProviderProfileModel {
+  const id = draft.id.trim();
+  if (!id) {
+    throw new Error("Model ID is required.");
+  }
+
+  const candidate: Record<string, unknown> = {
+    id,
+    label: draft.label.trim() || id,
+  };
+  const description = draft.description.trim();
+  const aliases = parseAliases(draft.aliases);
+  const defaultThinkingOptionId = draft.defaultThinkingOptionId.trim();
+  const thinkingOptions = parseOptionalJson(draft.thinkingOptionsJson, "array");
+  const metadata = parseOptionalJson(draft.metadataJson, "object");
+
+  if (description) candidate.description = description;
+  if (aliases) candidate.aliases = aliases;
+  if (draft.isDefault !== undefined) candidate.isDefault = draft.isDefault;
+  if (draft.isSelectable !== undefined) candidate.isSelectable = draft.isSelectable;
+  if (defaultThinkingOptionId) {
+    candidate.defaultThinkingOptionId = defaultThinkingOptionId;
+  }
+  if (thinkingOptions !== undefined) candidate.thinkingOptions = thinkingOptions;
+  if (metadata !== undefined) candidate.metadata = metadata;
+
+  if (draft.contextWindow.trim()) {
+    const contextWindowMaxTokens = Number(draft.contextWindow.trim());
+    if (!Number.isSafeInteger(contextWindowMaxTokens) || contextWindowMaxTokens <= 0) {
+      throw new Error("Context window must be a positive whole number of tokens.");
+    }
+    candidate.contextWindowMaxTokens = contextWindowMaxTokens;
+  }
+
+  const parsed = ProviderProfileModelSchema.safeParse(candidate);
+  if (!parsed.success) {
+    const issue = parsed.error.issues[0];
+    const path = issue?.path.length ? `${issue.path.join(".")}: ` : "";
+    throw new Error(`${path}${issue?.message ?? "Invalid model configuration."}`);
+  }
+
+  if (
+    parsed.data.defaultThinkingOptionId &&
+    parsed.data.thinkingOptions?.length &&
+    !parsed.data.thinkingOptions.some(
+      (option) => option.id === parsed.data.defaultThinkingOptionId
+    )
+  ) {
+    throw new Error(
+      "Default thinking option must match one of the configured thinking option IDs."
+    );
+  }
+
+  return parsed.data;
+}
+
 function OptionalBooleanControl({
   value,
   onChange,
@@ -75,30 +142,102 @@ function OptionalBooleanControl({
   value: OptionalBoolean;
   onChange: (value: OptionalBoolean) => void;
 }) {
+  const handleInherit = useCallback(() => onChange(undefined), [onChange]);
+  const handleYes = useCallback(() => onChange(true), [onChange]);
+  const handleNo = useCallback(() => onChange(false), [onChange]);
+
   return (
     <View style={editorStyles.booleanRow}>
       <Button
         variant={value === undefined ? "default" : "secondary"}
         size="sm"
-        onPress={() => onChange(undefined)}
+        onPress={handleInherit}
       >
         Inherit
       </Button>
       <Button
         variant={value === true ? "default" : "secondary"}
         size="sm"
-        onPress={() => onChange(true)}
+        onPress={handleYes}
       >
         Yes
       </Button>
       <Button
         variant={value === false ? "default" : "secondary"}
         size="sm"
-        onPress={() => onChange(false)}
+        onPress={handleNo}
       >
         No
       </Button>
     </View>
+  );
+}
+
+function JsonFields({
+  resetKey,
+  defaultThinkingOptionId,
+  thinkingOptionsJson,
+  metadataJson,
+  setDefaultThinkingOptionId,
+  setThinkingOptionsJson,
+  setMetadataJson,
+}: {
+  resetKey: string;
+  defaultThinkingOptionId: string;
+  thinkingOptionsJson: string;
+  metadataJson: string;
+  setDefaultThinkingOptionId: (value: string) => void;
+  setThinkingOptionsJson: (value: string) => void;
+  setMetadataJson: (value: string) => void;
+}) {
+  return (
+    <>
+      <View style={editorStyles.field}>
+        <Text style={editorStyles.label}>Default thinking option ID</Text>
+        <AdaptiveTextInput
+          initialValue={defaultThinkingOptionId}
+          resetKey={`${resetKey}:default-thinking`}
+          onChangeText={setDefaultThinkingOptionId}
+          placeholder="e.g. high"
+          autoCapitalize="none"
+          autoCorrect={false}
+          style={editorStyles.input}
+        />
+      </View>
+
+      <View style={editorStyles.field}>
+        <Text style={editorStyles.label}>Thinking options (JSON)</Text>
+        <AdaptiveTextInput
+          initialValue={thinkingOptionsJson}
+          resetKey={`${resetKey}:thinking-options`}
+          onChangeText={setThinkingOptionsJson}
+          multiline
+          numberOfLines={8}
+          placeholder='[{"id":"low","label":"Low"},{"id":"high","label":"High","isDefault":true}]'
+          autoCapitalize="none"
+          autoCorrect={false}
+          style={[editorStyles.input, editorStyles.codeInput]}
+        />
+        <Text style={editorStyles.hint}>
+          Supports id, label, description, isDefault, and per-option metadata.
+        </Text>
+      </View>
+
+      <View style={editorStyles.field}>
+        <Text style={editorStyles.label}>Model metadata (JSON)</Text>
+        <AdaptiveTextInput
+          initialValue={metadataJson}
+          resetKey={`${resetKey}:metadata`}
+          onChangeText={setMetadataJson}
+          multiline
+          numberOfLines={6}
+          placeholder="{}"
+          autoCapitalize="none"
+          autoCorrect={false}
+          style={[editorStyles.input, editorStyles.codeInput]}
+        />
+      </View>
+    </>
   );
 }
 
@@ -112,7 +251,6 @@ export function ProviderModelEditorSheet({
   refresh,
 }: ProviderModelEditorSheetProps) {
   const { t } = useTranslation();
-  const { theme } = useUnistyles();
   const { config, patchConfig } = useDaemonConfig(serverId);
 
   const [modelId, setModelId] = useState("");
@@ -161,85 +299,24 @@ export function ProviderModelEditorSheet({
   }:${model?.id ?? ""}`;
   const editingExisting = Boolean(model);
 
-  const buildModel = useCallback((): ProviderProfileModel => {
-    const id = modelId.trim();
-    if (!id) {
-      throw new Error("Model ID is required.");
-    }
-    const normalizedLabel = label.trim() || id;
-
-    let contextWindowMaxTokens: number | undefined;
-    if (contextWindow.trim()) {
-      const parsed = Number(contextWindow.trim());
-      if (!Number.isSafeInteger(parsed) || parsed <= 0) {
-        throw new Error(
-          "Context window must be a positive whole number of tokens."
-        );
-      }
-      contextWindowMaxTokens = parsed;
-    }
-
-    const thinkingOptions = parseOptionalJson(thinkingOptionsJson, "array");
-    const metadata = parseOptionalJson(metadataJson, "object");
-    const defaultThinking = defaultThinkingOptionId.trim() || undefined;
-
-    const candidate = {
-      id,
-      label: normalizedLabel,
-      ...(description.trim() ? { description: description.trim() } : {}),
-      ...(parseAliases(aliases) ? { aliases: parseAliases(aliases) } : {}),
-      ...(contextWindowMaxTokens !== undefined
-        ? { contextWindowMaxTokens }
-        : {}),
-      ...(isDefault !== undefined ? { isDefault } : {}),
-      ...(isSelectable !== undefined ? { isSelectable } : {}),
-      ...(thinkingOptions !== undefined ? { thinkingOptions } : {}),
-      ...(defaultThinking ? { defaultThinkingOptionId: defaultThinking } : {}),
-      ...(metadata !== undefined ? { metadata } : {}),
-    };
-
-    const parsed = ProviderProfileModelSchema.safeParse(candidate);
-    if (!parsed.success) {
-      const issue = parsed.error.issues[0];
-      const path = issue?.path.length ? `${issue.path.join(".")}: ` : "";
-      throw new Error(
-        `${path}${issue?.message ?? "Invalid model configuration."}`
-      );
-    }
-
-    if (
-      parsed.data.defaultThinkingOptionId &&
-      parsed.data.thinkingOptions?.length &&
-      !parsed.data.thinkingOptions.some(
-        (option) => option.id === parsed.data.defaultThinkingOptionId
-      )
-    ) {
-      throw new Error(
-        "Default thinking option must match one of the configured thinking option IDs."
-      );
-    }
-
-    return parsed.data;
-  }, [
-    aliases,
-    contextWindow,
-    defaultThinkingOptionId,
-    description,
-    isDefault,
-    isSelectable,
-    label,
-    metadataJson,
-    modelId,
-    thinkingOptionsJson,
-  ]);
-
   const handleSave = useCallback(() => {
     if (saving) return;
     setError(null);
 
     let nextModel: ProviderProfileModel;
     try {
-      nextModel = buildModel();
+      nextModel = buildProfileModel({
+        id: modelId,
+        label,
+        description,
+        contextWindow,
+        aliases,
+        isDefault,
+        isSelectable,
+        defaultThinkingOptionId,
+        thinkingOptionsJson,
+        metadataJson,
+      });
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "Invalid model configuration."
@@ -286,7 +363,15 @@ export function ProviderModelEditorSheet({
       .finally(() => setSaving(false));
   }, [
     additionalModels,
-    buildModel,
+    aliases,
+    contextWindow,
+    defaultThinkingOptionId,
+    description,
+    isDefault,
+    isSelectable,
+    label,
+    metadataJson,
+    modelId,
     onClose,
     originalModelId,
     patchConfig,
@@ -294,6 +379,7 @@ export function ProviderModelEditorSheet({
     refresh,
     saving,
     t,
+    thinkingOptionsJson,
   ]);
 
   const header = useMemo<SheetHeader>(
@@ -323,14 +409,9 @@ export function ProviderModelEditorSheet({
             onChangeText={setModelId}
             editable={!editingExisting}
             placeholder={t("settings.providers.models.modelIdPlaceholder")}
-            placeholderTextColor={theme.colors.foregroundMuted}
             autoCapitalize="none"
             autoCorrect={false}
-            style={[
-              editorStyles.input,
-              editingExisting && editorStyles.readOnly,
-              isWeb ? ({ outlineStyle: "none" } as never) : undefined,
-            ]}
+            style={[editorStyles.input, editingExisting && editorStyles.readOnly]}
           />
           <Text style={editorStyles.hint}>
             Use an existing discovered ID to override its metadata, or enter a
@@ -345,11 +426,7 @@ export function ProviderModelEditorSheet({
             resetKey={`${resetKey}:label`}
             onChangeText={setLabel}
             placeholder="Defaults to model ID"
-            placeholderTextColor={theme.colors.foregroundMuted}
-            style={[
-              editorStyles.input,
-              isWeb ? ({ outlineStyle: "none" } as never) : undefined,
-            ]}
+            style={editorStyles.input}
           />
         </View>
 
@@ -360,11 +437,7 @@ export function ProviderModelEditorSheet({
             resetKey={`${resetKey}:description`}
             onChangeText={setDescription}
             placeholder="Optional"
-            placeholderTextColor={theme.colors.foregroundMuted}
-            style={[
-              editorStyles.input,
-              isWeb ? ({ outlineStyle: "none" } as never) : undefined,
-            ]}
+            style={editorStyles.input}
           />
         </View>
 
@@ -375,14 +448,10 @@ export function ProviderModelEditorSheet({
             resetKey={`${resetKey}:context`}
             onChangeText={setContextWindow}
             placeholder="e.g. 500000"
-            placeholderTextColor={theme.colors.foregroundMuted}
             keyboardType="number-pad"
             autoCapitalize="none"
             autoCorrect={false}
-            style={[
-              editorStyles.input,
-              isWeb ? ({ outlineStyle: "none" } as never) : undefined,
-            ]}
+            style={editorStyles.input}
           />
           <Text style={editorStyles.hint}>
             For Codex-derived providers this explicit value is also forwarded as
@@ -397,13 +466,9 @@ export function ProviderModelEditorSheet({
             resetKey={`${resetKey}:aliases`}
             onChangeText={setAliases}
             placeholder="Comma or newline separated"
-            placeholderTextColor={theme.colors.foregroundMuted}
             autoCapitalize="none"
             autoCorrect={false}
-            style={[
-              editorStyles.input,
-              isWeb ? ({ outlineStyle: "none" } as never) : undefined,
-            ]}
+            style={editorStyles.input}
           />
         </View>
 
@@ -420,67 +485,15 @@ export function ProviderModelEditorSheet({
           />
         </View>
 
-        <View style={editorStyles.field}>
-          <Text style={editorStyles.label}>Default thinking option ID</Text>
-          <AdaptiveTextInput
-            initialValue={defaultThinkingOptionId}
-            resetKey={`${resetKey}:default-thinking`}
-            onChangeText={setDefaultThinkingOptionId}
-            placeholder="e.g. high"
-            placeholderTextColor={theme.colors.foregroundMuted}
-            autoCapitalize="none"
-            autoCorrect={false}
-            style={[
-              editorStyles.input,
-              isWeb ? ({ outlineStyle: "none" } as never) : undefined,
-            ]}
-          />
-        </View>
-
-        <View style={editorStyles.field}>
-          <Text style={editorStyles.label}>Thinking options (JSON)</Text>
-          <AdaptiveTextInput
-            initialValue={thinkingOptionsJson}
-            resetKey={`${resetKey}:thinking-options`}
-            onChangeText={setThinkingOptionsJson}
-            multiline
-            numberOfLines={8}
-            placeholder={
-              '[{"id":"low","label":"Low"},{"id":"high","label":"High","isDefault":true}]'
-            }
-            placeholderTextColor={theme.colors.foregroundMuted}
-            autoCapitalize="none"
-            autoCorrect={false}
-            style={[
-              editorStyles.input,
-              editorStyles.codeInput,
-              isWeb ? ({ outlineStyle: "none" } as never) : undefined,
-            ]}
-          />
-          <Text style={editorStyles.hint}>
-            Supports id, label, description, isDefault, and per-option metadata.
-          </Text>
-        </View>
-
-        <View style={editorStyles.field}>
-          <Text style={editorStyles.label}>Model metadata (JSON)</Text>
-          <AdaptiveTextInput
-            initialValue={metadataJson}
-            resetKey={`${resetKey}:metadata`}
-            onChangeText={setMetadataJson}
-            multiline
-            numberOfLines={6}
-            placeholder="{}"
-            placeholderTextColor={theme.colors.foregroundMuted}
-            autoCapitalize="none"
-            autoCorrect={false}
-            style={[
-              editorStyles.input,
-              editorStyles.codeInput,
-              isWeb ? ({ outlineStyle: "none" } as never) : undefined,
-            ]}
-          />
-        </View>
+        <JsonFields
+          resetKey={resetKey}
+          defaultThinkingOptionId={defaultThinkingOptionId}
+          thinkingOptionsJson={thinkingOptionsJson}
+          metadataJson={metadataJson}
+          setDefaultThinkingOptionId={setDefaultThinkingOptionId}
+          setThinkingOptionsJson={setThinkingOptionsJson}
+          setMetadataJson={setMetadataJson}
+        />
 
         {error ? <Text style={editorStyles.error}>{error}</Text> : null}
 
