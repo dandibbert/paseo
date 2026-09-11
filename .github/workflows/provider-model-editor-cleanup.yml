@@ -1,4 +1,4 @@
-name: Finalize provider model editor
+name: Finalize provider model editor v2
 
 on:
   push:
@@ -36,12 +36,10 @@ jobs:
           from pathlib import Path
           path = Path('packages/app/src/components/provider-diagnostic-sheet.tsx')
           text = path.read_text()
-
           helper_anchor = 'function DiscoveredModelRow({' 
           helper = '''function iconButtonStyle({\n  hovered,\n  pressed,\n}: PressableStateCallbackType & { hovered?: boolean }) {\n  return [\n    sheetStyles.iconButton,\n    (Boolean(hovered) || pressed) && sheetStyles.iconButtonHovered,\n  ];\n}\n\n'''
           if 'function iconButtonStyle({' not in text:
               text = text.replace(helper_anchor, helper + helper_anchor, 1)
-
           discovered_anchor = '''}) {\n  const { theme } = useUnistyles();\n  return (\n    <View style={sheetStyles.modelRow}>'''
           discovered_replacement = '''}) {\n  const { theme } = useUnistyles();\n  const handleEdit = useCallback(() => onEdit(model), [model, onEdit]);\n  return (\n    <View style={sheetStyles.modelRow}>'''
           if discovered_anchor in text:
@@ -49,7 +47,6 @@ jobs:
           text = text.replace('        onPress={() => onEdit(model)}', '        onPress={handleEdit}', 1)
           inline_style = '''        style={({\n          hovered,\n          pressed,\n        }: PressableStateCallbackType & { hovered?: boolean }) => [\n          sheetStyles.iconButton,\n          (Boolean(hovered) || pressed) && sheetStyles.iconButtonHovered,\n        ]}'''
           text = text.replace(inline_style, '        style={iconButtonStyle}', 1)
-
           custom_anchor = '''  const { t } = useTranslation();\n  const { theme } = useUnistyles();\n  const handleDelete = useCallback('''
           custom_replacement = '''  const { t } = useTranslation();\n  const { theme } = useUnistyles();\n  const handleEdit = useCallback(() => onEdit(model), [model, onEdit]);\n  const handleDelete = useCallback('''
           if custom_anchor in text:
@@ -57,7 +54,6 @@ jobs:
           text = text.replace('        onPress={() => onEdit(model)}', '        onPress={handleEdit}', 1)
           text = text.replace(inline_style, '        style={iconButtonStyle}', 1)
           path.write_text(text)
-
           docs = Path('docs/custom-providers.md')
           d = docs.read_text()
           old = '- `models` / `additionalModels` — model overrides or additions.'
@@ -70,10 +66,7 @@ jobs:
               d = d.replace(old, new, 1)
           docs.write_text(d)
           PY
-          npx prettier --write \
-            packages/app/src/components/provider-model-editor-sheet.tsx \
-            packages/app/src/components/provider-diagnostic-sheet.tsx \
-            docs/custom-providers.md
+          npx prettier --write packages/app/src/components/provider-model-editor-sheet.tsx packages/app/src/components/provider-diagnostic-sheet.tsx docs/custom-providers.md
       - name: Lint touched files
         run: npx oxlint packages/app/src/components/provider-model-editor-sheet.tsx packages/app/src/components/provider-diagnostic-sheet.tsx packages/protocol/src/provider-config.ts packages/server/src/server/agent/provider-registry.ts packages/server/src/server/agent/providers/codex-app-server-agent.ts
       - name: Build server stack
