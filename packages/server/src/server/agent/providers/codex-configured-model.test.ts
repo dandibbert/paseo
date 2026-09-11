@@ -51,17 +51,14 @@ describe("augmentCodexModelCatalog", () => {
   };
 
   it("adds an unknown configured model without replacing the bundled catalog", () => {
-    const result = augmentCodexModelCatalog(
-      { etag: "bundled-etag", models: [bundledTemplate] },
-      [
-        {
-          id: "grok-4.6",
-          aliases: ["grok"],
-          label: "Grok 4.6",
-          contextWindowMaxTokens: 500000,
-        },
-      ],
-    );
+    const result = augmentCodexModelCatalog({ etag: "bundled-etag", models: [bundledTemplate] }, [
+      {
+        id: "grok-4.6",
+        aliases: ["grok"],
+        label: "Grok 4.6",
+        contextWindowMaxTokens: 500000,
+      },
+    ]);
 
     expect(result?.etag).toBe("bundled-etag");
     const models = result?.models as Array<Record<string, unknown>>;
@@ -90,16 +87,13 @@ describe("augmentCodexModelCatalog", () => {
   });
 
   it("raises an existing catalog model max instead of letting Codex clamp it", () => {
-    const result = augmentCodexModelCatalog(
-      { models: [bundledTemplate] },
-      [
-        {
-          id: "gpt-bundled",
-          label: "Bundled GPT",
-          contextWindowMaxTokens: 500000,
-        },
-      ],
-    );
+    const result = augmentCodexModelCatalog({ models: [bundledTemplate] }, [
+      {
+        id: "gpt-bundled",
+        label: "Bundled GPT",
+        contextWindowMaxTokens: 500000,
+      },
+    ]);
     const models = result?.models as Array<Record<string, unknown>>;
     expect(models[0]).toMatchObject({
       preserved_marker: "keep-me",
@@ -112,10 +106,9 @@ describe("augmentCodexModelCatalog", () => {
 
   it("does nothing when no model has an explicit context window", () => {
     expect(
-      augmentCodexModelCatalog(
-        { models: [bundledTemplate] },
-        [{ id: "grok-4.6", label: "Grok 4.6" }],
-      ),
+      augmentCodexModelCatalog({ models: [bundledTemplate] }, [
+        { id: "grok-4.6", label: "Grok 4.6" },
+      ]),
     ).toBeNull();
   });
 });
@@ -125,14 +118,14 @@ describe("buildCodexAppServerArgs", () => {
     expect(
       buildCodexAppServerArgs(
         ["--profile", "custom"],
-        "model_catalog_json=\"/tmp/paseo models.json\"",
+        'model_catalog_json="/tmp/paseo models.json"',
         true,
       ),
     ).toEqual([
       "--profile",
       "custom",
       "-c",
-      "model_catalog_json=\"/tmp/paseo models.json\"",
+      'model_catalog_json="/tmp/paseo models.json"',
       "app-server",
       "--enable",
       "goals",
