@@ -125,14 +125,14 @@ describe("buildCodexAppServerArgs", () => {
     expect(
       buildCodexAppServerArgs(
         ["--profile", "custom"],
-        'model_catalog_json="/tmp/paseo models.json"',
+        "model_catalog_json=\"/tmp/paseo models.json\"",
         true,
       ),
     ).toEqual([
       "--profile",
       "custom",
       "-c",
-      'model_catalog_json="/tmp/paseo models.json"',
+      "model_catalog_json=\"/tmp/paseo models.json\"",
       "app-server",
       "--enable",
       "goals",
