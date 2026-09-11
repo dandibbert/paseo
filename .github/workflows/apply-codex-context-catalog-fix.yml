@@ -1,0 +1,42 @@
+name: Apply Codex configured context catalog fix
+
+on:
+  push:
+    branches: [combined/repair-provider-editor]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apply-codex-context-catalog-fix
+  cancel-in-progress: false
+
+jobs:
+  patch:
+    if: github.repository == 'dandibbert/paseo'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: true
+      - name: Apply context catalog integration
+        run: node scripts/apply-codex-context-catalog-fix.mjs
+      - name: Check patch
+        run: git diff --check
+      - name: Commit integration
+        shell: bash
+        run: |
+          set -euo pipefail
+          target=packages/server/src/server/agent/providers/codex-app-server-agent.ts
+          if git diff --quiet -- "$target"; then
+            echo "Context catalog integration already present."
+            exit 0
+          fi
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add "$target"
+          git commit -m "fix: honor configured Codex context windows"
+          git push origin HEAD:combined/repair-provider-editor
