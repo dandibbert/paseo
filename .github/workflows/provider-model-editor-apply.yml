@@ -47,6 +47,19 @@ jobs:
           path.write_text(text)
           PY
           node scripts/apply-provider-model-editor-patch.mjs
+          python3 - <<'PY'
+          from pathlib import Path
+          editor = Path('packages/app/src/components/provider-model-editor-sheet.tsx')
+          text = editor.read_text()
+          text = text.replace('            // @ts-expect-error - outlineStyle is web-only\n', '')
+          text = text.replace('isWeb && { outlineStyle: "none" }', 'isWeb ? ({ outlineStyle: "none" } as never) : undefined')
+          editor.write_text(text)
+
+          diagnostic = Path('packages/app/src/components/provider-diagnostic-sheet.tsx')
+          text = diagnostic.read_text()
+          text = text.replace('        m.description ?? "",\n        ...(m.aliases ?? []),\n', '        m.description ?? "",\n')
+          diagnostic.write_text(text)
+          PY
       - name: Format touched sources
         run: |
           npx prettier --write \
@@ -57,6 +70,23 @@ jobs:
             packages/server/src/server/agent/provider-registry.ts \
             packages/server/src/server/agent/providers/codex-app-server-agent.ts \
             packages/server/src/server/agent/providers/codex-configured-model.test.ts
+      - name: Commit generated integration
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add \
+            packages/protocol/src/provider-config.ts \
+            packages/protocol/src/provider-config.model-profile.test.ts \
+            packages/app/src/components/provider-diagnostic-sheet.tsx \
+            packages/app/src/components/provider-model-editor-sheet.tsx \
+            packages/server/src/server/agent/provider-registry.ts \
+            packages/server/src/server/agent/providers/codex-app-server-agent.ts \
+            packages/server/src/server/agent/providers/codex-configured-model.test.ts
+          git diff --cached --quiet && { echo 'No generated changes'; exit 1; }
+          git commit -m 'feat(providers): edit full model metadata in settings'
+          git push origin HEAD:feat/provider-model-editor
       - name: Build server stack
         run: npm run build:server
       - name: Typecheck
@@ -85,20 +115,3 @@ jobs:
             packages/server/src/server/agent/providers/codex-app-server-agent.features.test.ts
       - name: Lint
         run: npm run lint
-      - name: Commit generated integration
-        shell: bash
-        run: |
-          set -euo pipefail
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add \
-            packages/protocol/src/provider-config.ts \
-            packages/protocol/src/provider-config.model-profile.test.ts \
-            packages/app/src/components/provider-diagnostic-sheet.tsx \
-            packages/app/src/components/provider-model-editor-sheet.tsx \
-            packages/server/src/server/agent/provider-registry.ts \
-            packages/server/src/server/agent/providers/codex-app-server-agent.ts \
-            packages/server/src/server/agent/providers/codex-configured-model.test.ts
-          git diff --cached --quiet && { echo 'No generated changes'; exit 1; }
-          git commit -m 'feat(providers): edit full model metadata in settings'
-          git push origin HEAD:feat/provider-model-editor
