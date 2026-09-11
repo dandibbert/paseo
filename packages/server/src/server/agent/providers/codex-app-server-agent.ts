@@ -52,6 +52,10 @@ import { z } from "zod";
 import { renderPromptAttachmentAsText } from "../prompt-attachments.js";
 import { composeSystemPromptParts } from "../system-prompt.js";
 import { CodexSubagentPreview } from "./codex/subagent-preview.js";
+import {
+  buildCodexAppServerArgs,
+  resolveCodexModelCatalogConfigOverride,
+} from "./codex/model-catalog-override.js";
 import { CodexAsyncQuestions, codexAsyncQuestionToTimeline } from "./codex/async-questions.js";
 import {
   mapCodexToolCallEnvelope,
@@ -7271,10 +7275,18 @@ export class CodexAppServerAgentClient implements AgentClient {
     options?: { goalsEnabled?: boolean; agentId?: string },
   ): Promise<ChildProcessWithoutNullStreams> {
     const launchPrefix = await resolveCodexLaunchPrefix(this.runtimeSettings);
-    const args = [...launchPrefix.args, "app-server"];
-    if (options?.goalsEnabled) {
-      args.push("--enable", "goals");
-    }
+    const modelCatalogConfigOverride = await resolveCodexModelCatalogConfigOverride({
+      command: launchPrefix.command,
+      launchArgs: launchPrefix.args,
+      runtimeSettings: this.runtimeSettings,
+      launchEnv,
+      configuredModels: this.deps.configuredModels,
+    });
+    const args = buildCodexAppServerArgs(
+      launchPrefix.args,
+      modelCatalogConfigOverride,
+      options?.goalsEnabled === true,
+    );
     this.logger.trace(
       {
         agentId: options?.agentId,
