@@ -100,7 +100,6 @@ jobs:
 
           path.write_text(text)
           PY
-          npx oxfmt "$expected"
           git add "$expected"
           test -z "$(git diff --name-only --diff-filter=U)"
           grep -q 'resolveCodexConfiguredModelConfig' "$expected"
@@ -111,6 +110,26 @@ jobs:
           ! grep -q 'curateAgentActivity' "$expected"
       - name: Install dependencies
         run: node scripts/npm-retry.mjs ci
+      - name: Format integrated sources
+        run: |
+          npx oxfmt \
+            docs/custom-providers.md \
+            packages/app/src/components/provider-diagnostic-sheet.tsx \
+            packages/app/src/components/provider-model-editor-sheet.tsx \
+            packages/protocol/src/provider-config.model-profile.test.ts \
+            packages/protocol/src/provider-config.ts \
+            packages/server/src/server/agent/provider-registry.ts \
+            packages/server/src/server/agent/providers/codex-app-server-agent.ts \
+            packages/server/src/server/agent/providers/codex-configured-model.test.ts
+          git add \
+            docs/custom-providers.md \
+            packages/app/src/components/provider-diagnostic-sheet.tsx \
+            packages/app/src/components/provider-model-editor-sheet.tsx \
+            packages/protocol/src/provider-config.model-profile.test.ts \
+            packages/protocol/src/provider-config.ts \
+            packages/server/src/server/agent/provider-registry.ts \
+            packages/server/src/server/agent/providers/codex-app-server-agent.ts \
+            packages/server/src/server/agent/providers/codex-configured-model.test.ts
       - name: Build server stack
         run: npm run build:server
       - name: Typecheck
