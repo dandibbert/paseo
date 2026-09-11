@@ -1,5 +1,8 @@
 import type { Logger } from "pino";
-import type { ProviderOptions, ToolPolicy } from "@getpaseo/protocol/agent-types";
+import type {
+  ProviderOptions,
+  ToolPolicy,
+} from "@getpaseo/protocol/agent-types";
 import { z } from "zod";
 
 import type {
@@ -52,7 +55,10 @@ import { MockSlowProviderClient } from "./providers/mock-slow-provider.js";
 import { ClaudeProviderOptionsSchema } from "./providers/claude/options.js";
 import { CodexProviderOptionsSchema } from "./providers/codex/options.js";
 import { OpenCodeProviderOptionsSchema } from "./providers/opencode/options.js";
-import { ToolPolicyUnsupportedError, validateProviderOptions } from "./provider-options.js";
+import {
+  ToolPolicyUnsupportedError,
+  validateProviderOptions,
+} from "./provider-options.js";
 import {
   AGENT_PROVIDER_DEFINITIONS,
   BUILTIN_PROVIDER_IDS,
@@ -61,7 +67,9 @@ import {
   type AgentProviderDefinition,
 } from "@getpaseo/protocol/provider-manifest";
 
-function isNonEmptyStringArray(value: string[]): value is [string, ...string[]] {
+function isNonEmptyStringArray(
+  value: string[]
+): value is [string, ...string[]] {
   return value.length > 0;
 }
 
@@ -82,18 +90,24 @@ export interface ProviderDefinition extends AgentProviderDefinition {
   derivedFromProviderId: string | null;
   optionsSchema: z.ZodType<ProviderOptions>;
   supportsExactMcpPreapproval: boolean;
-  validateOptions: (options: ProviderOptions | undefined) => ProviderOptions | undefined;
+  validateOptions: (
+    options: ProviderOptions | undefined
+  ) => ProviderOptions | undefined;
   applyOptions: (
     config: AgentSessionConfig,
-    options: ProviderOptions | undefined,
+    options: ProviderOptions | undefined
   ) => AgentSessionConfig;
   applyToolPolicy: (
     config: AgentSessionConfig,
-    toolPolicy: ToolPolicy | undefined,
+    toolPolicy: ToolPolicy | undefined
   ) => AgentSessionConfig;
   createClient: (logger: Logger) => AgentClient;
-  resolveCreateConfig: (input: ResolveAgentCreateConfigInput) => ResolveAgentCreateConfigResult;
-  isCreateConfigUnattended: (input: AgentCreateConfigUnattendedInput) => boolean;
+  resolveCreateConfig: (
+    input: ResolveAgentCreateConfigInput
+  ) => ResolveAgentCreateConfigResult;
+  isCreateConfigUnattended: (
+    input: AgentCreateConfigUnattendedInput
+  ) => boolean;
   /**
    * Single catalog discovery call used by ProviderSnapshotManager. Should spawn
    * at most one provider runtime process and return both models and modes.
@@ -101,7 +115,7 @@ export interface ProviderDefinition extends AgentProviderDefinition {
   fetchCatalog: (
     options: FetchCatalogOptions,
     client?: AgentClient,
-    context?: ProviderRefreshContext,
+    context?: ProviderRefreshContext
   ) => Promise<ProviderCatalog>;
 }
 
@@ -115,12 +129,14 @@ export interface BuildProviderRegistryOptions {
   openCodeBridge?: OpenCodeBridge;
 }
 
-interface ProviderClientFactoryOptions extends Pick<
-  BuildProviderRegistryOptions,
-  "workspaceGitService" | "managedProcesses" | "ompRuntime"
-> {
+interface ProviderClientFactoryOptions
+  extends Pick<
+    BuildProviderRegistryOptions,
+    "workspaceGitService" | "managedProcesses" | "ompRuntime"
+  > {
   openCodeBridge?: OpenCodeBridge;
   providerParams?: unknown;
+  configuredModels?: ProviderProfileModel[];
   customProvider?: {
     id: string;
     label: string;
@@ -131,7 +147,7 @@ interface ProviderClientFactoryOptions extends Pick<
 type ProviderClientFactory = (
   logger: Logger,
   runtimeSettings?: ProviderRuntimeSettings,
-  options?: ProviderClientFactoryOptions,
+  options?: ProviderClientFactoryOptions
 ) => AgentClient;
 
 interface ResolvedProvider {
@@ -153,12 +169,23 @@ interface ProviderContract {
   applyToolPolicy?: (provider: string, toolPolicy: ToolPolicy) => ToolPolicy;
 }
 
-const EmptyProviderOptionsSchema: z.ZodType<ProviderOptions> = z.object({}).strict();
+const EmptyProviderOptionsSchema: z.ZodType<ProviderOptions> = z
+  .object({})
+  .strict();
 
 const PROVIDER_CONTRACTS: Record<string, ProviderContract> = {
-  claude: { optionsSchema: ClaudeProviderOptionsSchema, supportsExactMcpPreapproval: true },
-  codex: { optionsSchema: CodexProviderOptionsSchema, supportsExactMcpPreapproval: true },
-  opencode: { optionsSchema: OpenCodeProviderOptionsSchema, supportsExactMcpPreapproval: true },
+  claude: {
+    optionsSchema: ClaudeProviderOptionsSchema,
+    supportsExactMcpPreapproval: true,
+  },
+  codex: {
+    optionsSchema: CodexProviderOptionsSchema,
+    supportsExactMcpPreapproval: true,
+  },
+  opencode: {
+    optionsSchema: OpenCodeProviderOptionsSchema,
+    supportsExactMcpPreapproval: true,
+  },
 };
 
 const UNSUPPORTED_PROVIDER_CONTRACT: ProviderContract = {
@@ -183,7 +210,7 @@ const HUB_E2E_PROVIDER_CONTRACT: ProviderContract = {
       ) {
         throw new ToolPolicyUnsupportedError(
           provider,
-          `Provider '${provider}' accepts only exact MCP tool grants for the injected '${HUB_E2E_MCP_SERVER}' server`,
+          `Provider '${provider}' accepts only exact MCP tool grants for the injected '${HUB_E2E_MCP_SERVER}' server`
         );
       }
     }
@@ -203,6 +230,7 @@ const PROVIDER_CLIENT_FACTORIES: Record<string, ProviderClientFactory> = {
     new CodexAppServerAgentClient(logger, runtimeSettings, {
       workspaceGitService: options?.workspaceGitService,
       customProvider: options?.customProvider,
+      configuredModels: options?.configuredModels,
     }),
   copilot: (logger, runtimeSettings) =>
     new CopilotACPAgentClient({
@@ -238,7 +266,7 @@ const PROVIDER_CLIENT_FACTORIES: Record<string, ProviderClientFactory> = {
 };
 
 function getCursorACPCommand(
-  runtimeSettings: ProviderRuntimeSettings | undefined,
+  runtimeSettings: ProviderRuntimeSettings | undefined
 ): [string, ...string[]] {
   if (
     runtimeSettings?.command?.mode === "replace" &&
@@ -258,7 +286,9 @@ function getProviderClientFactory(provider: string): ProviderClientFactory {
   return factory;
 }
 
-function toRuntimeSettings(override?: ProviderOverride): ProviderRuntimeSettings | undefined {
+function toRuntimeSettings(
+  override?: ProviderOverride
+): ProviderRuntimeSettings | undefined {
   if (!override?.command && !override?.env && !override?.disallowedTools) {
     return undefined;
   }
@@ -277,7 +307,7 @@ function toRuntimeSettings(override?: ProviderOverride): ProviderRuntimeSettings
 
 function mergeRuntimeSettings(
   base: ProviderRuntimeSettings | undefined,
-  override: ProviderRuntimeSettings | undefined,
+  override: ProviderRuntimeSettings | undefined
 ): ProviderRuntimeSettings | undefined {
   if (!base && !override) {
     return undefined;
@@ -294,14 +324,17 @@ function mergeRuntimeSettings(
         : undefined,
     disallowedTools:
       base?.disallowedTools || override?.disallowedTools
-        ? [...(base?.disallowedTools ?? []), ...(override?.disallowedTools ?? [])]
+        ? [
+            ...(base?.disallowedTools ?? []),
+            ...(override?.disallowedTools ?? []),
+          ]
         : undefined,
   };
 }
 
 function applyOverrideToDefinition(
   definition: AgentProviderDefinition,
-  override?: ProviderOverride,
+  override?: ProviderOverride
 ): AgentProviderDefinition {
   if (!override) {
     return definition;
@@ -317,7 +350,7 @@ function applyOverrideToDefinition(
 function createDerivedDefinition(
   providerId: string,
   baseDefinition: AgentProviderDefinition,
-  override: ProviderOverride,
+  override: ProviderOverride
 ): AgentProviderDefinition {
   if (!override.label) {
     throw new Error(`Custom provider '${providerId}' requires a label`);
@@ -333,7 +366,7 @@ function createDerivedDefinition(
 
 function mapPersistenceHandle(
   provider: AgentProvider,
-  handle: AgentPersistenceHandle | null,
+  handle: AgentPersistenceHandle | null
 ): AgentPersistenceHandle | null {
   if (!handle) {
     return null;
@@ -345,14 +378,20 @@ function mapPersistenceHandle(
   };
 }
 
-function mapRuntimeInfo(provider: AgentProvider, runtimeInfo: AgentRuntimeInfo): AgentRuntimeInfo {
+function mapRuntimeInfo(
+  provider: AgentProvider,
+  runtimeInfo: AgentRuntimeInfo
+): AgentRuntimeInfo {
   return {
     ...runtimeInfo,
     provider,
   };
 }
 
-function mapStreamEvent(provider: AgentProvider, event: AgentStreamEvent): AgentStreamEvent {
+function mapStreamEvent(
+  provider: AgentProvider,
+  event: AgentStreamEvent
+): AgentStreamEvent {
   return {
     ...event,
     provider,
@@ -361,7 +400,7 @@ function mapStreamEvent(provider: AgentProvider, event: AgentStreamEvent): Agent
 
 function mapModel(
   provider: AgentProvider,
-  model: AgentModelDefinition | ProviderProfileModel,
+  model: AgentModelDefinition | ProviderProfileModel
 ): AgentModelDefinition {
   return normalizeAgentModelDefinition({ ...model, provider });
 }
@@ -369,7 +408,7 @@ function mapModel(
 function resolveConfiguredModels(
   provider: AgentProvider,
   client: AgentClient,
-  models: ProviderProfileModel[],
+  models: ProviderProfileModel[]
 ): AgentModelDefinition[] {
   return models.map((model) => {
     const mapped = mapModel(provider, model);
@@ -382,24 +421,27 @@ function mergeModels(
   profileModels: ProviderProfileModel[],
   additionalModels: ProviderProfileModel[],
   runtimeModels: AgentModelDefinition[],
-  options?: { profileModelsAreAdditive?: boolean },
+  options?: { profileModelsAreAdditive?: boolean }
 ): AgentModelDefinition[] {
   const baseModels = runtimeModels.map((model) => mapModel(provider, model));
   if (profileModels.length > 0 && options?.profileModelsAreAdditive !== true) {
     return mergeModelAdditions(
       provider,
       profileModels.map((model) => mapModel(provider, model)),
-      additionalModels,
+      additionalModels
     );
   }
 
-  return mergeModelAdditions(provider, baseModels, [...profileModels, ...additionalModels]);
+  return mergeModelAdditions(provider, baseModels, [
+    ...profileModels,
+    ...additionalModels,
+  ]);
 }
 
 function mergeModelAdditions(
   provider: AgentProvider,
   baseModels: AgentModelDefinition[],
-  modelAdditions: Array<ProviderProfileModel | AgentModelDefinition>,
+  modelAdditions: Array<ProviderProfileModel | AgentModelDefinition>
 ): AgentModelDefinition[] {
   if (modelAdditions.length === 0) {
     return baseModels;
@@ -412,7 +454,9 @@ function mergeModelAdditions(
     const additionalModel = mapModel(provider, model);
     hasAdditionalDefault ||= additionalModel.isDefault === true;
 
-    const existingIndex = mergedModels.findIndex((candidate) => candidate.id === model.id);
+    const existingIndex = mergedModels.findIndex(
+      (candidate) => candidate.id === model.id
+    );
     if (existingIndex === -1) {
       mergedModels.push(additionalModel);
       continue;
@@ -420,7 +464,8 @@ function mergeModelAdditions(
 
     const existingModel = mergedModels[existingIndex];
     const explicitlyEnablesCompatibilityModel =
-      existingModel?.isSelectable === false && additionalModel.isSelectable === undefined;
+      existingModel?.isSelectable === false &&
+      additionalModel.isSelectable === undefined;
     mergedModels[existingIndex] = {
       ...existingModel,
       ...additionalModel,
@@ -433,15 +478,22 @@ function mergeModelAdditions(
   }
 
   const additionalDefaultIds = new Set(
-    modelAdditions.filter((model) => model.isDefault === true).map((model) => model.id),
+    modelAdditions
+      .filter((model) => model.isDefault === true)
+      .map((model) => model.id)
   );
 
   return mergedModels.map((model) =>
-    additionalDefaultIds.has(model.id) ? model : Object.assign({}, model, { isDefault: false }),
+    additionalDefaultIds.has(model.id)
+      ? model
+      : Object.assign({}, model, { isDefault: false })
   );
 }
 
-export function wrapSessionProvider(provider: AgentProvider, inner: AgentSession): AgentSession {
+export function wrapSessionProvider(
+  provider: AgentProvider,
+  inner: AgentSession
+): AgentSession {
   return {
     provider,
     id: inner.id,
@@ -451,19 +503,23 @@ export function wrapSessionProvider(provider: AgentProvider, inner: AgentSession
     },
     run: (prompt, options) => inner.run(prompt, options),
     startTurn: (prompt, options) => inner.startTurn(prompt, options),
-    subscribe: (callback) => inner.subscribe((event) => callback(mapStreamEvent(provider, event))),
+    subscribe: (callback) =>
+      inner.subscribe((event) => callback(mapStreamEvent(provider, event))),
     async *streamHistory() {
       for await (const event of inner.streamHistory()) {
         yield mapStreamEvent(provider, event);
       }
     },
-    getRuntimeInfo: async () => mapRuntimeInfo(provider, await inner.getRuntimeInfo()),
+    getRuntimeInfo: async () =>
+      mapRuntimeInfo(provider, await inner.getRuntimeInfo()),
     getAvailableModes: () => inner.getAvailableModes(),
     getCurrentMode: () => inner.getCurrentMode(),
     setMode: (modeId) => inner.setMode(modeId),
     getPendingPermissions: () => inner.getPendingPermissions(),
-    respondToPermission: (requestId, response) => inner.respondToPermission(requestId, response),
-    describePersistence: () => mapPersistenceHandle(provider, inner.describePersistence()),
+    respondToPermission: (requestId, response) =>
+      inner.respondToPermission(requestId, response),
+    describePersistence: () =>
+      mapPersistenceHandle(provider, inner.describePersistence()),
     interrupt: () => inner.interrupt(),
     close: () => inner.close(),
     listCommands: inner.listCommands?.bind(inner),
@@ -482,7 +538,7 @@ function wrapClientProvider(
   inner: AgentClient,
   profileModels: ProviderProfileModel[],
   additionalModels: ProviderProfileModel[],
-  profileModelsAreAdditive: boolean,
+  profileModelsAreAdditive: boolean
 ): AgentClient {
   const listImportableSessions = inner.listImportableSessions?.bind(inner);
   const importSession = inner.importSession?.bind(inner);
@@ -499,8 +555,8 @@ function wrapClientProvider(
             ...config,
             provider: inner.provider,
           },
-          launchContext,
-        ),
+          launchContext
+        )
       ),
     resumeSession: async (handle, overrides, launchContext, options) =>
       wrapSessionProvider(
@@ -517,16 +573,22 @@ function wrapClientProvider(
               }
             : undefined,
           launchContext,
-          options,
-        ),
+          options
+        )
       ),
     fetchCatalog: async (options, context) => {
       const catalog = await inner.fetchCatalog(options, context);
       return {
         ...catalog,
-        models: mergeModels(provider, profileModels, additionalModels, catalog.models, {
-          profileModelsAreAdditive,
-        }),
+        models: mergeModels(
+          provider,
+          profileModels,
+          additionalModels,
+          catalog.models,
+          {
+            profileModelsAreAdditive,
+          }
+        ),
         modes: catalog.modes,
       };
     },
@@ -542,7 +604,8 @@ function wrapClientProvider(
     resolveConfiguredModel: inner.resolveConfiguredModel?.bind(inner),
     isCreateConfigUnattended: inner.isCreateConfigUnattended?.bind(inner),
     listFeatures: listFeatures
-      ? async (config) => await listFeatures({ ...config, provider: inner.provider })
+      ? async (config) =>
+          await listFeatures({ ...config, provider: inner.provider })
       : undefined,
     listImportableSessions: listImportableSessions
       ? async (options) => await listImportableSessions(options)
@@ -560,9 +623,14 @@ function wrapClientProvider(
               provider: inner.provider,
             },
           });
-          const persistence = mapPersistenceHandle(provider, imported.persistence);
+          const persistence = mapPersistenceHandle(
+            provider,
+            imported.persistence
+          );
           if (!persistence) {
-            throw new Error(`Provider '${provider}' import did not return persistence`);
+            throw new Error(
+              `Provider '${provider}' import did not return persistence`
+            );
           }
           return {
             ...imported,
@@ -584,16 +652,21 @@ function wrapClientProvider(
 function createRegistryEntry(
   logger: Logger,
   provider: AgentProvider,
-  resolved: ResolvedProvider,
+  resolved: ResolvedProvider
 ): ProviderDefinition {
   const modelClient = resolved.createBaseClient(logger);
-  const profileModels = resolveConfiguredModels(provider, modelClient, resolved.profileModels);
+  const profileModels = resolveConfiguredModels(
+    provider,
+    modelClient,
+    resolved.profileModels
+  );
   const additionalModels = resolveConfiguredModels(
     provider,
     modelClient,
-    resolved.additionalModels,
+    resolved.additionalModels
   );
-  const hasReplacementModels = profileModels.length > 0 && !resolved.profileModelsAreAdditive;
+  const hasReplacementModels =
+    profileModels.length > 0 && !resolved.profileModelsAreAdditive;
   const replacementModels = hasReplacementModels
     ? profileModels.map((model) => mapModel(provider, model))
     : [];
@@ -601,7 +674,9 @@ function createRegistryEntry(
   const decorateModes = (modes: AgentMode[]): AgentMode[] =>
     modes.map((mode) => {
       if (mode.icon && mode.colorTier) return mode;
-      const definitionMode = resolved.definition.modes.find((d) => d.id === mode.id);
+      const definitionMode = resolved.definition.modes.find(
+        (d) => d.id === mode.id
+      );
       if (!definitionMode) return mode;
       return Object.assign({}, mode, {
         icon: mode.icon ?? definitionMode.icon,
@@ -611,7 +686,11 @@ function createRegistryEntry(
 
   const hasStaticModes = resolved.definition.modes.length > 0;
 
-  const { createBaseClient: _createBaseClient, contract: _contract, ...configuration } = resolved;
+  const {
+    createBaseClient: _createBaseClient,
+    contract: _contract,
+    ...configuration
+  } = resolved;
   return {
     ...resolved.definition,
     configuration,
@@ -620,8 +699,15 @@ function createRegistryEntry(
     optionsSchema: resolved.contract.optionsSchema,
     supportsExactMcpPreapproval: resolved.contract.supportsExactMcpPreapproval,
     validateOptions: (options) =>
-      validateProviderOptions(provider, resolved.contract.optionsSchema, options),
-    applyOptions: (config, options) => ({ ...config, providerOptions: options }),
+      validateProviderOptions(
+        provider,
+        resolved.contract.optionsSchema,
+        options
+      ),
+    applyOptions: (config, options) => ({
+      ...config,
+      providerOptions: options,
+    }),
     applyToolPolicy: (config, toolPolicy) => {
       if (toolPolicy && !resolved.contract.supportsExactMcpPreapproval) {
         throw new ToolPolicyUnsupportedError(provider);
@@ -629,26 +715,33 @@ function createRegistryEntry(
       return {
         ...config,
         toolPolicy: toolPolicy
-          ? (resolved.contract.applyToolPolicy?.(provider, toolPolicy) ?? toolPolicy)
+          ? resolved.contract.applyToolPolicy?.(provider, toolPolicy) ??
+            toolPolicy
           : undefined,
       };
     },
     createClient: (providerLogger: Logger) =>
       createResolvedProviderClient(providerLogger, provider, resolved),
-    resolveCreateConfig: modelClient.resolveCreateConfig ?? resolveDefaultAgentCreateConfig,
+    resolveCreateConfig:
+      modelClient.resolveCreateConfig ?? resolveDefaultAgentCreateConfig,
     isCreateConfigUnattended:
-      modelClient.isCreateConfigUnattended ?? isDefaultAgentCreateConfigUnattended,
+      modelClient.isCreateConfigUnattended ??
+      isDefaultAgentCreateConfigUnattended,
     fetchCatalog: async (
       options: FetchCatalogOptions,
       client?: AgentClient,
-      context?: ProviderRefreshContext,
+      context?: ProviderRefreshContext
     ) => {
       const catalogClient = client ?? modelClient;
       if (hasReplacementModels) {
         // Replacement models skip runtime model discovery, but additionalModels
         // must still be merged on top. If modes are dynamic, probe for modes via
         // the single catalog API; otherwise use static/empty modes with no runtime.
-        const models = mergeModelAdditions(provider, replacementModels, additionalModels);
+        const models = mergeModelAdditions(
+          provider,
+          replacementModels,
+          additionalModels
+        );
         if (hasStaticModes) {
           const defaultModeId = await runProviderRefreshActivity(
             context,
@@ -657,10 +750,11 @@ function createRegistryEntry(
               await catalogClient.resolveDefaultModeId?.({
                 config: {
                   provider,
-                  cwd: options.scope === "workspace" ? options.cwd : process.cwd(),
+                  cwd:
+                    options.scope === "workspace" ? options.cwd : process.cwd(),
                 },
                 signal: context?.signal,
-              }),
+              })
           );
           return {
             models,
@@ -675,9 +769,15 @@ function createRegistryEntry(
       const catalog = await catalogClient.fetchCatalog(options, context);
       return {
         ...catalog,
-        models: mergeModels(provider, profileModels, additionalModels, catalog.models, {
-          profileModelsAreAdditive: resolved.profileModelsAreAdditive,
-        }),
+        models: mergeModels(
+          provider,
+          profileModels,
+          additionalModels,
+          catalog.models,
+          {
+            profileModelsAreAdditive: resolved.profileModelsAreAdditive,
+          }
+        ),
         modes: decorateModes(catalog.modes),
       };
     },
@@ -687,12 +787,21 @@ function createRegistryEntry(
 function createResolvedProviderClient(
   logger: Logger,
   provider: AgentProvider,
-  resolved: ResolvedProvider,
+  resolved: ResolvedProvider
 ): AgentClient {
   const inner = resolved.createBaseClient(logger);
-  const profileModels = resolveConfiguredModels(provider, inner, resolved.profileModels);
-  const additionalModels = resolveConfiguredModels(provider, inner, resolved.additionalModels);
-  const hasModelOverrides = profileModels.length > 0 || additionalModels.length > 0;
+  const profileModels = resolveConfiguredModels(
+    provider,
+    inner,
+    resolved.profileModels
+  );
+  const additionalModels = resolveConfiguredModels(
+    provider,
+    inner,
+    resolved.additionalModels
+  );
+  const hasModelOverrides =
+    profileModels.length > 0 || additionalModels.length > 0;
   if (inner.provider === provider && !hasModelOverrides) {
     return inner;
   }
@@ -701,7 +810,7 @@ function createResolvedProviderClient(
     inner,
     profileModels,
     additionalModels,
-    resolved.profileModelsAreAdditive,
+    resolved.profileModelsAreAdditive
   );
 }
 
@@ -712,7 +821,7 @@ function buildResolvedBuiltinProviders(
     BuildProviderRegistryOptions,
     "workspaceGitService" | "managedProcesses" | "ompRuntime" | "openCodeBridge"
   >,
-  isDev: boolean,
+  isDev: boolean
 ): Map<string, ResolvedProvider> {
   const resolvedProviders = new Map<string, ResolvedProvider>();
 
@@ -725,7 +834,7 @@ function buildResolvedBuiltinProviders(
     const factory = getProviderClientFactory(definition.id);
     const mergedRuntimeSettings = mergeRuntimeSettings(
       runtimeSettings?.[definition.id],
-      toRuntimeSettings(override),
+      toRuntimeSettings(override)
     );
 
     resolvedProviders.set(definition.id, {
@@ -744,8 +853,13 @@ function buildResolvedBuiltinProviders(
           ompRuntime: options.ompRuntime,
           openCodeBridge: options.openCodeBridge,
           providerParams: override?.params,
+          configuredModels: [
+            ...(override?.models ?? []),
+            ...(override?.additionalModels ?? []),
+          ],
         }),
-      contract: PROVIDER_CONTRACTS[definition.id] ?? UNSUPPORTED_PROVIDER_CONTRACT,
+      contract:
+        PROVIDER_CONTRACTS[definition.id] ?? UNSUPPORTED_PROVIDER_CONTRACT,
     });
   }
 
@@ -755,15 +869,23 @@ function buildResolvedBuiltinProviders(
 function addDerivedProviders(
   resolvedProviders: Map<string, ResolvedProvider>,
   providerOverrides: Record<string, ProviderOverride>,
-  options: Pick<BuildProviderRegistryOptions, "managedProcesses" | "openCodeBridge">,
+  options: Pick<
+    BuildProviderRegistryOptions,
+    "managedProcesses" | "openCodeBridge"
+  >
 ): void {
   for (const [providerId, override] of Object.entries(providerOverrides)) {
-    if (resolvedProviders.has(providerId) || BUILTIN_PROVIDER_IDS.includes(providerId)) {
+    if (
+      resolvedProviders.has(providerId) ||
+      BUILTIN_PROVIDER_IDS.includes(providerId)
+    ) {
       continue;
     }
 
     if (!override.extends) {
-      throw new Error(`Custom provider '${providerId}' requires an extends value`);
+      throw new Error(
+        `Custom provider '${providerId}' requires an extends value`
+      );
     }
 
     if (override.extends === "acp") {
@@ -783,7 +905,7 @@ function addDerivedProviders(
             defaultModeId: null,
             modes: [],
           },
-          override,
+          override
         ),
         runtimeSettings: toRuntimeSettings(override),
         profileModels: override.models ?? [],
@@ -827,13 +949,13 @@ function addDerivedProviders(
     const baseProvider = resolvedProviders.get(baseProviderId);
     if (!baseProvider) {
       throw new Error(
-        `Custom provider '${providerId}' extends unknown provider '${baseProviderId}'`,
+        `Custom provider '${providerId}' extends unknown provider '${baseProviderId}'`
       );
     }
 
     const mergedRuntimeSettings = mergeRuntimeSettings(
       baseProvider.runtimeSettings,
-      toRuntimeSettings(override),
+      toRuntimeSettings(override)
     );
     const baseDefinition = baseProvider.definition;
     const baseFactory = getProviderClientFactory(baseProviderId);
@@ -853,6 +975,10 @@ function addDerivedProviders(
           managedProcesses: options.managedProcesses,
           openCodeBridge: options.openCodeBridge,
           providerParams,
+          configuredModels: [
+            ...(override.models ?? []),
+            ...(override.additionalModels ?? []),
+          ],
           customProvider: {
             id: providerId,
             label: override.label ?? providerId,
@@ -866,7 +992,7 @@ function addDerivedProviders(
 
 export function buildProviderRegistry(
   logger: Logger,
-  options?: BuildProviderRegistryOptions,
+  options?: BuildProviderRegistryOptions
 ): Record<AgentProvider, ProviderDefinition> {
   const runtimeSettings = options?.runtimeSettings;
   const providerOverrides = options?.providerOverrides ?? {};
@@ -879,7 +1005,7 @@ export function buildProviderRegistry(
       ompRuntime: options?.ompRuntime,
       openCodeBridge: options?.openCodeBridge,
     },
-    options?.isDev === true,
+    options?.isDev === true
   );
   addDerivedProviders(resolvedProviders, providerOverrides, {
     managedProcesses: options?.managedProcesses,
@@ -890,12 +1016,12 @@ export function buildProviderRegistry(
     [...resolvedProviders.entries()].map(([provider, resolved]) => [
       provider,
       createRegistryEntry(logger, provider, resolved),
-    ]),
+    ])
   ) as Record<AgentProvider, ProviderDefinition>;
 }
 
 export function getProviderIds(
-  registry: Record<AgentProvider, ProviderDefinition>,
+  registry: Record<AgentProvider, ProviderDefinition>
 ): AgentProvider[] {
   return Object.keys(registry);
 }
@@ -906,26 +1032,29 @@ export const PROVIDER_REGISTRY: Record<AgentProvider, ProviderDefinition> =
 
 export function createAllClients(
   logger: Logger,
-  options?: BuildProviderRegistryOptions,
+  options?: BuildProviderRegistryOptions
 ): Record<AgentProvider, AgentClient> {
-  return createClientsFromRegistry(buildProviderRegistry(logger, options), logger);
+  return createClientsFromRegistry(
+    buildProviderRegistry(logger, options),
+    logger
+  );
 }
 
 export function createClientsFromRegistry(
   registry: Record<AgentProvider, ProviderDefinition>,
-  logger: Logger,
+  logger: Logger
 ): Record<AgentProvider, AgentClient> {
   return Object.fromEntries(
     Object.entries(registry).map(([provider, definition]) => [
       provider,
       definition.createClient(logger),
-    ]),
+    ])
   ) as Record<AgentProvider, AgentClient>;
 }
 
 export async function shutdownProviders(
   logger: Logger,
-  options?: BuildProviderRegistryOptions,
+  options?: BuildProviderRegistryOptions
 ): Promise<void> {
   const clients = createAllClients(logger, options);
   await shutdownAgentClients(Object.values(clients), logger);
@@ -933,7 +1062,7 @@ export async function shutdownProviders(
 
 export async function shutdownAgentClients(
   clients: Iterable<AgentClient>,
-  logger: Logger,
+  logger: Logger
 ): Promise<void> {
   await Promise.all(
     Array.from(clients).map(async (client) => {
@@ -941,8 +1070,11 @@ export async function shutdownAgentClients(
       try {
         await client.shutdown();
       } catch (error) {
-        logger.warn({ err: error, provider: client.provider }, "Provider client shutdown failed");
+        logger.warn(
+          { err: error, provider: client.provider },
+          "Provider client shutdown failed"
+        );
       }
-    }),
+    })
   );
 }

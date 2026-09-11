@@ -10,7 +10,10 @@ import {
 import { Button } from "@/components/ui/button";
 import { isWeb } from "@/constants/platform";
 import { useDaemonConfig } from "@/hooks/use-daemon-config";
-import type { AgentModelDefinition, AgentProvider } from "@getpaseo/protocol/agent-types";
+import type {
+  AgentModelDefinition,
+  AgentProvider,
+} from "@getpaseo/protocol/agent-types";
 import {
   ProviderProfileModelSchema,
   type ProviderProfileModel,
@@ -36,13 +39,16 @@ function parseAliases(value: string): string[] | undefined {
       value
         .split(/[\n,]/u)
         .map((entry) => entry.trim())
-        .filter(Boolean),
-    ),
+        .filter(Boolean)
+    )
   );
   return aliases.length > 0 ? aliases : undefined;
 }
 
-function parseOptionalJson(value: string, expected: "object" | "array"): unknown | undefined {
+function parseOptionalJson(
+  value: string,
+  expected: "object" | "array"
+): unknown | undefined {
   const trimmed = value.trim();
   if (!trimmed) return undefined;
   const parsed: unknown = JSON.parse(trimmed);
@@ -124,7 +130,7 @@ export function ProviderModelEditorSheet({
 
   const additionalModels = useMemo(
     () => config?.providers?.[provider]?.additionalModels ?? [],
-    [config?.providers, provider],
+    [config?.providers, provider]
   );
 
   useEffect(() => {
@@ -137,7 +143,9 @@ export function ProviderModelEditorSheet({
     setLabel(model?.label ?? "");
     setDescription(model?.description ?? "");
     setContextWindow(
-      model?.contextWindowMaxTokens != null ? String(model.contextWindowMaxTokens) : "",
+      model?.contextWindowMaxTokens != null
+        ? String(model.contextWindowMaxTokens)
+        : ""
     );
     setAliases(model?.aliases?.join(", ") ?? "");
     setIsDefault(model?.isDefault);
@@ -148,8 +156,10 @@ export function ProviderModelEditorSheet({
     setError(null);
   }, [model, visible]);
 
-  const resetKey = `${visible ? "open" : "closed"}:${originalModelId ?? "new"}:${model?.id ?? ""}`;
-  const editingExisting = Boolean(originalModelId);
+  const resetKey = `${visible ? "open" : "closed"}:${
+    originalModelId ?? "new"
+  }:${model?.id ?? ""}`;
+  const editingExisting = Boolean(model);
 
   const buildModel = useCallback((): ProviderProfileModel => {
     const id = modelId.trim();
@@ -162,7 +172,9 @@ export function ProviderModelEditorSheet({
     if (contextWindow.trim()) {
       const parsed = Number(contextWindow.trim());
       if (!Number.isSafeInteger(parsed) || parsed <= 0) {
-        throw new Error("Context window must be a positive whole number of tokens.");
+        throw new Error(
+          "Context window must be a positive whole number of tokens."
+        );
       }
       contextWindowMaxTokens = parsed;
     }
@@ -176,7 +188,9 @@ export function ProviderModelEditorSheet({
       label: normalizedLabel,
       ...(description.trim() ? { description: description.trim() } : {}),
       ...(parseAliases(aliases) ? { aliases: parseAliases(aliases) } : {}),
-      ...(contextWindowMaxTokens !== undefined ? { contextWindowMaxTokens } : {}),
+      ...(contextWindowMaxTokens !== undefined
+        ? { contextWindowMaxTokens }
+        : {}),
       ...(isDefault !== undefined ? { isDefault } : {}),
       ...(isSelectable !== undefined ? { isSelectable } : {}),
       ...(thinkingOptions !== undefined ? { thinkingOptions } : {}),
@@ -188,17 +202,21 @@ export function ProviderModelEditorSheet({
     if (!parsed.success) {
       const issue = parsed.error.issues[0];
       const path = issue?.path.length ? `${issue.path.join(".")}: ` : "";
-      throw new Error(`${path}${issue?.message ?? "Invalid model configuration."}`);
+      throw new Error(
+        `${path}${issue?.message ?? "Invalid model configuration."}`
+      );
     }
 
     if (
       parsed.data.defaultThinkingOptionId &&
       parsed.data.thinkingOptions?.length &&
       !parsed.data.thinkingOptions.some(
-        (option) => option.id === parsed.data.defaultThinkingOptionId,
+        (option) => option.id === parsed.data.defaultThinkingOptionId
       )
     ) {
-      throw new Error("Default thinking option must match one of the configured thinking option IDs.");
+      throw new Error(
+        "Default thinking option must match one of the configured thinking option IDs."
+      );
     }
 
     return parsed.data;
@@ -223,20 +241,29 @@ export function ProviderModelEditorSheet({
     try {
       nextModel = buildModel();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Invalid model configuration.");
+      setError(
+        err instanceof Error ? err.message : "Invalid model configuration."
+      );
       return;
     }
 
     const duplicate = additionalModels.some(
-      (entry) => entry.id === nextModel.id && entry.id !== originalModelId,
+      (entry) => entry.id === nextModel.id && entry.id !== originalModelId
     );
     if (duplicate) {
-      setError(`A custom model or override with ID “${nextModel.id}” already exists.`);
+      setError(
+        `A custom model or override with ID “${nextModel.id}” already exists.`
+      );
       return;
     }
 
-    const nextAdditionalModels = originalModelId
-      ? additionalModels.map((entry) => (entry.id === originalModelId ? nextModel : entry))
+    const hasOriginalOverride =
+      Boolean(originalModelId) &&
+      additionalModels.some((entry) => entry.id === originalModelId);
+    const nextAdditionalModels = hasOriginalOverride
+      ? additionalModels.map((entry) =>
+          entry.id === originalModelId ? nextModel : entry
+        )
       : [...additionalModels, nextModel];
 
     setSaving(true);
@@ -250,7 +277,11 @@ export function ProviderModelEditorSheet({
       .then(() => refresh([provider]))
       .then(() => onClose())
       .catch((err) => {
-        setError(err instanceof Error ? err.message : t("settings.providers.models.failedToSave"));
+        setError(
+          err instanceof Error
+            ? err.message
+            : t("settings.providers.models.failedToSave")
+        );
       })
       .finally(() => setSaving(false));
   }, [
@@ -266,8 +297,10 @@ export function ProviderModelEditorSheet({
   ]);
 
   const header = useMemo<SheetHeader>(
-    () => ({ title: editingExisting ? "Edit model override" : "Add / override model" }),
-    [editingExisting],
+    () => ({
+      title: editingExisting ? "Edit model override" : "Add / override model",
+    }),
+    [editingExisting]
   );
 
   return (
@@ -281,7 +314,9 @@ export function ProviderModelEditorSheet({
     >
       <View style={editorStyles.form}>
         <View style={editorStyles.field}>
-          <Text style={editorStyles.label}>{t("settings.providers.models.modelId")}</Text>
+          <Text style={editorStyles.label}>
+            {t("settings.providers.models.modelId")}
+          </Text>
           <AdaptiveTextInput
             initialValue={modelId}
             resetKey={`${resetKey}:id`}
@@ -291,11 +326,15 @@ export function ProviderModelEditorSheet({
             placeholderTextColor={theme.colors.foregroundMuted}
             autoCapitalize="none"
             autoCorrect={false}
-            // @ts-expect-error - outlineStyle is web-only
-            style={[editorStyles.input, editingExisting && editorStyles.readOnly, isWeb && { outlineStyle: "none" }]}
+            style={[
+              editorStyles.input,
+              editingExisting && editorStyles.readOnly,
+              isWeb ? ({ outlineStyle: "none" } as never) : undefined,
+            ]}
           />
           <Text style={editorStyles.hint}>
-            Use an existing discovered ID to override its metadata, or enter a new model ID.
+            Use an existing discovered ID to override its metadata, or enter a
+            new model ID.
           </Text>
         </View>
 
@@ -307,8 +346,10 @@ export function ProviderModelEditorSheet({
             onChangeText={setLabel}
             placeholder="Defaults to model ID"
             placeholderTextColor={theme.colors.foregroundMuted}
-            // @ts-expect-error - outlineStyle is web-only
-            style={[editorStyles.input, isWeb && { outlineStyle: "none" }]}
+            style={[
+              editorStyles.input,
+              isWeb ? ({ outlineStyle: "none" } as never) : undefined,
+            ]}
           />
         </View>
 
@@ -320,8 +361,10 @@ export function ProviderModelEditorSheet({
             onChangeText={setDescription}
             placeholder="Optional"
             placeholderTextColor={theme.colors.foregroundMuted}
-            // @ts-expect-error - outlineStyle is web-only
-            style={[editorStyles.input, isWeb && { outlineStyle: "none" }]}
+            style={[
+              editorStyles.input,
+              isWeb ? ({ outlineStyle: "none" } as never) : undefined,
+            ]}
           />
         </View>
 
@@ -336,11 +379,14 @@ export function ProviderModelEditorSheet({
             keyboardType="number-pad"
             autoCapitalize="none"
             autoCorrect={false}
-            // @ts-expect-error - outlineStyle is web-only
-            style={[editorStyles.input, isWeb && { outlineStyle: "none" }]}
+            style={[
+              editorStyles.input,
+              isWeb ? ({ outlineStyle: "none" } as never) : undefined,
+            ]}
           />
           <Text style={editorStyles.hint}>
-            For Codex-derived providers this explicit value is also forwarded as model_context_window.
+            For Codex-derived providers this explicit value is also forwarded as
+            model_context_window.
           </Text>
         </View>
 
@@ -354,8 +400,10 @@ export function ProviderModelEditorSheet({
             placeholderTextColor={theme.colors.foregroundMuted}
             autoCapitalize="none"
             autoCorrect={false}
-            // @ts-expect-error - outlineStyle is web-only
-            style={[editorStyles.input, isWeb && { outlineStyle: "none" }]}
+            style={[
+              editorStyles.input,
+              isWeb ? ({ outlineStyle: "none" } as never) : undefined,
+            ]}
           />
         </View>
 
@@ -366,7 +414,10 @@ export function ProviderModelEditorSheet({
 
         <View style={editorStyles.field}>
           <Text style={editorStyles.label}>Selectable</Text>
-          <OptionalBooleanControl value={isSelectable} onChange={setIsSelectable} />
+          <OptionalBooleanControl
+            value={isSelectable}
+            onChange={setIsSelectable}
+          />
         </View>
 
         <View style={editorStyles.field}>
@@ -379,8 +430,10 @@ export function ProviderModelEditorSheet({
             placeholderTextColor={theme.colors.foregroundMuted}
             autoCapitalize="none"
             autoCorrect={false}
-            // @ts-expect-error - outlineStyle is web-only
-            style={[editorStyles.input, isWeb && { outlineStyle: "none" }]}
+            style={[
+              editorStyles.input,
+              isWeb ? ({ outlineStyle: "none" } as never) : undefined,
+            ]}
           />
         </View>
 
@@ -392,12 +445,17 @@ export function ProviderModelEditorSheet({
             onChangeText={setThinkingOptionsJson}
             multiline
             numberOfLines={8}
-            placeholder={'[{"id":"low","label":"Low"},{"id":"high","label":"High","isDefault":true}]'}
+            placeholder={
+              '[{"id":"low","label":"Low"},{"id":"high","label":"High","isDefault":true}]'
+            }
             placeholderTextColor={theme.colors.foregroundMuted}
             autoCapitalize="none"
             autoCorrect={false}
-            // @ts-expect-error - outlineStyle is web-only
-            style={[editorStyles.input, editorStyles.codeInput, isWeb && { outlineStyle: "none" }]}
+            style={[
+              editorStyles.input,
+              editorStyles.codeInput,
+              isWeb ? ({ outlineStyle: "none" } as never) : undefined,
+            ]}
           />
           <Text style={editorStyles.hint}>
             Supports id, label, description, isDefault, and per-option metadata.
@@ -416,18 +474,31 @@ export function ProviderModelEditorSheet({
             placeholderTextColor={theme.colors.foregroundMuted}
             autoCapitalize="none"
             autoCorrect={false}
-            // @ts-expect-error - outlineStyle is web-only
-            style={[editorStyles.input, editorStyles.codeInput, isWeb && { outlineStyle: "none" }]}
+            style={[
+              editorStyles.input,
+              editorStyles.codeInput,
+              isWeb ? ({ outlineStyle: "none" } as never) : undefined,
+            ]}
           />
         </View>
 
         {error ? <Text style={editorStyles.error}>{error}</Text> : null}
 
         <View style={editorStyles.actions}>
-          <Button variant="secondary" size="sm" onPress={onClose} disabled={saving}>
+          <Button
+            variant="secondary"
+            size="sm"
+            onPress={onClose}
+            disabled={saving}
+          >
             {t("common.actions.cancel")}
           </Button>
-          <Button variant="default" size="sm" onPress={handleSave} disabled={saving}>
+          <Button
+            variant="default"
+            size="sm"
+            onPress={handleSave}
+            disabled={saving}
+          >
             {saving ? "Saving..." : "Save"}
           </Button>
         </View>
