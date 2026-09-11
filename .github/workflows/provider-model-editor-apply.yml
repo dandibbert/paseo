@@ -1,0 +1,83 @@
+name: Provider model editor integration
+
+on:
+  push:
+    branches:
+      - feat/provider-model-editor
+    paths:
+      - .github/workflows/provider-model-editor-apply.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply-and-verify:
+    if: github.event.head_commit.message == 'chore: run provider model editor integration'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      LEFTHOOK: 0
+      ONNXRUNTIME_NODE_INSTALL: skip
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/provider-model-editor
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: node scripts/npm-retry.mjs ci
+      - name: Apply integration patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('scripts/apply-provider-model-editor-patch.mjs')
+          text = path.read_text()
+          marker = '\npatch("docs/custom-providers.md"'
+          if marker in text:
+              text = text[:text.index(marker)] + '\n'
+              path.write_text(text)
+          PY
+          node scripts/apply-provider-model-editor-patch.mjs
+      - name: Format touched sources
+        run: |
+          npx prettier --write \
+            packages/protocol/src/provider-config.ts \
+            packages/protocol/src/provider-config.model-profile.test.ts \
+            packages/app/src/components/provider-diagnostic-sheet.tsx \
+            packages/app/src/components/provider-model-editor-sheet.tsx \
+            packages/server/src/server/agent/provider-registry.ts \
+            packages/server/src/server/agent/providers/codex-app-server-agent.ts \
+            packages/server/src/server/agent/providers/codex-configured-model.test.ts
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Focused tests
+        run: |
+          npx vitest run \
+            packages/protocol/src/provider-config.model-profile.test.ts \
+            packages/server/src/server/agent/providers/codex-configured-model.test.ts \
+            packages/server/src/server/agent/provider-registry.test.ts \
+            packages/server/src/server/agent/providers/codex-app-server-agent.features.test.ts
+      - name: Lint
+        run: npm run lint
+      - name: Commit generated integration
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add \
+            packages/protocol/src/provider-config.ts \
+            packages/protocol/src/provider-config.model-profile.test.ts \
+            packages/app/src/components/provider-diagnostic-sheet.tsx \
+            packages/app/src/components/provider-model-editor-sheet.tsx \
+            packages/server/src/server/agent/provider-registry.ts \
+            packages/server/src/server/agent/providers/codex-app-server-agent.ts \
+            packages/server/src/server/agent/providers/codex-configured-model.test.ts
+          git diff --cached --quiet && { echo 'No generated changes'; exit 1; }
+          git commit -m 'feat(providers): edit full model metadata in settings'
+          git push origin HEAD:feat/provider-model-editor
