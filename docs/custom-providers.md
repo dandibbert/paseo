@@ -299,7 +299,13 @@ You can also combine profiles with model overrides to pin specific models per pr
       "claude-fast": {
         "extends": "claude",
         "label": "Claude (Fast)",
-        "models": [{ "id": "claude-sonnet-4-6", "label": "Sonnet 4.6", "isDefault": true }]
+        "models": [
+          {
+            "id": "claude-sonnet-4-6",
+            "label": "Sonnet 4.6",
+            "isDefault": true
+          }
+        ]
       },
       "claude-smart": {
         "extends": "claude",
@@ -644,7 +650,11 @@ Example: add an experimental model while keeping every model the provider discov
         "label": "My Agent",
         "command": ["my-agent", "--acp"],
         "additionalModels": [
-          { "id": "experimental-model", "label": "Experimental", "isDefault": true }
+          {
+            "id": "experimental-model",
+            "label": "Experimental",
+            "isDefault": true
+          }
         ]
       }
     }

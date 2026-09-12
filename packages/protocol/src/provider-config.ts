@@ -33,19 +33,27 @@ export const ProviderPaseoToolsPolicySchema = z.object({
   disabledTools: z.array(z.string()).optional(),
 });
 
-const ProviderProfileThinkingOptionSchema = z.object({
-  id: z.string(),
-  label: z.string(),
-  description: z.string().optional(),
-  isDefault: z.boolean().optional(),
-});
+const ProviderModelMetadataSchema = z.record(z.string(), z.unknown());
 
-export const ProviderProfileModelSchema = z.object({
+const ProviderProfileThinkingOptionSchema = z.object({
   id: z.string().min(1),
   label: z.string().min(1),
   description: z.string().optional(),
   isDefault: z.boolean().optional(),
+  metadata: ProviderModelMetadataSchema.optional(),
+});
+
+export const ProviderProfileModelSchema = z.object({
+  id: z.string().min(1),
+  aliases: z.array(z.string().min(1)).optional(),
+  isSelectable: z.boolean().optional(),
+  label: z.string().min(1),
+  description: z.string().optional(),
+  isDefault: z.boolean().optional(),
+  metadata: ProviderModelMetadataSchema.optional(),
+  contextWindowMaxTokens: z.number().int().positive().optional(),
   thinkingOptions: z.array(ProviderProfileThinkingOptionSchema).optional(),
+  defaultThinkingOptionId: z.string().min(1).optional(),
 });
 
 export const ProviderOverrideSchema = z.object({

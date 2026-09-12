@@ -349,4 +349,141 @@ describe("relay-transport control lifecycle", () => {
     expect(relay.sockets[0]?.url).toMatch(/^wss:\/\/\[::1\]\/ws\?/);
     expect(relay.sockets[1]?.url).toMatch(/^wss:\/\/\[::1\]\/ws\?/);
   });
+  test("replaces a closing data socket on resync without restarting the daemon", async () => {
+    const attachSocket = vi.fn(async () => {});
+    const controller = startRelayTransport({
+      logger: createMockLogger() as unknown as pino.Logger,
+      attachSocket,
+      relayEndpoint: "relay.example.test:443",
+      relayUseTls: true,
+      serverId: "srv_test",
+      createWebSocket: relay.createWebSocket,
+    });
+    controllers.push(controller);
+    const control = relay.sockets[0];
+    control.open();
+    control.message(JSON.stringify({ type: "sync", connectionIds: ["client-1"] }));
+    const oldData = relay.sockets[1];
+    oldData.open();
+    oldData.readyState = 2; // no close callback: the map still contains the old socket
+    control.message(JSON.stringify({ type: "sync", connectionIds: ["client-1"] }));
+    expect(relay.sockets).toHaveLength(3);
+    const replacement = relay.sockets[2];
+    replacement.open();
+    oldData.close(); // late callback must not remove the replacement
+    control.message(JSON.stringify({ type: "connected", connectionId: "client-1" }));
+    expect(relay.sockets).toHaveLength(3);
+    expect(attachSocket).toHaveBeenCalledTimes(2);
+    expect(control.terminateCalls).toBe(0);
+  });
+
+  function startRecoveryTest(attachSocket = vi.fn(async () => {})) {
+    const logger = createMockLogger();
+    const controller = startRelayTransport({
+      logger: logger as unknown as pino.Logger,
+      attachSocket,
+      relayEndpoint: "relay.example.test:443",
+      relayUseTls: true,
+      serverId: "srv_test",
+      createWebSocket: relay.createWebSocket,
+    });
+    controllers.push(controller);
+    const control = relay.sockets[0];
+    control.open();
+    control.message(JSON.stringify({ type: "sync", connectionIds: ["client-1"] }));
+    return { control, data: relay.sockets[1], controller, attachSocket, logger };
+  }
+
+  test("does not reset healthy data sockets on duplicate sync or control reconnection", async () => {
+    vi.useFakeTimers();
+    const { control, data } = startRecoveryTest();
+    data.open();
+    await Promise.resolve();
+    control.message(JSON.stringify({ type: "sync", connectionIds: ["client-1"] }));
+    expect(relay.sockets).toHaveLength(2);
+    control.close(1006);
+    vi.advanceTimersByTime(1_000);
+    const newControl = relay.sockets[2];
+    newControl.open();
+    newControl.message(JSON.stringify({ type: "sync", connectionIds: ["client-1"] }));
+    expect(relay.sockets).toHaveLength(3);
+    expect(data.terminateCalls).toBe(0);
+  });
+
+  test("prunes sockets absent from authoritative sync", () => {
+    const { control, data } = startRecoveryTest();
+    data.open();
+    control.message(JSON.stringify({ type: "sync", connectionIds: [] }));
+    expect(data.terminateCalls).toBe(1);
+    expect(control.terminateCalls).toBe(0);
+  });
+
+  test("retries failed attachment while wanted, but stops retrying a disconnected client", () => {
+    vi.useFakeTimers();
+    const { control, data } = startRecoveryTest();
+    data.close(1006);
+    vi.advanceTimersByTime(1_000);
+    expect(relay.sockets).toHaveLength(3);
+    relay.sockets[2].close(1006);
+    control.message(JSON.stringify({ type: "disconnected", connectionId: "client-1" }));
+    vi.advanceTimersByTime(3_000);
+    expect(relay.sockets).toHaveLength(3);
+  });
+
+  test("a late open after stop cannot attach a socket or schedule timers", async () => {
+    vi.useFakeTimers();
+    const { controller, data, attachSocket } = startRecoveryTest();
+    await controller.stop();
+    data.open();
+    vi.advanceTimersByTime(120_000);
+    expect(attachSocket).not.toHaveBeenCalled();
+    expect(relay.sockets).toHaveLength(2);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  test("edge protocol pongs cannot hide an unresponsive control handler", async () => {
+    vi.useFakeTimers();
+    const { control, data, logger } = startRecoveryTest();
+    data.open();
+    await Promise.resolve();
+    for (let i = 0; i < 5; i++) {
+      control.pong();
+      data.message("client application heartbeat");
+      vi.advanceTimersByTime(10_000);
+    }
+    expect(control.sent).toContain(JSON.stringify({ type: "ping" }));
+    expect(control.terminateCalls).toBe(1);
+    expect(hasLogMessage(logger, "warn", "relay_control_application_timeout_terminating")).toBe(
+      true,
+    );
+    expect(data.terminateCalls).toBe(0);
+  });
+
+  test("recovers a silent OPEN data socket without resetting a healthy control", async () => {
+    vi.useFakeTimers();
+    const { control, data, logger } = startRecoveryTest();
+    data.open();
+    await Promise.resolve();
+    for (let i = 0; i < 5; i++) {
+      control.message(JSON.stringify({ type: "pong" }));
+      vi.advanceTimersByTime(10_000);
+    }
+    expect(data.terminateCalls).toBe(1);
+    expect(control.terminateCalls).toBe(0);
+    expect(hasLogMessage(logger, "warn", "relay_data_stale_terminating")).toBe(true);
+    vi.advanceTimersByTime(1_000);
+    expect(relay.sockets).toHaveLength(3);
+  });
+
+  test("an attachment rejection is contained and retried, not an unhandled rejection", async () => {
+    vi.useFakeTimers();
+    const attachSocket = vi.fn(async () => {
+      throw new Error("attachment failed");
+    });
+    const { data } = startRecoveryTest(attachSocket);
+    data.open();
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(data.terminateCalls).toBe(1);
+    expect(relay.sockets).toHaveLength(3);
+  });
 });

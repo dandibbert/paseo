@@ -51,7 +51,11 @@ import path from "node:path";
 import { z } from "zod";
 import { renderPromptAttachmentAsText } from "../prompt-attachments.js";
 import { composeSystemPromptParts } from "../system-prompt.js";
-import { curateAgentActivity } from "../activity-curator.js";
+import { CodexSubagentPreview } from "./codex/subagent-preview.js";
+import {
+  buildCodexAppServerArgs,
+  resolveCodexModelCatalogConfigOverride,
+} from "./codex/model-catalog-override.js";
 import { CodexAsyncQuestions, codexAsyncQuestionToTimeline } from "./codex/async-questions.js";
 import {
   mapCodexToolCallEnvelope,
@@ -63,6 +67,7 @@ import {
   createProviderEnv,
   createProviderEnvSpec,
   resolveProviderLaunch,
+  type ProviderProfileModel,
   type ProviderRuntimeSettings,
   type ResolvedProviderLaunch,
 } from "../provider-launch-config.js";
@@ -260,6 +265,7 @@ interface CodexAppServerAgentDeps {
     extends: string;
   };
   customCodexConfig?: Record<string, unknown> | null;
+  configuredModels?: ProviderProfileModel[];
   _createCodexClient?: (
     child: ChildProcessWithoutNullStreams,
     logger: Logger,
@@ -354,6 +360,24 @@ function normalizeCodexModelId(modelId: string | null | undefined): string | und
 
 function normalizeCodexModelLabel(displayName: string): string {
   return displayName.replace(/\bgpt\b/gi, "GPT");
+}
+
+export function resolveCodexConfiguredModelConfig(
+  modelId: string | null | undefined,
+  configuredModels: readonly ProviderProfileModel[] | undefined,
+): Record<string, unknown> | null {
+  const normalizedModelId = normalizeCodexModelId(modelId);
+  if (!normalizedModelId || !configuredModels?.length) {
+    return null;
+  }
+  const model = configuredModels.find(
+    (candidate) =>
+      candidate.id === normalizedModelId || candidate.aliases?.includes(normalizedModelId) === true,
+  );
+  if (!model?.contextWindowMaxTokens) {
+    return null;
+  }
+  return { model_context_window: model.contextWindowMaxTokens };
 }
 
 function isSchemaRecord(value: unknown): value is Record<string, unknown> {
@@ -1622,7 +1646,9 @@ function mapCodexTerminalInteractionToToolCall(params: {
 function mapCodexThreadPlanItem(normalizedItem: Record<string, unknown>): AgentTimelineItem | null {
   const callId =
     nonEmptyString(normalizedItem.id ?? normalizedItem.itemId ?? undefined) ??
-    `plan:${normalizePlanMarkdown(typeof normalizedItem.text === "string" ? normalizedItem.text : "")}`;
+    `plan:${normalizePlanMarkdown(
+      typeof normalizedItem.text === "string" ? normalizedItem.text : "",
+    )}`;
   return mapCodexPlanToToolCall({
     callId,
     text: typeof normalizedItem.text === "string" ? normalizedItem.text : "",
@@ -1978,7 +2004,9 @@ async function loadCodexThreadHistoryTimeline(params: {
           historicalSubAgentActivity.agentThreadId,
         );
         if (existingIndex !== undefined) {
-          const activityTimelineItem = threadItemToTimeline(item, { cwd: params.cwd });
+          const activityTimelineItem = threadItemToTimeline(item, {
+            cwd: params.cwd,
+          });
           updateHistoricalSubAgentActivity(
             timeline,
             existingIndex,
@@ -1991,7 +2019,9 @@ async function loadCodexThreadHistoryTimeline(params: {
           continue;
         }
       }
-      for (const timelineItem of threadItemToTimelineEntries(item, { cwd: params.cwd })) {
+      for (const timelineItem of threadItemToTimelineEntries(item, {
+        cwd: params.cwd,
+      })) {
         const timestamp =
           readCodexHistoryTimestamp(item) ?? readCodexTurnHistoryTimestamp(turn, timelineItem);
         const settledTimelineItem =
@@ -2067,7 +2097,11 @@ function toSandboxPolicy(
     case "danger-full-access":
       return { type: "dangerFullAccess" };
     default:
-      return { type: "workspaceWrite", networkAccess: false, writableRoots: [] };
+      return {
+        type: "workspaceWrite",
+        networkAccess: false,
+        writableRoots: [],
+      };
   }
 }
 
@@ -2425,9 +2459,23 @@ type ParsedCodexNotification =
       threadId: string | null;
     }
   | { kind: "diff_updated"; diff: string; threadId: string | null }
-  | { kind: "token_usage_updated"; tokenUsage: unknown; threadId: string | null }
-  | { kind: "agent_message_delta"; itemId: string; delta: string; threadId: string | null }
-  | { kind: "reasoning_delta"; itemId: string; delta: string; threadId: string | null }
+  | {
+      kind: "token_usage_updated";
+      tokenUsage: unknown;
+      threadId: string | null;
+    }
+  | {
+      kind: "agent_message_delta";
+      itemId: string;
+      delta: string;
+      threadId: string | null;
+    }
+  | {
+      kind: "reasoning_delta";
+      itemId: string;
+      delta: string;
+      threadId: string | null;
+    }
   | {
       kind: "item_completed";
       source: "item" | "codex_event";
@@ -2534,7 +2582,10 @@ function isCodexDeltaNotification(
 
 const CodexNotificationSchema = z.union([
   z
-    .object({ method: z.literal("thread/started"), params: ThreadStartedNotificationSchema })
+    .object({
+      method: z.literal("thread/started"),
+      params: ThreadStartedNotificationSchema,
+    })
     .transform(
       ({ params }): ParsedCodexNotification => ({
         kind: "thread_started",
@@ -2548,13 +2599,18 @@ const CodexNotificationSchema = z.union([
       params,
     }),
   ),
-  z.object({ method: z.literal("turn/started"), params: TurnStartedNotificationSchema }).transform(
-    ({ params }): ParsedCodexNotification => ({
-      kind: "turn_started",
-      turnId: params.turn.id,
-      threadId: params.threadId ?? null,
-    }),
-  ),
+  z
+    .object({
+      method: z.literal("turn/started"),
+      params: TurnStartedNotificationSchema,
+    })
+    .transform(
+      ({ params }): ParsedCodexNotification => ({
+        kind: "turn_started",
+        turnId: params.turn.id,
+        threadId: params.threadId ?? null,
+      }),
+    ),
   z.object({ method: z.literal("turn/started"), params: z.unknown() }).transform(
     ({ method, params }): ParsedCodexNotification => ({
       kind: "invalid_payload",
@@ -2563,7 +2619,10 @@ const CodexNotificationSchema = z.union([
     }),
   ),
   z
-    .object({ method: z.literal("turn/completed"), params: TurnCompletedNotificationSchema })
+    .object({
+      method: z.literal("turn/completed"),
+      params: TurnCompletedNotificationSchema,
+    })
     .transform(
       ({ params }): ParsedCodexNotification => ({
         kind: "turn_completed",
@@ -2580,7 +2639,10 @@ const CodexNotificationSchema = z.union([
     }),
   ),
   z
-    .object({ method: z.literal("turn/plan/updated"), params: TurnPlanUpdatedNotificationSchema })
+    .object({
+      method: z.literal("turn/plan/updated"),
+      params: TurnPlanUpdatedNotificationSchema,
+    })
     .transform(
       ({ params }): ParsedCodexNotification => ({
         kind: "plan_updated",
@@ -2599,7 +2661,10 @@ const CodexNotificationSchema = z.union([
     }),
   ),
   z
-    .object({ method: z.literal("turn/diff/updated"), params: TurnDiffUpdatedNotificationSchema })
+    .object({
+      method: z.literal("turn/diff/updated"),
+      params: TurnDiffUpdatedNotificationSchema,
+    })
     .transform(
       ({ params }): ParsedCodexNotification => ({
         kind: "diff_updated",
@@ -2626,15 +2691,23 @@ const CodexNotificationSchema = z.union([
         threadId: params.threadId ?? null,
       }),
     ),
-  z.object({ method: z.literal("thread/tokenUsage/updated"), params: z.unknown() }).transform(
-    ({ method, params }): ParsedCodexNotification => ({
-      kind: "invalid_payload",
-      method,
-      params,
-    }),
-  ),
   z
-    .object({ method: z.literal("thread/compacted"), params: ContextCompactedNotificationSchema })
+    .object({
+      method: z.literal("thread/tokenUsage/updated"),
+      params: z.unknown(),
+    })
+    .transform(
+      ({ method, params }): ParsedCodexNotification => ({
+        kind: "invalid_payload",
+        method,
+        params,
+      }),
+    ),
+  z
+    .object({
+      method: z.literal("thread/compacted"),
+      params: ContextCompactedNotificationSchema,
+    })
     .transform(
       ({ params }): ParsedCodexNotification => ({
         kind: "context_compacted",
@@ -2662,13 +2735,18 @@ const CodexNotificationSchema = z.union([
         threadId: params.threadId ?? null,
       }),
     ),
-  z.object({ method: z.literal("item/agentMessage/delta"), params: z.unknown() }).transform(
-    ({ method, params }): ParsedCodexNotification => ({
-      kind: "invalid_payload",
-      method,
-      params,
-    }),
-  ),
+  z
+    .object({
+      method: z.literal("item/agentMessage/delta"),
+      params: z.unknown(),
+    })
+    .transform(
+      ({ method, params }): ParsedCodexNotification => ({
+        kind: "invalid_payload",
+        method,
+        params,
+      }),
+    ),
   z
     .object({
       method: z.literal("item/reasoning/summaryTextDelta"),
@@ -2682,15 +2760,23 @@ const CodexNotificationSchema = z.union([
         threadId: params.threadId ?? null,
       }),
     ),
-  z.object({ method: z.literal("item/reasoning/summaryTextDelta"), params: z.unknown() }).transform(
-    ({ method, params }): ParsedCodexNotification => ({
-      kind: "invalid_payload",
-      method,
-      params,
-    }),
-  ),
   z
-    .object({ method: z.literal("item/completed"), params: ItemLifecycleNotificationSchema })
+    .object({
+      method: z.literal("item/reasoning/summaryTextDelta"),
+      params: z.unknown(),
+    })
+    .transform(
+      ({ method, params }): ParsedCodexNotification => ({
+        kind: "invalid_payload",
+        method,
+        params,
+      }),
+    ),
+  z
+    .object({
+      method: z.literal("item/completed"),
+      params: ItemLifecycleNotificationSchema,
+    })
     .transform(
       ({ params }): ParsedCodexNotification => ({
         kind: "item_completed",
@@ -2708,7 +2794,10 @@ const CodexNotificationSchema = z.union([
     }),
   ),
   z
-    .object({ method: z.literal("item/started"), params: ItemLifecycleNotificationSchema })
+    .object({
+      method: z.literal("item/started"),
+      params: ItemLifecycleNotificationSchema,
+    })
     .transform(
       ({ params }): ParsedCodexNotification => ({
         kind: "item_started",
@@ -2739,13 +2828,18 @@ const CodexNotificationSchema = z.union([
         item: params.msg.item,
       }),
     ),
-  z.object({ method: z.literal("codex/event/item_started"), params: z.unknown() }).transform(
-    ({ method, params }): ParsedCodexNotification => ({
-      kind: "invalid_payload",
-      method,
-      params,
-    }),
-  ),
+  z
+    .object({
+      method: z.literal("codex/event/item_started"),
+      params: z.unknown(),
+    })
+    .transform(
+      ({ method, params }): ParsedCodexNotification => ({
+        kind: "invalid_payload",
+        method,
+        params,
+      }),
+    ),
   z
     .object({
       method: z.literal("codex/event/item_completed"),
@@ -2760,13 +2854,18 @@ const CodexNotificationSchema = z.union([
         item: params.msg.item,
       }),
     ),
-  z.object({ method: z.literal("codex/event/item_completed"), params: z.unknown() }).transform(
-    ({ method, params }): ParsedCodexNotification => ({
-      kind: "invalid_payload",
-      method,
-      params,
-    }),
-  ),
+  z
+    .object({
+      method: z.literal("codex/event/item_completed"),
+      params: z.unknown(),
+    })
+    .transform(
+      ({ method, params }): ParsedCodexNotification => ({
+        kind: "invalid_payload",
+        method,
+        params,
+      }),
+    ),
   z
     .object({
       method: z.literal("codex/event/exec_command_begin"),
@@ -2781,13 +2880,18 @@ const CodexNotificationSchema = z.union([
         threadId: getCodexEventThreadId(params),
       }),
     ),
-  z.object({ method: z.literal("codex/event/exec_command_begin"), params: z.unknown() }).transform(
-    ({ method, params }): ParsedCodexNotification => ({
-      kind: "invalid_payload",
-      method,
-      params,
-    }),
-  ),
+  z
+    .object({
+      method: z.literal("codex/event/exec_command_begin"),
+      params: z.unknown(),
+    })
+    .transform(
+      ({ method, params }): ParsedCodexNotification => ({
+        kind: "invalid_payload",
+        method,
+        params,
+      }),
+    ),
   z
     .object({
       method: z.literal("codex/event/exec_command_end"),
@@ -2811,13 +2915,18 @@ const CodexNotificationSchema = z.union([
         threadId: getCodexEventThreadId(params),
       }),
     ),
-  z.object({ method: z.literal("codex/event/exec_command_end"), params: z.unknown() }).transform(
-    ({ method, params }): ParsedCodexNotification => ({
-      kind: "invalid_payload",
-      method,
-      params,
-    }),
-  ),
+  z
+    .object({
+      method: z.literal("codex/event/exec_command_end"),
+      params: z.unknown(),
+    })
+    .transform(
+      ({ method, params }): ParsedCodexNotification => ({
+        kind: "invalid_payload",
+        method,
+        params,
+      }),
+    ),
   z
     .object({
       method: z.literal("codex/event/exec_command_output_delta"),
@@ -2863,7 +2972,10 @@ const CodexNotificationSchema = z.union([
       }),
     ),
   z
-    .object({ method: z.literal("codex/event/terminal_interaction"), params: z.unknown() })
+    .object({
+      method: z.literal("codex/event/terminal_interaction"),
+      params: z.unknown(),
+    })
     .transform(
       ({ method, params }): ParsedCodexNotification => ({
         kind: "invalid_payload",
@@ -2914,13 +3026,18 @@ const CodexNotificationSchema = z.union([
         threadId: getCodexEventThreadId(params),
       }),
     ),
-  z.object({ method: z.literal("codex/event/patch_apply_begin"), params: z.unknown() }).transform(
-    ({ method, params }): ParsedCodexNotification => ({
-      kind: "invalid_payload",
-      method,
-      params,
-    }),
-  ),
+  z
+    .object({
+      method: z.literal("codex/event/patch_apply_begin"),
+      params: z.unknown(),
+    })
+    .transform(
+      ({ method, params }): ParsedCodexNotification => ({
+        kind: "invalid_payload",
+        method,
+        params,
+      }),
+    ),
   z
     .object({
       method: z.literal("codex/event/patch_apply_end"),
@@ -2937,13 +3054,18 @@ const CodexNotificationSchema = z.union([
         threadId: getCodexEventThreadId(params),
       }),
     ),
-  z.object({ method: z.literal("codex/event/patch_apply_end"), params: z.unknown() }).transform(
-    ({ method, params }): ParsedCodexNotification => ({
-      kind: "invalid_payload",
-      method,
-      params,
-    }),
-  ),
+  z
+    .object({
+      method: z.literal("codex/event/patch_apply_end"),
+      params: z.unknown(),
+    })
+    .transform(
+      ({ method, params }): ParsedCodexNotification => ({
+        kind: "invalid_payload",
+        method,
+        params,
+      }),
+    ),
   z
     .object({
       method: z.literal("item/fileChange/outputDelta"),
@@ -2957,13 +3079,18 @@ const CodexNotificationSchema = z.union([
         threadId: params.threadId ?? null,
       }),
     ),
-  z.object({ method: z.literal("item/fileChange/outputDelta"), params: z.unknown() }).transform(
-    ({ method, params }): ParsedCodexNotification => ({
-      kind: "invalid_payload",
-      method,
-      params,
-    }),
-  ),
+  z
+    .object({
+      method: z.literal("item/fileChange/outputDelta"),
+      params: z.unknown(),
+    })
+    .transform(
+      ({ method, params }): ParsedCodexNotification => ({
+        kind: "invalid_payload",
+        method,
+        params,
+      }),
+    ),
   z
     .object({
       method: z.literal("codex/event/turn_diff"),
@@ -2996,13 +3123,18 @@ const CodexNotificationSchema = z.union([
         threadId: getCodexEventThreadId(params),
       }),
     ),
-  z.object({ method: z.literal("codex/event/turn_aborted"), params: z.unknown() }).transform(
-    ({ method, params }): ParsedCodexNotification => ({
-      kind: "invalid_payload",
-      method,
-      params,
-    }),
-  ),
+  z
+    .object({
+      method: z.literal("codex/event/turn_aborted"),
+      params: z.unknown(),
+    })
+    .transform(
+      ({ method, params }): ParsedCodexNotification => ({
+        kind: "invalid_payload",
+        method,
+        params,
+      }),
+    ),
   z
     .object({
       method: z.literal("codex/event/task_complete"),
@@ -3016,13 +3148,18 @@ const CodexNotificationSchema = z.union([
         threadId: getCodexEventThreadId(params),
       }),
     ),
-  z.object({ method: z.literal("codex/event/task_complete"), params: z.unknown() }).transform(
-    ({ method, params }): ParsedCodexNotification => ({
-      kind: "invalid_payload",
-      method,
-      params,
-    }),
-  ),
+  z
+    .object({
+      method: z.literal("codex/event/task_complete"),
+      params: z.unknown(),
+    })
+    .transform(
+      ({ method, params }): ParsedCodexNotification => ({
+        kind: "invalid_payload",
+        method,
+        params,
+      }),
+    ),
   z
     .object({
       method: z.literal("codex/event/thread_rolled_back"),
@@ -3035,18 +3172,25 @@ const CodexNotificationSchema = z.union([
         threadId: getCodexEventThreadId(params),
       }),
     ),
-  z.object({ method: z.literal("codex/event/thread_rolled_back"), params: z.unknown() }).transform(
+  z
+    .object({
+      method: z.literal("codex/event/thread_rolled_back"),
+      params: z.unknown(),
+    })
+    .transform(
+      ({ method, params }): ParsedCodexNotification => ({
+        kind: "invalid_payload",
+        method,
+        params,
+      }),
+    ),
+  z.object({ method: z.string(), params: z.unknown() }).transform(
     ({ method, params }): ParsedCodexNotification => ({
-      kind: "invalid_payload",
+      kind: "unknown_method",
       method,
       params,
     }),
   ),
-  z
-    .object({ method: z.string(), params: z.unknown() })
-    .transform(
-      ({ method, params }): ParsedCodexNotification => ({ kind: "unknown_method", method, params }),
-    ),
 ]);
 
 async function readCodexConfiguredDefaults(
@@ -3270,8 +3414,7 @@ interface CodexSubAgentCallState {
   activityItemIds: Set<string>;
   pendingCommandOutputDeltas: Map<string, string[]>;
   pendingFileChangeOutputDeltas: Map<string, string[]>;
-  childItemOrder: string[];
-  childItems: Map<string, AgentTimelineItem>;
+  childPreview: CodexSubagentPreview;
   childThreadIds: Set<string>;
 }
 
@@ -3359,7 +3502,11 @@ export class CodexAppServerAgentSession implements AgentSession {
   private warnedInvalidNotificationPayloads = new Set<string>();
   private warnedIncompleteEditToolCallIds = new Set<string>();
   private latestUsage: AgentUsage | undefined;
-  private latestPlanResult: { callId: string; text: string; turnId: string | null } | null = null;
+  private latestPlanResult: {
+    callId: string;
+    text: string;
+    turnId: string | null;
+  } | null = null;
   private readonly userMessageTurnIndexes = new Map<string, number>();
   private readonly userMessageTurnIds: string[] = [];
   private readonly userMessageProviderTurnIds = new Map<string, string>();
@@ -3386,11 +3533,18 @@ export class CodexAppServerAgentSession implements AgentSession {
     settings: Record<string, unknown>;
     name: string;
   } | null = null;
-  private cachedSkills: Array<{ name: string; description: string; path: string }> | null = null;
+  private cachedSkills: Array<{
+    name: string;
+    description: string;
+    path: string;
+  }> | null = null;
 
   constructor(
     config: AgentSessionConfig,
-    private readonly resumeHandle: { sessionId: string; metadata?: Record<string, unknown> } | null,
+    private readonly resumeHandle: {
+      sessionId: string;
+      metadata?: Record<string, unknown>;
+    } | null,
     logger: Logger,
     private readonly spawnAppServer: () => Promise<ChildProcessWithoutNullStreams>,
     private readonly deps: CodexAppServerAgentDeps = {},
@@ -3521,7 +3675,9 @@ export class CodexAppServerAgentSession implements AgentSession {
     if (!this.client) return;
     try {
       const response = toObjectRecord(
-        await this.client.request("config/read", { cwd: this.config.cwd ?? null }),
+        await this.client.request("config/read", {
+          cwd: this.config.cwd ?? null,
+        }),
       );
       const config = toObjectRecord(response?.config);
       this.resolvedWorkspaceWrite = readSandboxWorkspaceWrite(config?.sandbox_workspace_write);
@@ -3744,7 +3900,11 @@ export class CodexAppServerAgentSession implements AgentSession {
       kind: "plan",
       planText,
     });
-    this.emitEvent({ type: "permission_requested", provider: CODEX_PROVIDER, request });
+    this.emitEvent({
+      type: "permission_requested",
+      provider: CODEX_PROVIDER,
+      request,
+    });
   }
 
   /**
@@ -3916,7 +4076,9 @@ export class CodexAppServerAgentSession implements AgentSession {
         return;
       }
       this.logger.warn({ error, threadId }, "Failed to resume persisted Codex thread");
-      throw new Error(`Failed to resume Codex thread ${threadId}: ${message}`, { cause: error });
+      throw new Error(`Failed to resume Codex thread ${threadId}: ${message}`, {
+        cause: error,
+      });
     }
   }
 
@@ -4156,7 +4318,10 @@ export class CodexAppServerAgentSession implements AgentSession {
             : item;
           return isNewMessage
             ? finalTextItem.text
-            : appendOrReplaceGrowingAssistantMessage({ current, item: finalTextItem });
+            : appendOrReplaceGrowingAssistantMessage({
+                current,
+                item: finalTextItem,
+              });
         }
         if (item.type === "tool_call" && item.detail.type === "plan") {
           currentAssistantMessageId = null;
@@ -4261,11 +4426,25 @@ export class CodexAppServerAgentSession implements AgentSession {
       return { status: "unavailable" };
     }
     if (await this.resolveSlashCommandInvocation(prompt)) return { status: "unavailable" };
-    if (!this.matchesSteerAdmission({ client, threadId, nativeTurnId, foregroundTurnId })) {
+    if (
+      !this.matchesSteerAdmission({
+        client,
+        threadId,
+        nativeTurnId,
+        foregroundTurnId,
+      })
+    ) {
       return { status: "unavailable" };
     }
     const input = await this.buildUserInput(prompt);
-    if (!this.matchesSteerAdmission({ client, threadId, nativeTurnId, foregroundTurnId })) {
+    if (
+      !this.matchesSteerAdmission({
+        client,
+        threadId,
+        nativeTurnId,
+        foregroundTurnId,
+      })
+    ) {
       return { status: "unavailable" };
     }
     try {
@@ -4357,7 +4536,10 @@ export class CodexAppServerAgentSession implements AgentSession {
         const index = this.userMessageTurnIndexes.get(messageId);
         return index === undefined
           ? null
-          : { index, turnId: this.userMessageProviderTurnIds.get(messageId) ?? null };
+          : {
+              index,
+              turnId: this.userMessageProviderTurnIds.get(messageId) ?? null,
+            };
       },
       count: () => this.userMessageTurnIds.length,
     };
@@ -4492,7 +4674,12 @@ export class CodexAppServerAgentSession implements AgentSession {
     const pendingRequest = this.pendingPermissions.get(requestId) ?? null;
 
     if (pending.kind === "plan") {
-      return this.handlePlanPermissionResponse({ requestId, response, pending, pendingRequest });
+      return this.handlePlanPermissionResponse({
+        requestId,
+        response,
+        pending,
+        pendingRequest,
+      });
     }
 
     this.pendingPermissionHandlers.delete(requestId);
@@ -4500,7 +4687,11 @@ export class CodexAppServerAgentSession implements AgentSession {
     this.resolvedPermissionRequests.add(requestId);
 
     if (response.behavior === "deny" && pendingRequest?.kind === "tool") {
-      this.emitDeniedToolCallTimelineEvent({ requestId, response, pendingRequest });
+      this.emitDeniedToolCallTimelineEvent({
+        requestId,
+        response,
+        pendingRequest,
+      });
     }
 
     this.emitEvent({
@@ -4595,7 +4786,11 @@ export class CodexAppServerAgentSession implements AgentSession {
       }
       followUpPrompt = undefined;
     }
-    this.emitEvent({ type: "timeline", provider: CODEX_PROVIDER, item: prepared.complete() });
+    this.emitEvent({
+      type: "timeline",
+      provider: CODEX_PROVIDER,
+      item: prepared.complete(),
+    });
     this.emitEvent({
       type: "permission_resolved",
       provider: CODEX_PROVIDER,
@@ -4905,9 +5100,9 @@ export class CodexAppServerAgentSession implements AgentSession {
     );
   }
 
-  tryHandleOutOfBand(
-    prompt: AgentPromptInput,
-  ): { run(ctx: { emit: (event: AgentStreamEvent) => void }): Promise<void> } | null {
+  tryHandleOutOfBand(prompt: AgentPromptInput): {
+    run(ctx: { emit: (event: AgentStreamEvent) => void }): Promise<void>;
+  } | null {
     if (typeof prompt !== "string") return null;
     const parsed = this.parseSlashCommandInput(prompt);
     if (!parsed) return null;
@@ -4920,7 +5115,10 @@ export class CodexAppServerAgentSession implements AgentSession {
             emit({
               type: "timeline",
               provider: CODEX_PROVIDER,
-              item: { type: "assistant_message", text: formatOutOfBandStatusMessage(error) },
+              item: {
+                type: "assistant_message",
+                text: formatOutOfBandStatusMessage(error),
+              },
             });
           }
         },
@@ -5142,6 +5340,13 @@ export class CodexAppServerAgentSession implements AgentSession {
     Object.assign(innerConfig, this.providerOptions);
     if (this.deps.customCodexConfig) {
       Object.assign(innerConfig, this.deps.customCodexConfig);
+    }
+    const configuredModelConfig = resolveCodexConfiguredModelConfig(
+      this.config.model,
+      this.deps.configuredModels,
+    );
+    if (configuredModelConfig) {
+      Object.assign(innerConfig, configuredModelConfig);
     }
     if (this.config.mcpServers) {
       const mcpServers: Record<string, CodexMcpServerConfig> = {};
@@ -5436,8 +5641,7 @@ export class CodexAppServerAgentSession implements AgentSession {
         activityItemIds: new Set<string>(),
         pendingCommandOutputDeltas: new Map<string, string[]>(),
         pendingFileChangeOutputDeltas: new Map<string, string[]>(),
-        childItemOrder: [],
-        childItems: new Map<string, AgentTimelineItem>(),
+        childPreview: new CodexSubagentPreview(),
         childThreadIds: new Set<string>(),
       } satisfies CodexSubAgentCallState);
 
@@ -5576,10 +5780,7 @@ export class CodexAppServerAgentSession implements AgentSession {
     if (!state) {
       return;
     }
-    if (!state.childItems.has(itemId)) {
-      state.childItemOrder.push(itemId);
-    }
-    state.childItems.set(itemId, item);
+    state.childPreview.upsert(itemId, item);
   }
 
   private emitCodexToolTimelineItem(
@@ -5588,7 +5789,11 @@ export class CodexAppServerAgentSession implements AgentSession {
     childThreadId?: string | null,
   ): void {
     if (!subAgentCallId) {
-      this.emitEvent({ type: "timeline", provider: CODEX_PROVIDER, item: timelineItem });
+      this.emitEvent({
+        type: "timeline",
+        provider: CODEX_PROVIDER,
+        item: timelineItem,
+      });
       return;
     }
     this.upsertSubAgentChildItem(subAgentCallId, timelineItem.callId, timelineItem);
@@ -5605,12 +5810,6 @@ export class CodexAppServerAgentSession implements AgentSession {
     );
   }
 
-  private getSubAgentChildTimeline(state: CodexSubAgentCallState): AgentTimelineItem[] {
-    return state.childItemOrder
-      .map((itemId) => state.childItems.get(itemId))
-      .filter((item): item is AgentTimelineItem => Boolean(item));
-  }
-
   private emitSubAgentActivityUpdate(
     callId: string,
     status?: ToolCallTimelineItem["status"],
@@ -5620,11 +5819,7 @@ export class CodexAppServerAgentSession implements AgentSession {
     if (!state || state.toolCall.detail.type !== "sub_agent") {
       return;
     }
-    const childTimeline = this.getSubAgentChildTimeline(state);
-    const log =
-      childTimeline.length > 0
-        ? curateAgentActivity(childTimeline, { labelAssistantMessages: true })
-        : "";
+    const log = state.childPreview.render();
     let resolvedStatus = status ?? state.toolCall.status;
     if (
       status === "running" &&
@@ -5661,7 +5856,11 @@ export class CodexAppServerAgentSession implements AgentSession {
       this.emitSubAgentActivityUpdate(state.parentCallId);
       return;
     }
-    this.emitEvent({ type: "timeline", provider: CODEX_PROVIDER, item: nextToolCall });
+    this.emitEvent({
+      type: "timeline",
+      provider: CODEX_PROVIDER,
+      item: nextToolCall,
+    });
   }
 
   private emitProviderSubagentUpsert(
@@ -5784,7 +5983,10 @@ export class CodexAppServerAgentSession implements AgentSession {
       return false;
     }
     if (item.id) {
-      this.upsertSubAgentChildItem(callId, item.id, { type: "compaction", status });
+      this.upsertSubAgentChildItem(callId, item.id, {
+        type: "compaction",
+        status,
+      });
     }
     this.emitSubAgentActivityUpdate(callId);
     return true;
@@ -5908,7 +6110,9 @@ export class CodexAppServerAgentSession implements AgentSession {
   ): void {
     const subAgentCallId = this.getSubAgentCallIdForThread(parsed.threadId);
     if (subAgentCallId) {
-      this.emitSubAgentActivityUpdate(subAgentCallId, "running", { reopen: true });
+      this.emitSubAgentActivityUpdate(subAgentCallId, "running", {
+        reopen: true,
+      });
       return;
     }
     this.currentTurnId = parsed.turnId;
@@ -5947,7 +6151,11 @@ export class CodexAppServerAgentSession implements AgentSession {
       });
     } else if (parsed.status === "interrupted") {
       this.dismissInterruptedAsyncQuestions();
-      this.emitEvent({ type: "turn_canceled", provider: CODEX_PROVIDER, reason: "interrupted" });
+      this.emitEvent({
+        type: "turn_canceled",
+        provider: CODEX_PROVIDER,
+        reason: "interrupted",
+      });
     } else {
       if (this.planModeEnabled && this.latestPlanResult?.text) {
         this.emitSyntheticPlanApprovalRequest(this.latestPlanResult.text);
@@ -6238,7 +6446,11 @@ export class CodexAppServerAgentSession implements AgentSession {
       command,
       stdin: parsed.stdin,
     });
-    this.emitEvent({ type: "timeline", provider: CODEX_PROVIDER, item: timelineItem });
+    this.emitEvent({
+      type: "timeline",
+      provider: CODEX_PROVIDER,
+      item: timelineItem,
+    });
   }
 
   private handlePatchApplyStartedNotification(
@@ -6303,14 +6515,25 @@ export class CodexAppServerAgentSession implements AgentSession {
     if (threadId !== this.currentThreadId) return;
     const request = this.asyncQuestions.receive(item);
     if (request)
-      this.emitEvent({ type: "permission_requested", provider: CODEX_PROVIDER, request });
+      this.emitEvent({
+        type: "permission_requested",
+        provider: CODEX_PROVIDER,
+        request,
+      });
   }
 
   private dismissInterruptedAsyncQuestions(): void {
-    const resolution: AgentPermissionResponse = { behavior: "deny", message: "Interrupted" };
+    const resolution: AgentPermissionResponse = {
+      behavior: "deny",
+      message: "Interrupted",
+    };
     for (const request of this.asyncQuestions.pending()) {
       const prepared = this.asyncQuestions.prepareResponse(request.id, resolution);
-      this.emitEvent({ type: "timeline", provider: CODEX_PROVIDER, item: prepared.complete() });
+      this.emitEvent({
+        type: "timeline",
+        provider: CODEX_PROVIDER,
+        item: prepared.complete(),
+      });
       this.emitEvent({
         type: "permission_resolved",
         provider: CODEX_PROVIDER,
@@ -6410,12 +6633,20 @@ export class CodexAppServerAgentSession implements AgentSession {
       }
       this.warnOnIncompleteEditToolCall(timelineItem, "item_completed", parsed.item);
     }
-    this.emitEvent({ type: "timeline", provider: CODEX_PROVIDER, item: timelineItem });
+    this.emitEvent({
+      type: "timeline",
+      provider: CODEX_PROVIDER,
+      item: timelineItem,
+    });
     if (timelineItem.type === "assistant_message") {
       this.pendingAssistantMessageBoundary = true;
     }
     for (const imageItem of imageItems) {
-      this.emitEvent({ type: "timeline", provider: CODEX_PROVIDER, item: imageItem });
+      this.emitEvent({
+        type: "timeline",
+        provider: CODEX_PROVIDER,
+        item: imageItem,
+      });
       this.pendingAssistantMessageBoundary = true;
     }
     if (itemId) {
@@ -6561,7 +6792,11 @@ export class CodexAppServerAgentSession implements AgentSession {
       return;
     }
     this.warnOnIncompleteEditToolCall(timelineItem, "item_started", parsed.item);
-    this.emitEvent({ type: "timeline", provider: CODEX_PROVIDER, item: timelineItem });
+    this.emitEvent({
+      type: "timeline",
+      provider: CODEX_PROVIDER,
+      item: timelineItem,
+    });
     if (itemId) {
       this.emittedItemStartedIds.add(itemId);
       this.pendingCommandOutputDeltas.delete(itemId);
@@ -6796,9 +7031,16 @@ export class CodexAppServerAgentSession implements AgentSession {
       },
     };
     this.pendingPermissions.set(requestId, request);
-    this.emitEvent({ type: "permission_requested", provider: CODEX_PROVIDER, request });
+    this.emitEvent({
+      type: "permission_requested",
+      provider: CODEX_PROVIDER,
+      request,
+    });
     return new Promise((resolve) => {
-      this.pendingPermissionHandlers.set(requestId, { resolve, kind: "command" });
+      this.pendingPermissionHandlers.set(requestId, {
+        resolve,
+        kind: "command",
+      });
     });
   }
 
@@ -6833,7 +7075,11 @@ export class CodexAppServerAgentSession implements AgentSession {
       },
     };
     this.pendingPermissions.set(requestId, request);
-    this.emitEvent({ type: "permission_requested", provider: CODEX_PROVIDER, request });
+    this.emitEvent({
+      type: "permission_requested",
+      provider: CODEX_PROVIDER,
+      request,
+    });
     return new Promise((resolve) => {
       this.pendingPermissionHandlers.set(requestId, { resolve, kind: "file" });
     });
@@ -6880,7 +7126,11 @@ export class CodexAppServerAgentSession implements AgentSession {
         status: "running",
       }),
     });
-    this.emitEvent({ type: "permission_requested", provider: CODEX_PROVIDER, request });
+    this.emitEvent({
+      type: "permission_requested",
+      provider: CODEX_PROVIDER,
+      request,
+    });
     return new Promise((resolve) => {
       this.pendingPermissionHandlers.set(requestId, {
         resolve,
@@ -6932,9 +7182,16 @@ export class CodexAppServerAgentSession implements AgentSession {
     };
     this.pendingPermissions.set(requestId, request);
     this.mcpElicitationPermissionIds.set(serverRequestId, requestId);
-    this.emitEvent({ type: "permission_requested", provider: CODEX_PROVIDER, request });
+    this.emitEvent({
+      type: "permission_requested",
+      provider: CODEX_PROVIDER,
+      request,
+    });
     return new Promise((resolve) => {
-      this.pendingPermissionHandlers.set(requestId, { resolve, kind: "mcp_elicitation" });
+      this.pendingPermissionHandlers.set(requestId, {
+        resolve,
+        kind: "mcp_elicitation",
+      });
     });
   }
 }
@@ -7018,10 +7275,18 @@ export class CodexAppServerAgentClient implements AgentClient {
     options?: { goalsEnabled?: boolean; agentId?: string },
   ): Promise<ChildProcessWithoutNullStreams> {
     const launchPrefix = await resolveCodexLaunchPrefix(this.runtimeSettings);
-    const args = [...launchPrefix.args, "app-server"];
-    if (options?.goalsEnabled) {
-      args.push("--enable", "goals");
-    }
+    const modelCatalogConfigOverride = await resolveCodexModelCatalogConfigOverride({
+      command: launchPrefix.command,
+      launchArgs: launchPrefix.args,
+      runtimeSettings: this.runtimeSettings,
+      launchEnv,
+      configuredModels: this.deps.configuredModels,
+    });
+    const args = buildCodexAppServerArgs(
+      launchPrefix.args,
+      modelCatalogConfigOverride,
+      options?.goalsEnabled === true,
+    );
     this.logger.trace(
       {
         agentId: options?.agentId,
@@ -7055,7 +7320,10 @@ export class CodexAppServerAgentClient implements AgentClient {
       // TODO: Honor persistSession=false if app-server adds support, or route
       // utility generations through `codex exec --ephemeral` in a larger change.
     }
-    const sessionConfig: AgentSessionConfig = { ...config, provider: CODEX_PROVIDER };
+    const sessionConfig: AgentSessionConfig = {
+      ...config,
+      provider: CODEX_PROVIDER,
+    };
     const goalsEnabled = await this.resolveGoalsEnabled();
     const autoReviewEnabled = await this.resolveAutoReviewEnabled();
     const session = new CodexAppServerAgentSession(
@@ -7063,7 +7331,10 @@ export class CodexAppServerAgentClient implements AgentClient {
       null,
       this.logger,
       () =>
-        this.spawnAppServer(launchContext?.env, { goalsEnabled, agentId: launchContext?.agentId }),
+        this.spawnAppServer(launchContext?.env, {
+          goalsEnabled,
+          agentId: launchContext?.agentId,
+        }),
       this.sessionDeps(),
       options?.persistSession === false,
       goalsEnabled,
@@ -7094,7 +7365,10 @@ export class CodexAppServerAgentClient implements AgentClient {
       handle,
       this.logger,
       () =>
-        this.spawnAppServer(launchContext?.env, { goalsEnabled, agentId: launchContext?.agentId }),
+        this.spawnAppServer(launchContext?.env, {
+          goalsEnabled,
+          agentId: launchContext?.agentId,
+        }),
       this.sessionDeps(),
       false,
       goalsEnabled,

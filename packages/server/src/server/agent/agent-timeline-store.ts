@@ -1,4 +1,13 @@
 import { randomUUID } from "node:crypto";
+import { TimelinePayloadStore, type TimelinePayloadHandle } from "./timeline-payload-store.js";
+import { timelineProjectionIndexRow } from "./timeline-row-index.js";
+import {
+  hydrateTimelineProjectionEntry,
+  selectProjectedTimelinePage,
+  selectTimelineWindowByProjectedLimit,
+  type ProjectedTimelinePageSelection,
+  type TimelineSeqRange,
+} from "./timeline-projection.js";
 import type { AgentTimelineItem } from "./agent-sdk-types.js";
 import type {
   AgentTimelineFetchOptions,
@@ -14,9 +23,13 @@ export interface SeedAgentTimelineOptions {
   timestamp?: string;
 }
 
+interface IndexedTimelineRow extends AgentTimelineRow {
+  payload: TimelinePayloadHandle;
+}
+
 interface AgentTimelineState {
   epoch: string;
-  rows: AgentTimelineRow[];
+  rows: IndexedTimelineRow[];
   nextSeq: number;
 }
 
@@ -137,6 +150,105 @@ function fetchReset(
 
 export class InMemoryAgentTimelineStore {
   private readonly states = new Map<string, AgentTimelineState>();
+  private readonly payloads: TimelinePayloadStore;
+
+  constructor(options: { maxMemoryBytes?: number } = {}) {
+    this.payloads = new TimelinePayloadStore(options.maxMemoryBytes);
+  }
+
+  getItemCount(agentId: string): number {
+    return this.requireState(agentId).rows.length;
+  }
+
+  getStorageStats(): ReturnType<TimelinePayloadStore["stats"]> {
+    return this.payloads.stats();
+  }
+
+  dispose(): void {
+    this.states.clear();
+    this.payloads.dispose();
+  }
+
+  private indexRow(row: AgentTimelineRow): IndexedTimelineRow {
+    return { ...timelineProjectionIndexRow(row), payload: this.payloads.put(row) };
+  }
+
+  private materialize(agentId: string, row: AgentTimelineRow): AgentTimelineRow {
+    const rows = this.requireState(agentId).rows;
+    const index = this.lowerBound(rows, row.seq);
+    const found = rows[index];
+    if (!found || found.seq !== row.seq)
+      throw new Error("Timeline projection refers to a missing row");
+    return this.payloads.get(found.payload);
+  }
+
+  private lowerBound(rows: readonly AgentTimelineRow[], seq: number): number {
+    let left = 0;
+    let right = rows.length;
+    while (left < right) {
+      const middle = (left + right) >>> 1;
+      if (rows[middle].seq < seq) left = middle + 1;
+      else right = middle;
+    }
+    return left;
+  }
+
+  private *readRanges(
+    agentId: string,
+    ranges: readonly TimelineSeqRange[],
+  ): Iterable<AgentTimelineRow> {
+    const rows = this.requireState(agentId).rows;
+    for (const range of ranges) {
+      for (
+        let i = this.lowerBound(rows, range.startSeq);
+        i < rows.length && rows[i].seq <= range.endSeq;
+        i++
+      ) {
+        yield this.payloads.get(rows[i].payload);
+      }
+    }
+  }
+
+  fetchProjectedPage(
+    agentId: string,
+    options?: AgentTimelineFetchOptions,
+  ): ProjectedTimelinePageSelection {
+    const state = this.requireState(agentId);
+    const control = this.fetchIndex(agentId, options);
+    const page = selectProjectedTimelinePage({
+      rows: state.rows,
+      bounds: control.window,
+      direction: control.reset ? "tail" : control.direction,
+      cursorSeq: options?.cursor?.seq,
+      limit: options?.limit,
+    });
+    return {
+      ...page,
+      entries: page.entries.map((entry) =>
+        hydrateTimelineProjectionEntry(entry, this.readRanges(agentId, entry.sourceSeqRanges)),
+      ),
+    };
+  }
+
+  fetchProjectedWindow(
+    agentId: string,
+    options?: AgentTimelineFetchOptions,
+  ): AgentTimelineFetchResult {
+    const timeline = this.fetchIndex(agentId, { ...options, limit: 0 });
+    const selected = selectTimelineWindowByProjectedLimit({
+      rows: timeline.rows,
+      direction: timeline.reset ? "tail" : timeline.direction,
+      limit: options?.limit ?? DEFAULT_TIMELINE_FETCH_LIMIT,
+    });
+    return {
+      ...timeline,
+      rows: selected.selectedRows.map((row) => this.materialize(agentId, row)),
+      hasOlder:
+        timeline.hasOlder || (selected.minSeq !== null && selected.minSeq > timeline.window.minSeq),
+      hasNewer:
+        timeline.hasNewer || (selected.maxSeq !== null && selected.maxSeq < timeline.window.maxSeq),
+    };
+  }
 
   has(agentId: string): boolean {
     return this.states.has(agentId);
@@ -144,27 +256,34 @@ export class InMemoryAgentTimelineStore {
 
   initialize(agentId: string, options?: SeedAgentTimelineOptions): void {
     const timestamp = options?.timestamp ?? new Date().toISOString();
-    const rows = options?.rows?.length
-      ? options.rows.map(cloneRow)
+    const seedRows = options?.rows?.length
+      ? options.rows
       : this.buildRowsFromItems(options?.items ?? [], options?.nextSeq ?? 1, timestamp);
+    const rows: IndexedTimelineRow[] = [];
+    try {
+      for (const row of seedRows) rows.push(this.indexRow(row));
+    } catch (error) {
+      for (const row of rows) this.payloads.release(row.payload);
+      throw error;
+    }
     const nextSeq = options?.nextSeq ?? (rows.length ? rows[rows.length - 1].seq + 1 : 1);
-    this.states.set(agentId, {
-      epoch: options?.epoch ?? randomUUID(),
-      rows,
-      nextSeq,
-    });
+    this.delete(agentId);
+    this.states.set(agentId, { epoch: options?.epoch ?? randomUUID(), rows, nextSeq });
   }
 
   delete(agentId: string): void {
+    const state = this.states.get(agentId);
+    if (!state) return;
+    for (const row of state.rows) this.payloads.release(row.payload);
     this.states.delete(agentId);
   }
 
   getItems(agentId: string): AgentTimelineItem[] {
-    return this.requireState(agentId).rows.map((row) => row.item);
+    return this.requireState(agentId).rows.map((row) => this.payloads.get(row.payload).item);
   }
 
   getRows(agentId: string): AgentTimelineRow[] {
-    return this.requireState(agentId).rows.map(cloneRow);
+    return this.requireState(agentId).rows.map((row) => this.payloads.get(row.payload));
   }
 
   getSubmittedUserMessage(agentId: string, clientMessageId: string): AgentTimelineRow | null {
@@ -173,7 +292,7 @@ export class InMemoryAgentTimelineStore {
         candidate.item.type === "user_message" &&
         candidate.item.clientMessageId === clientMessageId,
     );
-    return row ? cloneRow(row) : null;
+    return row ? this.payloads.get(row.payload) : null;
   }
 
   enrichSubmittedUserMessage(
@@ -187,13 +306,12 @@ export class InMemoryAgentTimelineStore {
         candidate.item.type === "user_message" &&
         candidate.item.clientMessageId === clientMessageId,
     );
-    const row = state.rows[index];
-    if (!row || row.item.type !== "user_message") {
-      return null;
-    }
-    const enriched: AgentTimelineRow = { ...row, providerMessageId };
-    state.rows[index] = enriched;
-    return cloneRow(enriched);
+    const previous = state.rows[index];
+    if (!previous) return null;
+    const row = { ...this.payloads.get(previous.payload), providerMessageId };
+    state.rows[index] = this.indexRow(row);
+    this.payloads.release(previous.payload);
+    return row;
   }
 
   getEpoch(agentId: string): string {
@@ -201,6 +319,14 @@ export class InMemoryAgentTimelineStore {
   }
 
   fetch(agentId: string, options?: AgentTimelineFetchOptions): AgentTimelineFetchResult {
+    const result = this.fetchIndex(agentId, options);
+    return { ...result, rows: result.rows.map((row) => this.materialize(agentId, row)) };
+  }
+
+  private fetchIndex(
+    agentId: string,
+    options?: AgentTimelineFetchOptions,
+  ): AgentTimelineFetchResult {
     const state = this.requireState(agentId);
     const direction = options?.direction ?? "tail";
     const requestedLimit = options?.limit;
@@ -274,21 +400,27 @@ export class InMemoryAgentTimelineStore {
       ...(options?.turnId ? { turnId: options.turnId } : {}),
       ...(options?.providerMessageId ? { providerMessageId: options.providerMessageId } : {}),
     };
+    const indexed = this.indexRow(row);
     state.nextSeq += 1;
-    state.rows.push(row);
+    state.rows.push(indexed);
     return cloneRow(row);
   }
 
   getLastItem(agentId: string): AgentTimelineItem | null {
     const state = this.requireState(agentId);
-    return state.rows[state.rows.length - 1]?.item ?? null;
+    const last = state.rows[state.rows.length - 1];
+    return last ? this.payloads.get(last.payload).item : null;
   }
 
   getLastAssistantMessage(agentId: string): string | null {
     const rows = this.requireState(agentId).rows;
     const chunks: string[] = [];
     for (let i = rows.length - 1; i >= 0; i -= 1) {
-      const item = rows[i].item;
+      const indexed = rows[i];
+      const item =
+        indexed.item.type === "assistant_message"
+          ? this.payloads.get(indexed.payload).item
+          : indexed.item;
       if (item.type !== "assistant_message") {
         if (chunks.length > 0) {
           break;
