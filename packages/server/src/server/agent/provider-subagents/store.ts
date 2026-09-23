@@ -150,12 +150,7 @@ export class ProviderSubagentStore {
     subagentId: string,
     options?: AgentTimelineFetchOptions,
   ): AgentTimelineFetchResult {
-    return this.timelines.fetchProjectedWindow(storeKey(parentAgentId, subagentId), options);
-  }
-
-  dispose(): void {
-    this.descriptors.clear();
-    this.timelines.dispose();
+    return this.timelines.fetch(storeKey(parentAgentId, subagentId), options);
   }
 
   deleteParent(parentAgentId: string): ProviderSubagentStoreEvent[] {
