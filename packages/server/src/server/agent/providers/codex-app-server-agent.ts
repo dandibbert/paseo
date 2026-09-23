@@ -7272,16 +7272,23 @@ export class CodexAppServerAgentClient implements AgentClient {
 
   private async spawnAppServer(
     launchEnv?: Record<string, string>,
-    options?: { goalsEnabled?: boolean; agentId?: string },
+    options?: {
+      goalsEnabled?: boolean;
+      agentId?: string;
+      useConfiguredModelCatalog?: boolean;
+    },
   ): Promise<ChildProcessWithoutNullStreams> {
     const launchPrefix = await resolveCodexLaunchPrefix(this.runtimeSettings);
-    const modelCatalogConfigOverride = await resolveCodexModelCatalogConfigOverride({
-      command: launchPrefix.command,
-      launchArgs: launchPrefix.args,
-      runtimeSettings: this.runtimeSettings,
-      launchEnv,
-      configuredModels: this.deps.configuredModels,
-    });
+    const modelCatalogConfigOverride =
+      options?.useConfiguredModelCatalog === false
+        ? null
+        : await resolveCodexModelCatalogConfigOverride({
+            command: launchPrefix.command,
+            launchArgs: launchPrefix.args,
+            runtimeSettings: this.runtimeSettings,
+            launchEnv,
+            configuredModels: this.deps.configuredModels,
+          });
     const args = buildCodexAppServerArgs(
       launchPrefix.args,
       modelCatalogConfigOverride,
@@ -7485,7 +7492,13 @@ export class CodexAppServerAgentClient implements AgentClient {
 
     try {
       await runProviderRefreshActivity(context, "app-server.start", async () => {
-        const child = await this.spawnAppServer();
+        // Model discovery must use Codex's live/cache-aware catalogue. The configured
+        // model_catalog_json override is derived from the bundled catalogue solely to
+        // raise explicit context-window limits for actual sessions; applying it here
+        // would pin Paseo's model picker to the bundled model list indefinitely.
+        const child = await this.spawnAppServer(undefined, {
+          useConfiguredModelCatalog: false,
+        });
         client = new CodexAppServerClient(child, this.logger);
         if (context?.signal.aborted) await dispose();
       });
