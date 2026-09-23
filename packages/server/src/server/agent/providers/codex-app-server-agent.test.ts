@@ -184,6 +184,59 @@ function createProviderWithFakeAppServer(appServer: FakeCodexAppServer): CodexAp
   return provider;
 }
 
+describe("Codex model catalog discovery", () => {
+  test("bypasses the configured bundled catalog override while listing models", async () => {
+    const appServer = createFakeCodexAppServer({
+      "model/list": () => ({
+        data: [
+          {
+            id: "gpt-6-sol",
+            displayName: "GPT-6 Sol",
+            isDefault: true,
+            defaultReasoningEffort: "medium",
+          },
+        ],
+      }),
+      getUserSavedConfig: () => ({ config: {} }),
+      "config/read": () => ({ config: {} }),
+    });
+    const provider = new CodexAppServerAgentClient(createTestLogger(), undefined, {
+      configuredModels: [
+        {
+          id: "gpt-6-astra",
+          label: "GPT-6 Astra",
+          contextWindowMaxTokens: 500000,
+        },
+      ],
+    });
+    const spawnAppServer = vi.fn(
+      async (
+        _launchEnv?: Record<string, string>,
+        _options?: {
+          goalsEnabled?: boolean;
+          agentId?: string;
+          useConfiguredModelCatalog?: boolean;
+        },
+      ) => appServer.child,
+    );
+    const internals = castInternals<{
+      autoReviewEnabledPromise: Promise<boolean> | null;
+      spawnAppServer: typeof spawnAppServer;
+    }>(provider);
+    internals.autoReviewEnabledPromise = Promise.resolve(false);
+    internals.spawnAppServer = spawnAppServer;
+
+    const catalog = await provider.fetchCatalog({ scope: "global", force: true });
+
+    expect(spawnAppServer).toHaveBeenCalledTimes(1);
+    expect(spawnAppServer).toHaveBeenCalledWith(undefined, {
+      useConfiguredModelCatalog: false,
+    });
+    expect(catalog.models.map((model) => model.id)).toEqual(["gpt-6-sol"]);
+    appServer.assertNoErrors();
+  });
+});
+
 async function startPublicSteeringSession(
   appServer: FakeCodexAppServer,
   resolveSlashCommandInvocation?: (prompt: AgentPromptInput) => Promise<{
