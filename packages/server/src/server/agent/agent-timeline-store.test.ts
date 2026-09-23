@@ -1,16 +1,5 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { InMemoryAgentTimelineStore } from "./agent-timeline-store.js";
-import type { AgentTimelineRow } from "./agent-timeline-store-types.js";
-import { selectProjectedTimelinePage } from "./timeline-projection.js";
-const stores: InMemoryAgentTimelineStore[] = [];
-afterEach(() => {
-  for (const store of stores.splice(0)) store.dispose();
-});
-function spillingStore() {
-  const store = new InMemoryAgentTimelineStore({ maxMemoryBytes: 0 });
-  stores.push(store);
-  return store;
-}
 
 describe("InMemoryAgentTimelineStore", () => {
   it("clamps an overshooting before cursor into the bounded tail window", () => {
@@ -22,17 +11,17 @@ describe("InMemoryAgentTimelineStore", () => {
         {
           seq: 5,
           timestamp: "2026-01-01T00:00:00.000Z",
-          item: { type: "assistant_message", text: "five" },
+          item: { type: "assistant_message", text: "five", messageId: "five" },
         },
         {
           seq: 6,
           timestamp: "2026-01-01T00:00:01.000Z",
-          item: { type: "assistant_message", text: "six" },
+          item: { type: "assistant_message", text: "six", messageId: "six" },
         },
         {
           seq: 7,
           timestamp: "2026-01-01T00:00:02.000Z",
-          item: { type: "assistant_message", text: "seven" },
+          item: { type: "assistant_message", text: "seven", messageId: "seven" },
         },
       ],
     });
@@ -43,7 +32,7 @@ describe("InMemoryAgentTimelineStore", () => {
       limit: 2,
     });
 
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       epoch: "epoch-1",
       direction: "before",
       reset: false,
@@ -56,12 +45,12 @@ describe("InMemoryAgentTimelineStore", () => {
         {
           seq: 6,
           timestamp: "2026-01-01T00:00:01.000Z",
-          item: { type: "assistant_message", text: "six" },
+          item: { type: "assistant_message", text: "six", messageId: "six" },
         },
         {
           seq: 7,
           timestamp: "2026-01-01T00:00:02.000Z",
-          item: { type: "assistant_message", text: "seven" },
+          item: { type: "assistant_message", text: "seven", messageId: "seven" },
         },
       ],
     });
@@ -76,17 +65,17 @@ describe("InMemoryAgentTimelineStore", () => {
         {
           seq: 5,
           timestamp: "2026-01-01T00:00:00.000Z",
-          item: { type: "assistant_message", text: "five" },
+          item: { type: "assistant_message", text: "five", messageId: "five" },
         },
         {
           seq: 6,
           timestamp: "2026-01-01T00:00:01.000Z",
-          item: { type: "assistant_message", text: "six" },
+          item: { type: "assistant_message", text: "six", messageId: "six" },
         },
         {
           seq: 7,
           timestamp: "2026-01-01T00:00:02.000Z",
-          item: { type: "assistant_message", text: "seven" },
+          item: { type: "assistant_message", text: "seven", messageId: "seven" },
         },
       ],
     });
@@ -97,7 +86,7 @@ describe("InMemoryAgentTimelineStore", () => {
       limit: 1,
     });
 
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       epoch: "epoch-1",
       direction: "after",
       reset: true,
@@ -110,131 +99,115 @@ describe("InMemoryAgentTimelineStore", () => {
         {
           seq: 7,
           timestamp: "2026-01-01T00:00:02.000Z",
-          item: { type: "assistant_message", text: "seven" },
+          item: { type: "assistant_message", text: "seven", messageId: "seven" },
         },
       ],
     });
   });
-  it("retains all old history on disk with the same epoch, cursors, and late prompt acknowledgement", () => {
-    const store = spillingStore();
-    store.initialize("agent", { epoch: "e" });
-    store.append("agent", {
-      type: "user_message",
-      text: "prompt",
-      messageId: "client",
-      clientMessageId: "client",
-    });
-    for (let i = 0; i < 100; i++)
-      store.append("agent", { type: "assistant_message", text: `message-${i}` });
-    const beforeReads = store.getStorageStats().payloadReads;
-    expect(store.getItemCount("agent")).toBe(101);
-    expect(store.getStorageStats().payloadReads).toBe(beforeReads);
-    expect(
-      store.fetch("agent", { direction: "tail", limit: 2 }).rows.map((row) => row.seq),
-    ).toEqual([100, 101]);
-    expect(store.getStorageStats().payloadReads - beforeReads).toBe(2);
-    const older = store.fetch("agent", {
-      direction: "before",
-      cursor: { epoch: "e", seq: 4 },
-      limit: 3,
-    });
-    expect(older.rows.map((row) => row.seq)).toEqual([1, 2, 3]);
-    expect(older.hasOlder).toBe(false);
-    expect(older.hasNewer).toBe(true);
-    expect(store.enrichSubmittedUserMessage("agent", "client", "provider")?.providerMessageId).toBe(
-      "provider",
-    );
-    expect(store.getSubmittedUserMessage("agent", "client")?.item).toMatchObject({
-      text: "prompt",
-    });
-    expect(store.fetch("agent", { limit: 0 }).rows).toHaveLength(101);
-    store.delete("agent");
-    expect(store.getStorageStats().spilledRows).toBe(0);
-  });
+});
 
-  it("hydrates only the requested projected page, not every heavy historical payload", () => {
-    const store = spillingStore();
-    store.initialize("agent", { epoch: "e" });
-    for (let i = 0; i < 500; i++) {
-      store.append("agent", { type: "user_message", text: `${i}: ${"history".repeat(2000)}` });
-    }
-    const before = store.getStorageStats().payloadReads;
-    const page = store.fetchProjectedPage("agent", { direction: "tail", limit: 2 });
-    expect(page.entries.map((e) => e.seqStart)).toEqual([499, 500]);
-    expect(page.hasOlder).toBe(true);
-    expect(store.getStorageStats().payloadReads - before).toBe(2);
-    expect(store.getStorageStats().residentBytes).toBe(0);
-  });
-
-  it("matches in-memory projection across spilled lifecycle, text, plugin and turn boundaries", () => {
-    const store = spillingStore();
-    const rows: AgentTimelineRow[] = [];
-    function push(item: AgentTimelineRow["item"], turnId = "turn-a") {
-      rows.push({ seq: rows.length + 1, timestamp: String(rows.length), turnId, item });
-    }
-    push({ type: "user_message", text: "user" });
-    push({
-      type: "tool_call",
-      callId: "tool",
-      name: "shell",
-      status: "running",
-      error: null,
-      detail: { type: "shell", command: "pwd" },
-      metadata: { first: true },
-    });
-    push({ type: "assistant_message", text: "first ", messageId: "a" });
-    push({ type: "assistant_message", text: "second", messageId: "a" });
-    push({ type: "reasoning", text: "thinking " });
-    push({ type: "reasoning", text: "done" });
-    push({
-      type: "tool_call",
-      callId: "tool",
-      name: "shell",
-      status: "completed",
-      error: null,
-      detail: { type: "unknown", input: null, output: "done" },
-      metadata: { second: true },
-    });
-    push({
-      type: "plugin",
-      id: "p",
-      pluginId: "plugin",
-      kind: "k",
-      version: 1,
-      data: { first: 1 },
-    });
-    push({ type: "user_message", text: "next" });
-    push({ type: "plugin", id: "p", pluginId: "plugin", kind: "k", version: 1, data: { last: 2 } });
-    push(
-      {
-        type: "tool_call",
-        callId: "tool",
-        name: "shell",
-        status: "running",
+describe("projected timeline retention", () => {
+  it("retains one full tool state while streaming every source update", () => {
+    const store = new InMemoryAgentTimelineStore();
+    store.initialize("agent");
+    for (let seq = 1; seq <= 2000; seq++) {
+      const item = {
+        type: "tool_call" as const,
+        callId: "child",
+        name: "task",
+        status: "running" as const,
         error: null,
-        detail: { type: "shell", command: "ls" },
-      },
-      "turn-b",
-    );
-    push({ type: "assistant_message", text: "last", messageId: "" }, "turn-b");
-    store.initialize("agent", { epoch: "e", rows });
-    for (const direction of ["tail", "before", "after"] as const) {
-      for (const limit of [0, 1, 2, 10]) {
-        for (const seq of [0, 2, 4, 7, 10, 12, 100]) {
-          const cursor = { epoch: "e", seq };
-          expect(store.fetchProjectedPage("agent", { direction, cursor, limit })).toEqual(
-            selectProjectedTimelinePage({ rows, direction, cursorSeq: seq, limit }),
-          );
-        }
-      }
+        detail: { type: "plain_text" as const, label: "Child", text: "x".repeat(seq * 128) },
+      };
+      expect(store.append("agent", item)).toMatchObject({ seq, item });
     }
+    const result = store.fetch("agent", { limit: 0 });
+    expect(result.rows).toHaveLength(1);
+    expect(JSON.stringify(result.rows).length).toBeLessThan(260_000);
+    expect(result.window.maxSeq).toBe(2000);
   });
 
-  it("replacing a seeded timeline releases previous spill blocks", () => {
-    const store = spillingStore();
-    store.initialize("agent", { items: [{ type: "assistant_message", text: "old" }] });
-    store.initialize("agent", { items: [{ type: "assistant_message", text: "new" }] });
-    expect(store.getItems("agent")).toEqual([{ type: "assistant_message", text: "new" }]);
-    expect(store.getStorageStats().spilledRows).toBe(1);
+  it("catches up a mid-message cursor with the complete projected message", () => {
+    const store = new InMemoryAgentTimelineStore();
+    store.initialize("agent", { epoch: "e" });
+    store.append("agent", { type: "assistant_message", messageId: "m", text: "A" });
+    store.append("agent", { type: "assistant_message", messageId: "m", text: "B" });
+    expect(
+      store.fetch("agent", { direction: "after", cursor: { epoch: "e", seq: 1 } }).rows,
+    ).toMatchObject([
+      {
+        item: { text: "AB" },
+        seqStart: 1,
+        seqEnd: 2,
+        sourceSeqRanges: [{ startSeq: 1, endSeq: 2 }],
+      },
+    ]);
   });
+});
+
+describe("projected sequence ownership", () => {
+  it("preserves fetched coverage when another source chunk arrives", () => {
+    const store = new InMemoryAgentTimelineStore();
+    store.initialize("a");
+    store.append("a", { type: "assistant_message", text: "A" });
+    const before = store.fetch("a");
+    store.append("a", { type: "assistant_message", text: "B" });
+    expect(before.rows[0]).toMatchObject({
+      item: { text: "A" },
+      seqEnd: 1,
+      sourceSeqRanges: [{ startSeq: 1, endSeq: 1 }],
+    });
+    expect(store.fetch("a").rows[0]).toMatchObject({
+      item: { text: "AB" },
+      seqEnd: 2,
+      sourceSeqRanges: [{ startSeq: 1, endSeq: 2 }],
+    });
+  });
+  it("preserves source positions when seeding a projected history whose last update is an earlier tool", () => {
+    const store = new InMemoryAgentTimelineStore();
+    store.initialize("a");
+    const tool = {
+      type: "tool_call" as const,
+      callId: "t",
+      name: "shell",
+      error: null,
+      detail: { type: "plain_text" as const, label: "work" },
+    };
+    store.append("a", { ...tool, status: "running" });
+    store.append("a", { type: "assistant_message", text: "Answer" });
+    store.append("a", { ...tool, status: "completed" });
+    store.initialize("b", { rows: store.getRows("a") });
+    expect(store.append("b", { type: "user_message", text: "next" }).seq).toBe(4);
+    expect(store.fetch("b").rows.map((row) => row.seqStart)).toEqual([1, 2, 4]);
+  });
+  it("returns the last projected assistant message without joining different messages", () => {
+    const store = new InMemoryAgentTimelineStore();
+    store.initialize("a");
+    store.append("a", { type: "assistant_message", messageId: "first", text: "First" });
+    store.append("a", { type: "assistant_message", messageId: "second", text: "Sec" });
+    store.append("a", { type: "assistant_message", messageId: "second", text: "ond" });
+    expect(store.getLastAssistantMessage("a")).toBe("Second");
+  });
+});
+
+it("includes transitive tool updates in a contiguous projected tail", () => {
+  const store = new InMemoryAgentTimelineStore();
+  store.initialize("a");
+  const tool = (callId: string, status: "running" | "completed") => ({
+    type: "tool_call" as const,
+    callId,
+    name: "shell",
+    status,
+    error: null,
+    detail: { type: "plain_text" as const, label: "work" },
+  });
+  store.append("a", tool("first", "running"));
+  store.append("a", tool("second", "running"));
+  store.append("a", { type: "user_message", text: "Continue" });
+  store.append("a", tool("first", "completed"));
+  store.append("a", { type: "assistant_message", text: "Answer" });
+  store.append("a", tool("second", "completed"));
+  const tail = store.fetch("a", { limit: 1 });
+  expect(tail.rows.map((row) => row.seqStart)).toEqual([1, 2, 3, 5]);
+  expect(tail).toMatchObject({ startSeq: 1, endSeq: 6, hasOlder: false });
 });

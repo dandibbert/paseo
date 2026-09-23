@@ -1796,7 +1796,6 @@ export async function createPaseoDaemon(
     if (wsServer) {
       await wsServer.close();
     }
-    agentManager.disposeTimelineStorage();
     await serviceProxy.stopStandalone();
     // Force-drop remaining sockets so httpServer.close() resolves promptly.
     // We've already closed wsServer (which sent ws-layer close frames) and

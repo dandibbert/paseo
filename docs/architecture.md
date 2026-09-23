@@ -54,6 +54,15 @@ The heart of Paseo. A Node.js process that:
 
 All paths are under `packages/server/src/`.
 
+Desktop and CLI import server capabilities through explicit package subpaths such as
+`@getpaseo/server/daemon-control`, `/configuration`, and `/process`. The root export
+loads daemon bootstrap eagerly, even when a caller only uses a path or process helper.
+Keep process-management and configuration dependencies independent of bootstrap and
+WebSocket message schemas. Shared configuration schemas belong in protocol leaf modules;
+`messages` imports and re-exports them. This prevents every supervising process from
+retaining the daemon's runtime and wire-schema allocations. The server export tests guard
+these dependency trees with tree-shaking disabled to match unbundled production imports.
+
 Project identity is daemon-global rather than session-owned. After registry bootstrap, the daemon's
 project Git observer keeps one non-recursive watch on each lexically equivalent active project root
 and listens only for the root `.git` entry, with a slow rescan as a missed-event fallback. It runs
@@ -321,6 +330,36 @@ Example: adding a new enum value
 // 4. Gate the new emitted value: session.supports(CLIENT_CAPS.newThing) ? "new_value" : "old_value"
 ```
 
+### Creation ownership
+
+Creation is owned by the daemon across socket lifetimes. A workspace request can include
+its initial agent and prompt. Workspace readiness is published before provider startup;
+the app keeps its existing disk-ready navigation and observes the remaining creation.
+Callbacks do not advance the workflow. Resource reservations in acknowledgement are
+identities, not ready workspace records.
+
+The creation journal (`server/creation/`) owns identity and execution for both legacy and
+modern creation RPCs. Requesting progress never selects a different journal. Existing
+agent receipts are imported at this boundary; message delivery receipts remain separate.
+It keeps cumulative milestones and permanent IDs under an operation kind and idempotency
+key. Reconnect subscribes to that key; retries
+join active work or reuse committed stages. A persisted resource alone cannot prove
+that a provider accepted its initial prompt. Interrupted side effects with no conclusive
+receipt return an unknown outcome instead of being repeated.
+
+`packages/client/src/creation/` owns capability selection and legacy orchestration.
+Callers always pass the initial prompt to agent creation. On an older host, the client
+adapts keyed creation to the legacy create/send sequence; it cannot continue that
+sequence after the client process disappears. Explicitly requested IDs or receipts
+that an old host cannot honor produce an unsupported error. Keep these adapters inside
+the client package, as an exception to the default no-fallback feature policy.
+
+Creation executes through the existing Session capabilities. Connection-owned delivery
+controls observation only: detaching a socket or cleaning up its Session does not cancel
+accepted creation. Updates require an explicit subscription and go only to that socket;
+reconnect uses the shared subscription owner. Legacy consumers, including Hub, keep their
+existing response contract.
+
 ## Agent lifecycle
 
 The lifecycle states are defined in `shared/agent-lifecycle.ts`:
@@ -348,10 +387,7 @@ initializing → idle ⇄ running
   client-side dedup; the default fetch page is 200 items.
 - Timeline row `timestamp` values are canonical daemon-owned timestamps. Providers may supply original replay timestamps, but clients must not guess timestamp trust or hide time UI based on local clock heuristics.
 - Events stream to connected clients in real time; correctness is backed by authoritative timeline fetches and paged-to-completion catch-up.
-- Agent state persists to `$PASEO_HOME/agents/{cwd-with-dashes}/{agent-id}.json`. Provider history is the durable transcript authority and resumed agents rebuild from it. That storage path is derived from `cwd`, not from workspace id.
-- Runtime timeline payloads use a shared 16 MiB encoded hot set per store (root and provider-subagent stores have independent budgets). Older payloads spill losslessly into private temporary backing; eviction does not remove rows or change epochs/cursors. Projection planning uses a lightweight resident index and decodes only contributing rows. The backing is not a second durable transcript and is disposed at daemon shutdown; POSIX descriptors are unlinked immediately so crashes reclaim them too.
-- The payload budget does not bound the metadata index, provider-owned state, a single large projected entry, or explicit full-history consumers such as fork/export and terminal plugin hooks. Do not interpret it as a global daemon RSS limit. Append/compression and spill reads are synchronous; measure event-loop latency as well as retained heap when changing the budget.
-- A Codex parent tool card contains a bounded child-activity preview, not another complete copy of that child's history. Full child events remain available through the independent provider-subagent timeline.
+- Agent state persists to `$PASEO_HOME/agents/{cwd-with-dashes}/{agent-id}.json`. Timeline rows are runtime memory; provider history is the durable transcript authority and resumed agents rebuild from it. That storage path is derived from `cwd`, not from workspace id.
 
 ## Right-sidebar boundary: directory-backed vs workspace-owned
 
