@@ -180,6 +180,8 @@ Enables remote access when the daemon is behind a firewall.
 - Optional E2EE capability negotiation preserves application frame kind: text plaintext uses base64 ciphertext text frames, while binary plaintext uses raw ciphertext binary frames; mixed-version peers remain base64-only
 - Self-hosted relays opt into TLS with `daemon.relay.useTls` or `PASEO_RELAY_USE_TLS=true`; the public (client-facing) TLS setting can be overridden independently via `daemon.relay.publicUseTls` or `PASEO_RELAY_PUBLIC_USE_TLS`
 
+Relay recovery belongs to the transport, not the agent lifecycle. Reconciliation preserves healthy data sockets, removes absent clients, and retries failed attachments with bounded backoff. Old socket callbacks cannot claim a replacement connection. Protocol pongs are not evidence that the relay application is responding; an idle control connection also receives a sparse application probe. A silent data socket is retired independently. Neither path restarts the daemon or its providers.
+
 The production relay server lives in [getpaseo/paseo-relay](https://github.com/getpaseo/paseo-relay). It is a distributed Elixir service. The Cloudflare relay implementation in this monorepo is retained as legacy code and is not deployed.
 
 See [SECURITY.md](../SECURITY.md) for the full threat model.
