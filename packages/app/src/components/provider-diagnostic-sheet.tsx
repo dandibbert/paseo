@@ -1,20 +1,15 @@
 import * as Clipboard from "expo-clipboard";
-import { AlertTriangle, Copy, FileText, Plus, RotateCw, Trash2 } from "lucide-react-native";
+import { AlertTriangle, Copy, FileText, Pencil, Plus, RotateCw, Trash2 } from "lucide-react-native";
 import type { TFunction } from "i18next";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Pressable, type PressableStateCallbackType, Text, View } from "react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
-import {
-  AdaptiveModalSheet,
-  AdaptiveTextInput,
-  type SheetHeader,
-} from "@/components/adaptive-modal-sheet";
+import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
 import { Button } from "@/components/ui/button";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { ScrollableCodeSurface, SurfaceCard } from "@/components/ui/scrollable-code-surface";
 import { useIsCompactFormFactor } from "@/constants/layout";
-import { isWeb } from "@/constants/platform";
 import { useToast } from "@/contexts/toast-context";
 import { CODE_SURFACE_DATASET } from "@/styles/code-surface";
 import { useDaemonConfig } from "@/hooks/use-daemon-config";
@@ -30,6 +25,7 @@ import {
   resolveProviderDiscoveredModels,
   type ProviderDiscoveredModelsCache,
 } from "./provider-diagnostic-models";
+import { ProviderModelEditorSheet } from "./provider-model-editor-sheet";
 
 interface ProviderDiagnosticSheetProps {
   provider: string;
@@ -49,7 +45,19 @@ function rankModels<T>(items: T[], query: string, fields: (item: T) => string[])
   return scored.map((entry) => entry.item);
 }
 
-function DiscoveredModelRow({ model }: { model: AgentModelDefinition }) {
+function iconButtonStyle({ hovered, pressed }: PressableStateCallbackType & { hovered?: boolean }) {
+  return [sheetStyles.iconButton, (Boolean(hovered) || pressed) && sheetStyles.iconButtonHovered];
+}
+
+function DiscoveredModelRow({
+  model,
+  onEdit,
+}: {
+  model: AgentModelDefinition;
+  onEdit: (model: AgentModelDefinition) => void;
+}) {
+  const { theme } = useUnistyles();
+  const handleEdit = useCallback(() => onEdit(model), [model, onEdit]);
   return (
     <View style={sheetStyles.modelRow}>
       <Text style={sheetStyles.modelTitle} numberOfLines={1}>
@@ -63,11 +71,27 @@ function DiscoveredModelRow({ model }: { model: AgentModelDefinition }) {
       >
         {model.id}
       </Text>
+      {model.contextWindowMaxTokens ? (
+        <Text style={sheetStyles.modelMeta} numberOfLines={1}>
+          {Math.round(model.contextWindowMaxTokens / 1000)}k ctx
+        </Text>
+      ) : null}
       {model.description ? (
         <Text style={sheetStyles.descriptionInline} numberOfLines={1}>
           {model.description}
         </Text>
-      ) : null}
+      ) : (
+        <View style={sheetStyles.modelRowFiller} />
+      )}
+      <Pressable
+        onPress={handleEdit}
+        hitSlop={8}
+        style={iconButtonStyle}
+        accessibilityRole="button"
+        accessibilityLabel={`Edit model ${model.id}`}
+      >
+        <Pencil size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />
+      </Pressable>
     </View>
   );
 }
@@ -75,14 +99,17 @@ function DiscoveredModelRow({ model }: { model: AgentModelDefinition }) {
 function CustomModelRow({
   model,
   deleting,
+  onEdit,
   onDelete,
 }: {
   model: ProviderProfileModel;
   deleting: boolean;
+  onEdit: (model: ProviderProfileModel) => void;
   onDelete: (modelId: string) => void;
 }) {
   const { t } = useTranslation();
   const { theme } = useUnistyles();
+  const handleEdit = useCallback(() => onEdit(model), [model, onEdit]);
   const handleDelete = useCallback(() => onDelete(model.id), [model.id, onDelete]);
   const deleteButtonStyle = useCallback(
     ({ hovered, pressed }: PressableStateCallbackType & { hovered?: boolean }) => [
@@ -106,14 +133,30 @@ function CustomModelRow({
       >
         {model.id}
       </Text>
+      {model.contextWindowMaxTokens ? (
+        <Text style={sheetStyles.modelMeta} numberOfLines={1}>
+          {Math.round(model.contextWindowMaxTokens / 1000)}k ctx
+        </Text>
+      ) : null}
       <View style={sheetStyles.modelRowFiller} />
+      <Pressable
+        onPress={handleEdit}
+        hitSlop={8}
+        style={iconButtonStyle}
+        accessibilityRole="button"
+        accessibilityLabel={`Edit model ${model.id}`}
+      >
+        <Pencil size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />
+      </Pressable>
       <Pressable
         onPress={handleDelete}
         disabled={deleting}
         hitSlop={8}
         style={deleteButtonStyle}
         accessibilityRole="button"
-        accessibilityLabel={t("settings.providers.models.removeModel", { id: model.id })}
+        accessibilityLabel={t("settings.providers.models.removeModel", {
+          id: model.id,
+        })}
       >
         <Trash2 size={theme.iconSize.sm} color={theme.colors.destructive} />
       </Pressable>
@@ -151,86 +194,16 @@ function AddCustomModelSubSheet({
   onClose: () => void;
   refresh: (providers?: AgentProvider[]) => Promise<void>;
 }) {
-  const { t } = useTranslation();
-  const { theme } = useUnistyles();
-  const { config, patchConfig } = useDaemonConfig(serverId);
-  const [input, setInput] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
-
-  const additionalModels = useMemo(
-    () => config?.providers?.[provider]?.additionalModels ?? [],
-    [config?.providers, provider],
-  );
-  const trimmed = input.trim();
-  const canAdd = trimmed.length > 0 && !additionalModels.some((model) => model.id === trimmed);
-
-  useEffect(() => {
-    if (!visible) {
-      setInput("");
-      setError(null);
-    }
-  }, [visible]);
-
-  const handleAdd = useCallback(() => {
-    if (!canAdd) return;
-    setError(null);
-    setSaving(true);
-    void patchConfig({
-      providers: {
-        [provider]: {
-          additionalModels: [...additionalModels, { id: trimmed, label: trimmed }],
-        },
-      },
-    })
-      .then(() => refresh([provider]))
-      .then(() => onClose())
-      .catch((err) => {
-        setError(err instanceof Error ? err.message : t("settings.providers.models.failedToSave"));
-      })
-      .finally(() => setSaving(false));
-  }, [additionalModels, canAdd, onClose, patchConfig, provider, refresh, t, trimmed]);
-
-  const header = useMemo<SheetHeader>(
-    () => ({ title: t("settings.providers.models.addCustomTitle") }),
-    [t],
-  );
-
   return (
-    <AdaptiveModalSheet
-      header={header}
+    <ProviderModelEditorSheet
+      provider={provider}
+      serverId={serverId}
       visible={visible}
+      model={null}
+      originalModelId={null}
       onClose={onClose}
-      desktopMaxWidth={420}
-      snapPoints={ADD_SNAP_POINTS}
-      testID="add-custom-model-sheet"
-    >
-      <View style={sheetStyles.formGroup}>
-        <Text style={sheetStyles.formLabel}>{t("settings.providers.models.modelId")}</Text>
-        <AdaptiveTextInput
-          initialValue={input}
-          resetKey={`add-custom-${visible}`}
-          onChangeText={setInput}
-          onSubmitEditing={handleAdd}
-          placeholder={t("settings.providers.models.modelIdPlaceholder")}
-          placeholderTextColor={theme.colors.foregroundMuted}
-          autoCapitalize="none"
-          autoCorrect={false}
-          returnKeyType="done"
-          // @ts-expect-error - outlineStyle is web-only
-          style={[sheetStyles.formInput, isWeb && { outlineStyle: "none" }]}
-        />
-        {error ? <Text style={sheetStyles.errorText}>{error}</Text> : null}
-        <View style={sheetStyles.formActions}>
-          <Button variant="secondary" size="sm" onPress={onClose} disabled={saving}>
-            {t("common.actions.cancel")}
-          </Button>
-          <Button variant="default" size="sm" onPress={handleAdd} disabled={!canAdd || saving}>
-            {saving ? t("settings.providers.models.adding") : t("settings.providers.models.add")}
-          </Button>
-        </View>
-      </View>
-    </AdaptiveModalSheet>
+      refresh={refresh}
+    />
   );
 }
 
@@ -404,6 +377,8 @@ interface ProviderModalBodyProps {
   filteredCustom: ProviderProfileModel[];
   deletingModelId: string | null;
   onRefresh: () => void;
+  onEditDiscovered: (model: AgentModelDefinition) => void;
+  onEditCustom: (model: ProviderProfileModel) => void;
   onDeleteCustom: (modelId: string) => void;
   theme: { iconSize: { md: number }; colors: { foregroundMuted: string } };
 }
@@ -490,6 +465,8 @@ function ProviderModalBody(props: ProviderModalBodyProps) {
     filteredCustom,
     deletingModelId,
     onRefresh,
+    onEditDiscovered,
+    onEditCustom,
     onDeleteCustom,
     theme,
   } = props;
@@ -539,7 +516,7 @@ function ProviderModalBody(props: ProviderModalBodyProps) {
           />
           <View style={settingsStyles.card}>
             {filteredDiscovered.map((model) => (
-              <DiscoveredModelRow key={model.id} model={model} />
+              <DiscoveredModelRow key={model.id} model={model} onEdit={onEditDiscovered} />
             ))}
           </View>
         </View>
@@ -556,6 +533,7 @@ function ProviderModalBody(props: ProviderModalBodyProps) {
                 key={model.id}
                 model={model}
                 deleting={deletingModelId === model.id}
+                onEdit={onEditCustom}
                 onDelete={onDeleteCustom}
               />
             ))}
@@ -579,6 +557,11 @@ export function ProviderDiagnosticSheet({
   const { config, patchConfig } = useDaemonConfig(serverId);
   const [query, setQuery] = useState("");
   const [addSheetOpen, setAddSheetOpen] = useState(false);
+  const [editSheetOpen, setEditSheetOpen] = useState(false);
+  const [editingModel, setEditingModel] = useState<
+    AgentModelDefinition | ProviderProfileModel | null
+  >(null);
+  const [editingOriginalModelId, setEditingOriginalModelId] = useState<string | null>(null);
   const [diagSheetOpen, setDiagSheetOpen] = useState(false);
   const [deletingModelId, setDeletingModelId] = useState<string | null>(null);
 
@@ -625,6 +608,9 @@ export function ProviderDiagnosticSheet({
     if (!visible) {
       setQuery("");
       setAddSheetOpen(false);
+      setEditSheetOpen(false);
+      setEditingModel(null);
+      setEditingOriginalModelId(null);
       setDiagSheetOpen(false);
     }
   }, [visible]);
@@ -635,7 +621,7 @@ export function ProviderDiagnosticSheet({
     [discoveredModels, q],
   );
   const filteredCustom = useMemo(
-    () => rankModels(additionalModels, q, (m) => [m.label, m.id]),
+    () => rankModels(additionalModels, q, (m) => [m.label, m.id, m.description ?? ""]),
     [additionalModels, q],
   );
 
@@ -645,6 +631,21 @@ export function ProviderDiagnosticSheet({
 
   const handleOpenAddSheet = useCallback(() => setAddSheetOpen(true), []);
   const handleCloseAddSheet = useCallback(() => setAddSheetOpen(false), []);
+  const handleEditDiscovered = useCallback(
+    (model: AgentModelDefinition) => {
+      const override = additionalModels.find((entry) => entry.id === model.id);
+      setEditingModel(override ?? model);
+      setEditingOriginalModelId(model.id);
+      setEditSheetOpen(true);
+    },
+    [additionalModels],
+  );
+  const handleEditCustom = useCallback((model: ProviderProfileModel) => {
+    setEditingModel(model);
+    setEditingOriginalModelId(model.id);
+    setEditSheetOpen(true);
+  }, []);
+  const handleCloseEditSheet = useCallback(() => setEditSheetOpen(false), []);
   const handleOpenDiagSheet = useCallback(() => setDiagSheetOpen(true), []);
   const handleCloseDiagSheet = useCallback(() => setDiagSheetOpen(false), []);
 
@@ -707,6 +708,8 @@ export function ProviderDiagnosticSheet({
           filteredCustom={filteredCustom}
           deletingModelId={deletingModelId}
           onRefresh={handleRefreshModels}
+          onEditDiscovered={handleEditDiscovered}
+          onEditCustom={handleEditCustom}
           onDeleteCustom={handleDeleteCustom}
           theme={theme}
         />
@@ -716,6 +719,15 @@ export function ProviderDiagnosticSheet({
         serverId={serverId}
         visible={addSheetOpen}
         onClose={handleCloseAddSheet}
+        refresh={refresh}
+      />
+      <ProviderModelEditorSheet
+        provider={provider}
+        serverId={serverId}
+        visible={editSheetOpen}
+        model={editingModel}
+        originalModelId={editingOriginalModelId}
+        onClose={handleCloseEditSheet}
         refresh={refresh}
       />
       <DiagnosticSubSheet
@@ -741,6 +753,11 @@ const sheetStyles = StyleSheet.create((theme) => ({
   },
   descriptionInline: {
     flex: 1,
+    fontSize: theme.fontSize.sm,
+    color: theme.colors.foregroundMuted,
+  },
+  modelMeta: {
+    flexShrink: 0,
     fontSize: theme.fontSize.sm,
     color: theme.colors.foregroundMuted,
   },
@@ -867,5 +884,4 @@ const sheetStyles = StyleSheet.create((theme) => ({
 }));
 
 const MAIN_SNAP_POINTS = ["65%", "92%"];
-const ADD_SNAP_POINTS = ["40%"];
 const DIAGNOSTIC_SNAP_POINTS = ["50%", "85%"];
