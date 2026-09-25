@@ -102,8 +102,8 @@ async function exerciseProviderSettingsStack(page: Page) {
   await expectProviderSettingsVisible(page);
 
   await page.getByRole("button", { name: "Add model" }).click();
-  await expect(page.getByTestId("add-custom-model-sheet")).toBeVisible({ timeout: 10_000 });
-  await closeSheetByHeaderButton(page, "add-custom-model-sheet");
+  await expect(page.getByTestId("provider-model-editor-sheet")).toBeVisible({ timeout: 10_000 });
+  await closeSheetByHeaderButton(page, "provider-model-editor-sheet");
   await expect(page.getByPlaceholder("e.g. openai/gpt-5")).not.toBeVisible({ timeout: 10_000 });
   await expectProviderSettingsVisible(page);
 
