@@ -9,7 +9,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: combined-provider-repair-${{ github.ref }}
+  group: combined-provider-repair-${{ github.sha }}
   cancel-in-progress: false
 
 env:
