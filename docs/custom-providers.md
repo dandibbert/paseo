@@ -299,13 +299,7 @@ You can also combine profiles with model overrides to pin specific models per pr
       "claude-fast": {
         "extends": "claude",
         "label": "Claude (Fast)",
-        "models": [
-          {
-            "id": "claude-sonnet-4-6",
-            "label": "Sonnet 4.6",
-            "isDefault": true
-          }
-        ]
+        "models": [{ "id": "claude-sonnet-4-6", "label": "Sonnet 4.6", "isDefault": true }]
       },
       "claude-smart": {
         "extends": "claude",
@@ -650,11 +644,7 @@ Example: add an experimental model while keeping every model the provider discov
         "label": "My Agent",
         "command": ["my-agent", "--acp"],
         "additionalModels": [
-          {
-            "id": "experimental-model",
-            "label": "Experimental",
-            "isDefault": true
-          }
+          { "id": "experimental-model", "label": "Experimental", "isDefault": true }
         ]
       }
     }
@@ -724,7 +714,7 @@ Each entry in the `models` array:
 
 ### Claude settings.json model discovery
 
-The built-in `claude` provider appends concrete model IDs from `~/.claude/settings.json` to its first-party Claude model list. Paseo reads the top-level `model` field and these `env` keys: `ANTHROPIC_MODEL`, `ANTHROPIC_SMALL_FAST_MODEL`, `ANTHROPIC_DEFAULT_OPUS_MODEL`, `ANTHROPIC_DEFAULT_SONNET_MODEL`, and `ANTHROPIC_DEFAULT_HAIKU_MODEL`.
+The built-in `claude` provider appends concrete model IDs from `~/.claude/settings.json` to its first-party Claude model list. Paseo reads the top-level `model` field and these `env` keys: `ANTHROPIC_MODEL`, `ANTHROPIC_SMALL_FAST_MODEL`, `ANTHROPIC_DEFAULT_FABLE_MODEL`, `ANTHROPIC_DEFAULT_OPUS_MODEL`, `ANTHROPIC_DEFAULT_SONNET_MODEL`, and `ANTHROPIC_DEFAULT_HAIKU_MODEL`.
 
 This lets users who already configured Claude Code for Bedrock, OpenRouter, ollama, Z.AI, or another Anthropic-compatible gateway select the exact model ID in Paseo. Explicit model IDs are passed unchanged to Claude Code, even when the same string is a compatibility alias for a built-in model. When `agents.providers.claude.models` is set it **replaces** both the hardcoded first-party Claude list and any settings.json-discovered entries; use `agents.providers.claude.additionalModels` to keep the first-party list and append curated entries on top.
 
