@@ -56,6 +56,11 @@ type ControlMessage =
 const CONTROL_PING_INTERVAL_MS = 10_000;
 const CONTROL_STALE_TIMEOUT_MS = 30_000;
 const CONTROL_READY_TIMEOUT_MS = 8_000;
+// Protocol pongs can be answered by an intermediary. A sparse application probe
+// also checks that the relay's control handler is still processing messages.
+const CONTROL_APPLICATION_PROBE_INTERVAL_MS = 30_000;
+const CONTROL_APPLICATION_PROBE_TIMEOUT_MS = 15_000;
+const DATA_APPLICATION_STALE_MS = 45_000;
 const RELAY_WEBSOCKET_OPTIONS = { handshakeTimeout: 10_000, perMessageDeflate: false } as const;
 
 function createDefaultRelayWebSocket(url: string): RelayWebSocketLike {
@@ -81,9 +86,9 @@ function tryParseControlMessage(raw: unknown): ControlMessage | null {
     if (parsed.type === "ping") return { type: "ping" };
     if (parsed.type === "pong") return { type: "pong" };
     if (parsed.type === "sync" && Array.isArray(parsed.connectionIds)) {
-      const connectionIds = parsed.connectionIds.filter(
-        (id: unknown) => typeof id === "string" && id.trim().length > 0,
-      );
+      const connectionIds = parsed.connectionIds
+        .filter((id: unknown): id is string => typeof id === "string" && id.trim().length > 0)
+        .map((id) => id.trim());
       return { type: "sync", connectionIds };
     }
     if (
@@ -126,9 +131,51 @@ export function startRelayTransport({
   let controlReadyTimeout: ReturnType<typeof setTimeout> | null = null;
   let controlLastSeenAt = 0;
   let controlConnectionSeq = 0;
+  const wantedConnections = new Set<string>();
+  const dataRetries = new Map<string, ReturnType<typeof setTimeout>>();
+  const dataRetryAttempts = new Map<string, number>();
+  const dataCleanups = new Map<RelayWebSocketLike, () => void>();
+
+  const cancelDataRetry = (id: string): void => {
+    const timer = dataRetries.get(id);
+    if (timer) clearTimeout(timer);
+    dataRetries.delete(id);
+  };
+
+  const dropDataSocket = (id: string): void => {
+    const socket = dataSockets.get(id);
+    if (!socket) return;
+    // Retire ownership before close callbacks (which can arrive synchronously).
+    dataSockets.delete(id);
+    dataCleanups.get(socket)?.();
+    try {
+      socket.terminate();
+    } catch (error) {
+      relayLogger.warn({ err: error, connectionId: id }, "relay_data_terminate_failed");
+    }
+  };
+
+  const retryDataSocket = (id: string): void => {
+    if (stopped || !wantedConnections.has(id) || dataRetries.has(id)) return;
+    const attempt = (dataRetryAttempts.get(id) ?? 0) + 1;
+    dataRetryAttempts.set(id, attempt);
+    dataRetries.set(
+      id,
+      setTimeout(
+        () => {
+          dataRetries.delete(id);
+          if (controlWs?.readyState === WebSocket.OPEN) ensureClientDataSocket(id);
+        },
+        Math.min(30_000, 1_000 * attempt),
+      ),
+    );
+  };
 
   const stop = async (): Promise<void> => {
     stopped = true;
+    wantedConnections.clear();
+    for (const id of dataRetries.keys()) cancelDataRetry(id);
+    dataRetryAttempts.clear();
     if (reconnectTimeout) {
       clearTimeout(reconnectTimeout);
       reconnectTimeout = null;
@@ -143,20 +190,13 @@ export function startRelayTransport({
     }
     if (controlWs) {
       try {
-        controlWs.close();
+        controlWs.terminate();
       } catch {
         // ignore
       }
       controlWs = null;
     }
-    for (const ws of dataSockets.values()) {
-      try {
-        ws.close();
-      } catch {
-        // ignore
-      }
-    }
-    dataSockets.clear();
+    for (const id of dataSockets.keys()) dropDataSocket(id);
   };
 
   const connectControl = (): void => {
@@ -169,9 +209,18 @@ export function startRelayTransport({
       serverId,
       role: "server",
     });
-    const socket = createWebSocket(url);
+    let socket: RelayWebSocketLike;
+    try {
+      socket = createWebSocket(url);
+    } catch (error) {
+      relayLogger.warn({ err: error, connectionId }, "relay_control_create_failed");
+      scheduleReconnect();
+      return;
+    }
     controlWs = socket;
     let controlConnected = false;
+    let applicationLastSeenAt = Date.now();
+    let applicationProbeAt: number | null = null;
 
     const markControlReady = () => {
       if (controlWs !== socket) return;
@@ -220,8 +269,8 @@ export function startRelayTransport({
         const staleForMs = now - controlLastSeenAt;
         // If the control socket is half-open or silently dropped, ws may never emit "close".
         // Use a WebSocket protocol ping to detect staleness and force a reconnect.
-        // Cloudflare's runtime auto-responds to protocol pings at the edge without waking the
-        // hibernated relay Durable Object, so this keepalive does not incur DO CPU billing.
+        // This checks the network leg; the less frequent application probe below
+        // separately checks the relay handler, even when an edge answers pings.
         if (staleForMs > CONTROL_STALE_TIMEOUT_MS) {
           relayLogger.warn(
             { url, staleForMs, connectionId, staleTimeoutMs: CONTROL_STALE_TIMEOUT_MS },
@@ -235,7 +284,23 @@ export function startRelayTransport({
           return;
         }
 
+        if (
+          applicationProbeAt !== null &&
+          now - applicationProbeAt >= CONTROL_APPLICATION_PROBE_TIMEOUT_MS
+        ) {
+          relayLogger.warn({ connectionId }, "relay_control_application_timeout_terminating");
+          socket.terminate();
+          return;
+        }
         try {
+          if (
+            controlConnected &&
+            applicationProbeAt === null &&
+            now - applicationLastSeenAt >= CONTROL_APPLICATION_PROBE_INTERVAL_MS
+          ) {
+            applicationProbeAt = now;
+            socket.send(JSON.stringify({ type: "ping" }));
+          }
           socket.ping();
         } catch (error) {
           relayLogger.warn({ err: error, connectionId }, "relay_control_ping_send_failed");
@@ -294,6 +359,8 @@ export function startRelayTransport({
       controlLastSeenAt = Date.now();
       const msg = tryParseControlMessage(data);
       if (msg) {
+        applicationLastSeenAt = Date.now();
+        applicationProbeAt = null;
         markControlReady();
       }
       if (!msg) return;
@@ -307,25 +374,30 @@ export function startRelayTransport({
       }
       if (msg.type === "pong") return;
       if (msg.type === "sync") {
-        for (const clientConnectionId of msg.connectionIds) {
-          ensureClientDataSocket(clientConnectionId);
+        const wanted = new Set(msg.connectionIds);
+        for (const id of wantedConnections) {
+          if (wanted.has(id)) continue;
+          wantedConnections.delete(id);
+          cancelDataRetry(id);
+          dataRetryAttempts.delete(id);
+          dropDataSocket(id);
+        }
+        for (const id of wanted) {
+          wantedConnections.add(id);
+          ensureClientDataSocket(id);
         }
         return;
       }
       if (msg.type === "connected") {
+        wantedConnections.add(msg.connectionId);
         ensureClientDataSocket(msg.connectionId);
         return;
       }
       if (msg.type === "disconnected") {
-        const existing = dataSockets.get(msg.connectionId);
-        if (existing) {
-          try {
-            existing.close(1001, "Client disconnected");
-          } catch {
-            // ignore
-          }
-          dataSockets.delete(msg.connectionId);
-        }
+        wantedConnections.delete(msg.connectionId);
+        cancelDataRetry(msg.connectionId);
+        dataRetryAttempts.delete(msg.connectionId);
+        dropDataSocket(msg.connectionId);
       }
     });
   };
@@ -345,7 +417,11 @@ export function startRelayTransport({
   const ensureClientDataSocket = (connectionId: string): void => {
     if (stopped) return;
     if (!connectionId) return;
-    if (dataSockets.has(connectionId)) return;
+    const existing = dataSockets.get(connectionId);
+    if (existing?.readyState === WebSocket.OPEN || existing?.readyState === WebSocket.CONNECTING)
+      return;
+    if (existing) dropDataSocket(connectionId);
+    cancelDataRetry(connectionId);
 
     const url = buildRelayWebSocketUrl({
       endpoint: relayEndpoint,
@@ -354,23 +430,52 @@ export function startRelayTransport({
       role: "server",
       connectionId,
     });
-    const socket = createWebSocket(url);
+    let socket: RelayWebSocketLike;
+    try {
+      socket = createWebSocket(url);
+    } catch (error) {
+      relayLogger.warn({ err: error, connectionId }, "relay_data_create_failed");
+      retryDataSocket(connectionId);
+      return;
+    }
     dataSockets.set(connectionId, socket);
-
+    const isCurrent = () => !stopped && dataSockets.get(connectionId) === socket;
     let attached = false;
+    let lastMessageAt = Date.now();
+    let keepalive: ReturnType<typeof setInterval> | null = null;
     const openTimeout = setTimeout(() => {
-      if (stopped) return;
-      if (socket.readyState === WebSocket.OPEN) return;
+      if (!isCurrent()) return;
       relayLogger.warn({ connectionId }, "relay_data_open_timeout_terminating");
-      try {
-        socket.terminate();
-      } catch {
-        // ignore
-      }
+      dropDataSocket(connectionId);
+      retryDataSocket(connectionId);
     }, 15_000);
+    const cleanup = () => {
+      clearTimeout(openTimeout);
+      if (keepalive) clearInterval(keepalive);
+      dataCleanups.delete(socket);
+    };
+    dataCleanups.set(socket, cleanup);
+    socket.on("message", () => {
+      lastMessageAt = Date.now();
+    });
 
     socket.on("open", () => {
-      clearTimeout(openTimeout);
+      if (!isCurrent()) {
+        socket.terminate();
+        return;
+      }
+      keepalive = setInterval(() => {
+        if (!isCurrent()) return;
+        // Count data/application traffic, not edge-generated protocol pongs.
+        if (
+          socket.readyState !== WebSocket.OPEN ||
+          Date.now() - lastMessageAt > DATA_APPLICATION_STALE_MS
+        ) {
+          relayLogger.warn({ connectionId }, "relay_data_stale_terminating");
+          dropDataSocket(connectionId);
+          retryDataSocket(connectionId);
+        }
+      }, CONTROL_PING_INTERVAL_MS);
       relayLogger.info({ connectionId }, "relay_data_connected");
       if (attached) return;
       attached = true;
@@ -379,27 +484,40 @@ export function startRelayTransport({
         externalSessionKey: `session:${connectionId}`,
         relayConnectionId: connectionId,
       };
-      if (daemonKeyPair) {
-        void attachEncryptedSocket(
-          socket,
-          daemonKeyPair,
-          relayLogger.child({ connectionId }),
-          attachSocket,
-          externalMetadata,
-        );
-      } else {
-        void attachSocket(socket, externalMetadata);
-      }
+      const attach = daemonKeyPair
+        ? attachEncryptedSocket(
+            socket,
+            daemonKeyPair,
+            relayLogger.child({ connectionId }),
+            attachSocket,
+            externalMetadata,
+            isCurrent,
+          )
+        : attachSocket(socket, externalMetadata);
+      void attach
+        .then(() => {
+          if (!isCurrent()) return undefined;
+          clearTimeout(openTimeout);
+          dataRetryAttempts.delete(connectionId);
+          return undefined;
+        })
+        .catch((error) => {
+          relayLogger.warn({ err: error, connectionId }, "relay_data_attach_failed");
+          if (!isCurrent()) return;
+          dropDataSocket(connectionId);
+          retryDataSocket(connectionId);
+        });
     });
 
     socket.on("close", (code, reason) => {
-      clearTimeout(openTimeout);
+      cleanup();
       relayLogger.warn(
         { code, reason: reason?.toString?.(), url, connectionId },
         "relay_data_disconnected",
       );
       if (dataSockets.get(connectionId) === socket) {
         dataSockets.delete(connectionId);
+        retryDataSocket(connectionId);
       }
     });
 
@@ -419,6 +537,7 @@ async function attachEncryptedSocket(
   logger: pino.Logger,
   attachSocket: (ws: RelaySocketLike, metadata?: ExternalSocketMetadata) => Promise<void>,
   metadata?: ExternalSocketMetadata,
+  isCurrent: () => boolean = () => true,
 ): Promise<void> {
   try {
     const relayTransport = createRelayTransportAdapter(socket, logger);
@@ -437,9 +556,13 @@ async function attachEncryptedSocket(
       onclose: (code, reason) => emitter.emit("close", code, reason),
       onerror: (error) => {
         logger.warn({ err: error }, "relay_e2ee_error");
-        emitter.emit("error", error);
+        if (emitter.listenerCount("error") > 0) emitter.emit("error", error);
       },
     });
+    if (!isCurrent() || socket.readyState !== WebSocket.OPEN) {
+      socket.terminate();
+      return;
+    }
     const encryptedSocket = createEncryptedRelaySocket({
       channel,
       emitter,
@@ -447,6 +570,10 @@ async function attachEncryptedSocket(
       terminateTransport: () => socket.terminate(),
     });
     await attachSocket(encryptedSocket, metadata);
+    if (!isCurrent()) {
+      encryptedSocket.terminate();
+      return;
+    }
     attached = true;
     for (const message of pendingMessages) {
       emitter.emit("message", message);
@@ -455,7 +582,7 @@ async function attachEncryptedSocket(
   } catch (error) {
     logger.warn({ err: error }, "relay_e2ee_handshake_failed");
     try {
-      socket.close(1011, "E2EE handshake failed");
+      socket.terminate();
     } catch {
       // ignore
     }
