@@ -121,6 +121,7 @@ interface ProviderClientFactoryOptions extends Pick<
 > {
   openCodeBridge?: OpenCodeBridge;
   providerParams?: unknown;
+  configuredModels?: ProviderProfileModel[];
   customProvider?: {
     id: string;
     label: string;
@@ -156,9 +157,18 @@ interface ProviderContract {
 const EmptyProviderOptionsSchema: z.ZodType<ProviderOptions> = z.object({}).strict();
 
 const PROVIDER_CONTRACTS: Record<string, ProviderContract> = {
-  claude: { optionsSchema: ClaudeProviderOptionsSchema, supportsExactMcpPreapproval: true },
-  codex: { optionsSchema: CodexProviderOptionsSchema, supportsExactMcpPreapproval: true },
-  opencode: { optionsSchema: OpenCodeProviderOptionsSchema, supportsExactMcpPreapproval: true },
+  claude: {
+    optionsSchema: ClaudeProviderOptionsSchema,
+    supportsExactMcpPreapproval: true,
+  },
+  codex: {
+    optionsSchema: CodexProviderOptionsSchema,
+    supportsExactMcpPreapproval: true,
+  },
+  opencode: {
+    optionsSchema: OpenCodeProviderOptionsSchema,
+    supportsExactMcpPreapproval: true,
+  },
 };
 
 const UNSUPPORTED_PROVIDER_CONTRACT: ProviderContract = {
@@ -203,6 +213,7 @@ const PROVIDER_CLIENT_FACTORIES: Record<string, ProviderClientFactory> = {
     new CodexAppServerAgentClient(logger, runtimeSettings, {
       workspaceGitService: options?.workspaceGitService,
       customProvider: options?.customProvider,
+      configuredModels: options?.configuredModels,
     }),
   copilot: (logger, runtimeSettings) =>
     new CopilotACPAgentClient({
@@ -621,7 +632,10 @@ function createRegistryEntry(
     supportsExactMcpPreapproval: resolved.contract.supportsExactMcpPreapproval,
     validateOptions: (options) =>
       validateProviderOptions(provider, resolved.contract.optionsSchema, options),
-    applyOptions: (config, options) => ({ ...config, providerOptions: options }),
+    applyOptions: (config, options) => ({
+      ...config,
+      providerOptions: options,
+    }),
     applyToolPolicy: (config, toolPolicy) => {
       if (toolPolicy && !resolved.contract.supportsExactMcpPreapproval) {
         throw new ToolPolicyUnsupportedError(provider);
@@ -744,6 +758,7 @@ function buildResolvedBuiltinProviders(
           ompRuntime: options.ompRuntime,
           openCodeBridge: options.openCodeBridge,
           providerParams: override?.params,
+          configuredModels: [...(override?.models ?? []), ...(override?.additionalModels ?? [])],
         }),
       contract: PROVIDER_CONTRACTS[definition.id] ?? UNSUPPORTED_PROVIDER_CONTRACT,
     });
@@ -853,6 +868,7 @@ function addDerivedProviders(
           managedProcesses: options.managedProcesses,
           openCodeBridge: options.openCodeBridge,
           providerParams,
+          configuredModels: [...(override.models ?? []), ...(override.additionalModels ?? [])],
           customProvider: {
             id: providerId,
             label: override.label ?? providerId,
