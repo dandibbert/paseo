@@ -299,6 +299,8 @@ export const en = {
       closed: "Closed",
     },
     badges: {
+      rootAgent: "Root",
+      subagent: "Sub · parent {{parent}}",
       archived: "Archived",
       pending: "{{count}} pending",
       attention: "Attention",
