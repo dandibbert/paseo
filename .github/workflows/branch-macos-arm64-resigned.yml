@@ -1,0 +1,110 @@
+name: Branch macOS ARM64 Resigned Build
+
+on:
+  push:
+    branches:
+      - build/agent-lifecycle-clarity-arm64-resigned
+
+permissions:
+  contents: read
+  packages: read
+
+env:
+  ONNXRUNTIME_NODE_INSTALL: skip
+
+jobs:
+  build:
+    runs-on: macos-14
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: package-lock.json
+          registry-url: "https://npm.pkg.github.com"
+          scope: "@boudra"
+
+      - name: Install dependencies
+        run: node scripts/npm-retry.mjs ci
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build unpacked macOS ARM64 app
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EP_GH_IGNORE_TIME: true
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+          NODE_OPTIONS: --max-old-space-size=4096
+        run: |
+          set -euo pipefail
+          npm run build:desktop -- --publish never --mac --arm64 --dir \
+            -c.mac.notarize=false \
+            -c.mac.hardenedRuntime=false
+
+      - name: Uniformly ad-hoc re-sign app bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          app="packages/desktop/release/mac-arm64/Paseo.app"
+          test -d "$app"
+
+          # electron-builder's fallback may leave the outer executable and embedded
+          # Electron frameworks with different signing identities. Re-sign the whole
+          # nested code graph with the same ad-hoc identity.
+          codesign --force --deep --sign - --timestamp=none "$app"
+
+          echo "=== outer app signature ==="
+          codesign -dvv "$app" 2>&1 | grep -E 'Identifier=|TeamIdentifier=|Signature=' || true
+          echo "=== Electron Framework signature ==="
+          codesign -dvv "$app/Contents/Frameworks/Electron Framework.framework/Versions/A/Electron Framework" 2>&1 \
+            | grep -E 'Identifier=|TeamIdentifier=|Signature=' || true
+
+          codesign --verify --deep --strict --verbose=4 "$app"
+
+      - name: Launch smoke
+        shell: bash
+        run: |
+          set -euo pipefail
+          app="packages/desktop/release/mac-arm64/Paseo.app"
+          log="$RUNNER_TEMP/paseo-smoke.log"
+          "$app/Contents/MacOS/Paseo" --version >"$log" 2>&1 &
+          pid=$!
+          sleep 5
+          if kill -0 "$pid" 2>/dev/null; then
+            kill "$pid" || true
+            wait "$pid" || true
+          else
+            status=0
+            wait "$pid" || status=$?
+            cat "$log"
+            if [[ "$status" -ne 0 ]]; then
+              echo "::error::Paseo exited during launch smoke with status $status"
+              exit "$status"
+            fi
+          fi
+          cat "$log" || true
+
+      - name: Create DMG
+        shell: bash
+        run: |
+          set -euo pipefail
+          app="packages/desktop/release/mac-arm64/Paseo.app"
+          out="packages/desktop/release/Paseo-0.9.2-arm64-resigned.dmg"
+          stage="$RUNNER_TEMP/paseo-dmg"
+          rm -rf "$stage"
+          mkdir -p "$stage"
+          ditto "$app" "$stage/Paseo.app"
+          ln -s /Applications "$stage/Applications"
+          hdiutil create -volname "Paseo" -srcfolder "$stage" -ov -format UDZO "$out"
+          shasum -a 256 "$out"
+
+      - name: Upload DMG
+        uses: actions/upload-artifact@v4
+        with:
+          name: paseo-agent-lifecycle-macos-arm64-resigned
+          path: packages/desktop/release/Paseo-0.9.2-arm64-resigned.dmg
+          if-no-files-found: error
+          retention-days: 7
