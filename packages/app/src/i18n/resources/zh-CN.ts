@@ -302,6 +302,8 @@ export const zhCN: TranslationResources = {
       closed: "已关闭",
     },
     badges: {
+      rootAgent: "主",
+      subagent: "子 · 父 {{parent}}",
       archived: "已归档",
       pending: "{{count}} 个待处理",
       attention: "需要注意",
