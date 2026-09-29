@@ -2050,7 +2050,7 @@ export function createPaseoToolCatalog(options: PaseoToolHostDependencies): Pase
     {
       title: "List agents",
       description:
-        "List agents as compact metadata. Agent-scoped calls default to the caller's collaboration tree; use scope=\"cwd\" or scope=\"global\" to broaden the search.",
+        'List agents as compact metadata. Agent-scoped calls default to the caller\'s collaboration tree; use scope="cwd" or scope="global" to broaden the search.',
       inputSchema: {
         includeArchived: z.boolean().optional().default(false),
         scope: z.enum(["related", "cwd", "global"]).optional(),
