@@ -306,6 +306,8 @@ export const ru: TranslationResources = {
       closed: "Закрыт",
     },
     badges: {
+      rootAgent: "Корневой",
+      subagent: "Подагент · родитель {{parent}}",
       archived: "В архиве",
       pending: "На рассмотрении: {{count}}",
       attention: "Внимание",
