@@ -307,6 +307,8 @@ export const ja: TranslationResources = {
       closed: "クローズ",
     },
     badges: {
+      rootAgent: "親",
+      subagent: "子 · 親 {{parent}}",
       archived: "アーカイブ済み",
       pending: "{{count}}件保留中",
       attention: "注意",
