@@ -307,6 +307,8 @@ export const es: TranslationResources = {
       closed: "Cerrado",
     },
     badges: {
+      rootAgent: "Principal",
+      subagent: "Subagente · padre {{parent}}",
       archived: "Archivado",
       pending: "{{count}}pendiente",
       attention: "Atención",
