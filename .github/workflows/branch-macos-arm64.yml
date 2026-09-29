@@ -1,0 +1,53 @@
+name: Branch macOS ARM64 Build
+
+on:
+  push:
+    branches:
+      - build/agent-lifecycle-clarity-arm64
+
+permissions:
+  contents: read
+  packages: read
+
+env:
+  ONNXRUNTIME_NODE_INSTALL: skip
+
+jobs:
+  build:
+    runs-on: macos-14
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: package-lock.json
+          registry-url: "https://npm.pkg.github.com"
+          scope: "@boudra"
+
+      - name: Install dependencies
+        run: node scripts/npm-retry.mjs ci
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build macOS ARM64
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EP_GH_IGNORE_TIME: true
+          CSC_LINK: ${{ secrets.APPLE_CERTIFICATE }}
+          CSC_KEY_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          NODE_OPTIONS: --max-old-space-size=4096
+        run: npm run build:desktop -- --publish never --mac --arm64
+
+      - name: Upload DMG
+        uses: actions/upload-artifact@v4
+        with:
+          name: paseo-agent-lifecycle-macos-arm64
+          path: packages/desktop/release/*.dmg
+          if-no-files-found: error
+          retention-days: 7
