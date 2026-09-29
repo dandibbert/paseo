@@ -95,6 +95,7 @@ import type {
 } from "./types.js";
 import type { ProviderPaseoToolsPolicy } from "@getpaseo/protocol/provider-config";
 import { isPaseoToolEnabled } from "../paseo-tool-policy.js";
+import { getParentAgentIdFromLabels } from "@getpaseo/protocol/agent-labels";
 
 export interface PaseoToolHostDependencies {
   agentManager: AgentManager;
@@ -166,6 +167,25 @@ function resolveAgentListActivityTime(agent: AgentListItemPayload): number {
     parseTimestamp(agent.archivedAt),
     parseTimestamp(agent.createdAt),
   );
+}
+
+function resolveAgentListRootId(
+  agentId: string,
+  agentsById: ReadonlyMap<string, AgentListItemPayload>,
+): string {
+  const seen = new Set<string>();
+  let currentId = agentId;
+
+  while (!seen.has(currentId)) {
+    seen.add(currentId);
+    const current = agentsById.get(currentId);
+    if (!current) return currentId;
+    const parentId = getParentAgentIdFromLabels(current.labels);
+    if (!parentId) return currentId;
+    currentId = parentId;
+  }
+
+  return agentId;
 }
 
 interface ProviderSummary {
@@ -2029,9 +2049,11 @@ export function createPaseoToolCatalog(options: PaseoToolHostDependencies): Pase
     "list_agents",
     {
       title: "List agents",
-      description: "List recent agents as compact metadata.",
+      description:
+        "List agents as compact metadata. Agent-scoped calls default to the caller's collaboration tree; use scope=\"cwd\" or scope=\"global\" to broaden the search.",
       inputSchema: {
         includeArchived: z.boolean().optional().default(false),
+        scope: z.enum(["related", "cwd", "global"]).optional(),
         cwd: z.string().optional(),
         sinceHours: z
           .number()
@@ -2047,8 +2069,9 @@ export function createPaseoToolCatalog(options: PaseoToolHostDependencies): Pase
         agents: z.array(AgentListItemPayloadSchema),
       },
     },
-    async ({ includeArchived = false, cwd, sinceHours = 48, statuses, limit = 50 }) => {
+    async ({ includeArchived = false, scope, cwd, sinceHours = 48, statuses, limit = 50 }) => {
       const callerCwd = callerAgentId ? resolveCallerAgent()?.cwd : undefined;
+      const resolvedScope = scope ?? (callerAgentId ? "related" : "cwd");
       const requestedCwd = cwd?.trim() ? expandUserPath(cwd) : callerCwd;
       const statusFilter = statuses && statuses.length > 0 ? new Set(statuses) : null;
       const sinceMs = Date.now() - sinceHours * 60 * 60 * 1000;
@@ -2069,9 +2092,20 @@ export function createPaseoToolCatalog(options: PaseoToolHostDependencies): Pase
             includeArchived || isStoredAgentProviderAvailable(record, registeredProviderIds),
         )
         .map((record) => buildStoredAgentPayload(record, registeredProviderIds));
-      const agents = [...liveAgents, ...storedAgents]
-        .map(toAgentListItemPayload)
-        .filter((agent) => !requestedCwd || isSameOrDescendantPath(requestedCwd, agent.cwd))
+      const projectedAgents = [...liveAgents, ...storedAgents].map(toAgentListItemPayload);
+      const agentsById = new Map(projectedAgents.map((agent) => [agent.id, agent] as const));
+      const callerRootId =
+        callerAgentId && resolvedScope === "related"
+          ? resolveAgentListRootId(callerAgentId, agentsById)
+          : null;
+      const agents = projectedAgents
+        .filter((agent) => {
+          if (resolvedScope === "global") return true;
+          if (resolvedScope === "related" && callerRootId) {
+            return resolveAgentListRootId(agent.id, agentsById) === callerRootId;
+          }
+          return !requestedCwd || isSameOrDescendantPath(requestedCwd, agent.cwd);
+        })
         .filter((agent) => !statusFilter || statusFilter.has(agent.status))
         .filter((agent) => !agent.archivedAt || resolveAgentListActivityTime(agent) >= sinceMs)
         .sort(compareAgentListItems)
