@@ -306,6 +306,8 @@ export const ptBR: TranslationResources = {
       closed: "Fechada",
     },
     badges: {
+      rootAgent: "Principal",
+      subagent: "Subagente · pai {{parent}}",
       archived: "Arquivado",
       pending: "{{count}} pendente(s)",
       attention: "Atenção",
