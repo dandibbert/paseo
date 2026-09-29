@@ -303,6 +303,8 @@ export const ko: TranslationResources = {
       closed: "종료됨",
     },
     badges: {
+      rootAgent: "루트",
+      subagent: "하위 · 부모 {{parent}}",
       archived: "보관됨",
       pending: "대기 {{count}}개",
       attention: "주의",
