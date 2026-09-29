@@ -24,6 +24,7 @@ import { useArchiveAgent } from "@/hooks/use-archive-agent";
 import { HighlightedText } from "@/components/ui/highlighted-text";
 import { StatusBadge, type StatusBadgeVariant } from "@/components/ui/status-badge";
 import { findHighlightRanges } from "@/components/ui/highlighted-text-segments";
+import { getParentAgentIdFromLabels } from "@getpaseo/protocol/agent-labels";
 
 interface AgentListProps {
   agents: AggregatedAgent[];
@@ -122,8 +123,16 @@ function SessionRowBadges({
   showDesktopAttention: boolean;
 }) {
   const { t } = useTranslation();
+  const parentAgentId = getParentAgentIdFromLabels(agent.labels);
   return (
     <>
+      <SessionBadge
+        label={
+          parentAgentId
+            ? t("agentList.badges.subagent", { parent: parentAgentId.slice(0, 7) })
+            : t("agentList.badges.rootAgent")
+        }
+      />
       {agent.archivedAt ? (
         <SessionBadge label={t("agentList.badges.archived")} icon={archivedIcon} />
       ) : null}
