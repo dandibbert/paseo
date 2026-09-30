@@ -291,6 +291,7 @@ export const fr: TranslationResources = {
     },
   },
   agentList: {
+    actions: en.agentList.actions,
     fallbackTitle: "Nouvelle séance",
     dateSections: {
       recent: "Récent",

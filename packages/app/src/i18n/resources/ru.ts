@@ -289,6 +289,7 @@ export const ru: TranslationResources = {
     },
   },
   agentList: {
+    actions: en.agentList.actions,
     fallbackTitle: "Новая сессия",
     dateSections: {
       recent: "Недавние",

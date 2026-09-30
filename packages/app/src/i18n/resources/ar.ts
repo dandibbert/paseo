@@ -285,6 +285,7 @@ export const ar: TranslationResources = {
     },
   },
   agentList: {
+    actions: en.agentList.actions,
     fallbackTitle: "جلسة جديدة",
     dateSections: {
       recent: "مؤخرًا",

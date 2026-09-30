@@ -286,6 +286,7 @@ export const ko: TranslationResources = {
     },
   },
   agentList: {
+    actions: en.agentList.actions,
     fallbackTitle: "새 세션",
     dateSections: {
       recent: "최근",

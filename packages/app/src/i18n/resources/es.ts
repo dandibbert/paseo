@@ -290,6 +290,7 @@ export const es: TranslationResources = {
     },
   },
   agentList: {
+    actions: en.agentList.actions,
     fallbackTitle: "Nueva sesión",
     dateSections: {
       recent: "Reciente",

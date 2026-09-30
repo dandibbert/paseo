@@ -289,6 +289,7 @@ export const ptBR: TranslationResources = {
     },
   },
   agentList: {
+    actions: en.agentList.actions,
     fallbackTitle: "Nova sessão",
     dateSections: {
       recent: "Recentes",

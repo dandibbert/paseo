@@ -290,6 +290,7 @@ export const ja: TranslationResources = {
     },
   },
   agentList: {
+    actions: en.agentList.actions,
     fallbackTitle: "新しいセッション",
     dateSections: {
       recent: "最近",

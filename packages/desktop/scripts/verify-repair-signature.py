@@ -16,9 +16,13 @@ REQUIRED = (
 )
 
 
-def validate_metadata(label, metadata, entitlements):
-    if "Signature=adhoc" not in metadata:
+def validate_identity(label, metadata):
+    if not re.search(r"^Signature=adhoc$", metadata, re.MULTILINE):
         raise ValueError(f"{label}: expected the personal ad-hoc signature")
+
+
+def validate_metadata(label, metadata, entitlements):
+    validate_identity(label, metadata)
     match = re.search(r"flags=0x([0-9a-fA-F]+)", metadata)
     if not match or not int(match.group(1), 16) & 0x10000:
         raise ValueError(f"{label}: Hardened Runtime must remain enabled")
@@ -31,6 +35,17 @@ def self_test():
     valid = dict.fromkeys(REQUIRED, True)
     metadata = "Signature=adhoc\nCodeDirectory flags=0x10002(adhoc,runtime)"
     validate_metadata("valid", metadata, valid)
+    # Frameworks need the same signing identity as the outer app, but executable
+    # entitlements and Hardened Runtime are checked only on app/helper processes.
+    validate_identity("Electron Framework", "Signature=adhoc\nflags=0x2(adhoc)")
+    for bad in ("Authority=Developer ID Application: Electron\nTeamIdentifier=ELECTRON",
+                "Signature=adhoc-invalid", ""):
+        try:
+            validate_identity("Electron Framework", bad)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError("Accepted an unsigned or differently signed framework")
     for key in REQUIRED:
         missing = dict(valid)
         missing.pop(key)
@@ -77,6 +92,13 @@ def verify(app_path):
     if not framework.is_file() or not framework.resolve().is_relative_to(app):
         raise ValueError("Embedded Electron Framework is missing or escapes the app")
     subprocess.run(["codesign", "--verify", "--deep", "--strict", "--verbose=2", str(app)], check=True)
+    framework_metadata = subprocess.run(
+        ["codesign", "--display", "--verbose=4", str(framework)],
+        check=True, capture_output=True, text=True,
+    )
+    framework_details = framework_metadata.stdout + framework_metadata.stderr
+    framework_label = str(framework.relative_to(app.parent))
+    validate_identity(framework_label, framework_details)
     helpers = sorted((app / "Contents/Frameworks").rglob("*.app"))
     if not helpers:
         raise ValueError("No Electron helper bundles found")
@@ -100,7 +122,11 @@ def verify(app_path):
         label = str(bundle.relative_to(app.parent))
         validate_metadata(label, details, entitlements)
         reports.append({"bundle": label, "entitlements": entitlements, "signature": details})
-    print(json.dumps({"app": str(app), "verifiedBundles": reports}, indent=2))
+    print(json.dumps({
+        "app": str(app),
+        "verifiedBundles": reports,
+        "verifiedFrameworks": [{"framework": framework_label, "signature": framework_details}],
+    }, indent=2))
 
 
 def main():
