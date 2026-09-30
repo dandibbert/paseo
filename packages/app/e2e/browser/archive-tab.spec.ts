@@ -41,6 +41,27 @@ async function openHistoryActions(page: Page, agentId: string): Promise<void> {
   await expect(historyAction(page, agentId, "open")).toBeVisible();
 }
 
+async function expectDesktopHistoryAgentSelected(
+  page: Page,
+  agent: { id: string; title: string },
+): Promise<void> {
+  await expectAgentTabActive(page, agent.id);
+}
+
+async function expectCompactHistoryAgentSelected(
+  page: Page,
+  agent: { id: string; title: string },
+): Promise<void> {
+  const switcher = page.getByTestId("workspace-tab-switcher-trigger");
+  await expect(switcher).toBeVisible();
+  await expect(switcher).toHaveText(agent.title);
+  const composer = page
+    .getByRole("textbox", { name: "Message agent..." })
+    .filter({ visible: true });
+  await expect(composer).toHaveCount(1);
+  await expect(composer).toBeEditable();
+}
+
 async function fetchActiveAgent(client: SeedDaemonClient, agentId: string) {
   const result = await client.fetchAgents({ scope: "active" });
   return result.entries.find((entry) => entry.agent.id === agentId)?.agent;
@@ -270,9 +291,15 @@ test.describe("Archive tab reconciliation", () => {
     });
   });
 
-  for (const viewport of [
-    { width: 1440, height: 1000 },
-    { width: 390, height: 844 },
+  for (const { viewport, expectSelectedAgent } of [
+    {
+      viewport: { width: 1440, height: 1000 },
+      expectSelectedAgent: expectDesktopHistoryAgentSelected,
+    },
+    {
+      viewport: { width: 390, height: 844 },
+      expectSelectedAgent: expectCompactHistoryAgentSelected,
+    },
   ]) {
     test(`history management supports dismissal, rename, archive and unarchive at ${viewport.width}px`, async ({
       page,
@@ -373,8 +400,14 @@ test.describe("Archive tab reconciliation", () => {
         await expect(historyAction(page, agent.id, "archive")).toBeVisible();
         await expect(historyAction(page, agent.id, "unarchive")).toHaveCount(0);
         await historyAction(page, agent.id, "open").click();
-        await expectAgentTabActive(page, agent.id);
         await expect(page).toHaveURL(buildHostWorkspaceRoute(getServerId(), workspaceId));
+        await expectSelectedAgent(page, { id: agent.id, title: renamedTitle });
+        const screenshotPath = testInfo.outputPath(`history-open-agent-${viewport.width}.png`);
+        await page.screenshot({ path: screenshotPath });
+        await testInfo.attach(`History opens the selected agent at ${viewport.width}px`, {
+          path: screenshotPath,
+          contentType: "image/png",
+        });
       });
     });
   }
