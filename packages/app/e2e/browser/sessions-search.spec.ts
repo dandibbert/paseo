@@ -2,11 +2,7 @@ import { randomUUID } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { expect, type Locator, type Page } from "@playwright/test";
 import { test } from "../support/fixtures";
-import {
-  connectSeedClient,
-  seedWorkspace,
-  type SeededWorkspace,
-} from "../support/helpers/seed-client";
+import { connectSeedClient } from "../support/helpers/seed-client";
 import { createTempGitRepo } from "../support/helpers/workspace";
 import { getServerId } from "../support/helpers/server-id";
 import { seedParentWithSubagent, type SeededSubagentPair } from "../support/helpers/subagents";
@@ -239,27 +235,41 @@ async function expectReadableHistoryRow(page: Page, agentId: string): Promise<vo
 }
 
 test.describe("History multilingual layout", () => {
-  let workspace: SeededWorkspace;
+  let client: Awaited<ReturnType<typeof connectSeedClient>>;
+  let tempRepo: Awaited<ReturnType<typeof createTempGitRepo>>;
+  let projectId: string;
   let agents: SeededSubagentPair;
 
   test.beforeAll(async () => {
-    workspace = await seedWorkspace({
-      repoPrefix: "history-layout-",
+    tempRepo = await createTempGitRepo("history-layout-");
+    // Register the checkout only after its branch is final: workspace creation
+    // records that branch in the authoritative agent project placement.
+    execFileSync("git", ["branch", "-m", LONG_HISTORY_LABELS.branch], {
+      cwd: tempRepo.path,
+    });
+    client = await connectSeedClient();
+    const created = await client.createWorkspace({
+      source: { kind: "directory", path: tempRepo.path },
       title: LONG_HISTORY_LABELS.workspace,
     });
-    execFileSync("git", ["branch", "-m", LONG_HISTORY_LABELS.branch], {
-      cwd: workspace.repoPath,
-    });
-    await workspace.client.renameProject(workspace.projectId, LONG_HISTORY_LABELS.project);
-    await workspace.client.checkoutRefresh(workspace.repoPath);
-    agents = await seedParentWithSubagent(workspace, {
-      parentTitle: LONG_HISTORY_LABELS.parent,
-      childTitle: LONG_HISTORY_LABELS.child,
-    });
+    if (!created.workspace) {
+      throw new Error(created.error ?? `Failed to create workspace ${tempRepo.path}`);
+    }
+    projectId = created.workspace.projectId;
+    await client.renameProject(projectId, LONG_HISTORY_LABELS.project);
+    agents = await seedParentWithSubagent(
+      { client, repoPath: tempRepo.path, workspaceId: created.workspace.id },
+      {
+        parentTitle: LONG_HISTORY_LABELS.parent,
+        childTitle: LONG_HISTORY_LABELS.child,
+      },
+    );
   });
 
   test.afterAll(async () => {
-    await workspace?.cleanup();
+    await client?.removeProject(projectId).catch(() => undefined);
+    await client?.close().catch(() => undefined);
+    await tempRepo?.cleanup();
   });
 
   for (const viewport of [

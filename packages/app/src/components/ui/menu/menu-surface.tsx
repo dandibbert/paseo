@@ -20,6 +20,8 @@ import {
   useIsolatedBottomSheetVisibility,
   type ContextBridge,
 } from "@/components/ui/isolated-bottom-sheet-modal";
+import { OverlayLayerProvider, useOverlayLayer } from "@/lib/overlay-root";
+import { useMenuWebOverlayRegistration } from "./menu-keyboard";
 import { SPACING, type Theme } from "@/styles/theme";
 import { useRetainedPanelActive } from "@/components/retained-panel";
 import { useMenuContext, MenuContextProvider } from "./menu-context";
@@ -345,6 +347,7 @@ function MenuSheetSurface({
   const menu = useMenuContext("MenuSurface");
   const { value: surfaceValue } = useSubAnchors();
   const safeAreaInsets = useSafeAreaInsets();
+  const sheetLayer = useOverlayLayer("modal");
 
   const sheetScrollContentStyle = useMemo(
     () => ({
@@ -356,11 +359,20 @@ function MenuSheetSurface({
     [safeAreaInsets.bottom],
   );
   const sheetDataSet = useMemo(
-    () => (keyboardFocusScope ? { keyboardScope: keyboardFocusScope } : undefined),
+    () => ({
+      menuSurface: "true",
+      ...(keyboardFocusScope ? { keyboardScope: keyboardFocusScope } : undefined),
+    }),
     [keyboardFocusScope],
   );
 
   const handleClose = useCallback(() => menu.setOpen(false), [menu]);
+  const setWebOverlayScope = useMenuWebOverlayRegistration({
+    visible: menu.open,
+    layer: sheetLayer,
+    onClose: handleClose,
+    restoreFocusRef: menu.triggerRef,
+  });
   const { sheetRef, handleSheetChange, handleSheetDismiss } = useIsolatedBottomSheetVisibility({
     visible: menu.open,
     isEnabled: true,
@@ -388,11 +400,13 @@ function MenuSheetSurface({
   // wrong side of the portal and every item inside would throw. See `ContextBridge`.
   const contextBridge = useCallback<ContextBridge>(
     (content) => (
-      <MenuContextProvider value={menu}>
-        <MenuSurfaceContext.Provider value={surfaceValue}>{content}</MenuSurfaceContext.Provider>
-      </MenuContextProvider>
+      <OverlayLayerProvider layer={sheetLayer}>
+        <MenuContextProvider value={menu}>
+          <MenuSurfaceContext.Provider value={surfaceValue}>{content}</MenuSurfaceContext.Provider>
+        </MenuContextProvider>
+      </OverlayLayerProvider>
     ),
-    [menu, surfaceValue],
+    [menu, surfaceValue, sheetLayer],
   );
 
   return (
@@ -415,23 +429,26 @@ function MenuSheetSurface({
       keyboardBlurBehavior="restore"
     >
       <BottomSheetScrollView
-        dataSet={sheetDataSet}
         contentContainerStyle={sheetScrollContentStyle}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
         testID={testID ? `${testID}-content` : undefined}
       >
-        {openPage ? (
-          <>
-            <MenuSheetHeader title={openPage.title} onBack={menu.goBack} />
-            <MenuPage depth={depth}>{openPage.content}</MenuPage>
-          </>
-        ) : (
-          <>
-            {sheetTitle ? <MenuSheetHeader title={sheetTitle} onBack={null} /> : null}
-            <MenuPage depth={0}>{children}</MenuPage>
-          </>
-        )}
+        {menu.open ? (
+          <View ref={setWebOverlayScope} collapsable={false} tabIndex={-1} dataSet={sheetDataSet}>
+            {openPage ? (
+              <>
+                <MenuSheetHeader title={openPage.title} onBack={menu.goBack} />
+                <MenuPage depth={depth}>{openPage.content}</MenuPage>
+              </>
+            ) : (
+              <>
+                {sheetTitle ? <MenuSheetHeader title={sheetTitle} onBack={null} /> : null}
+                <MenuPage depth={0}>{children}</MenuPage>
+              </>
+            )}
+          </View>
+        ) : null}
       </BottomSheetScrollView>
     </ThemedBottomSheetModal>
   );

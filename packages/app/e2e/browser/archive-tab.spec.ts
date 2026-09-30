@@ -75,7 +75,7 @@ async function holdHistoryRow(page: Page, agentId: string): Promise<void> {
 /** Close real browser/daemon sockets without synthesizing any daemon messages. */
 async function interruptibleDaemonConnection(page: Page) {
   let offline = false;
-  let resolveReconnection: (() => void) | undefined;
+  let receivedServerInfo = false;
   const sockets = new Set<WebSocketRoute>();
   await page.routeWebSocket(daemonWsRoutePattern(), (socket) => {
     if (offline) {
@@ -89,12 +89,23 @@ async function interruptibleDaemonConnection(page: Page) {
     server.onMessage((message) => {
       socket.send(message);
       const text = typeof message === "string" ? message : message.toString("utf8");
-      if (text.includes('"type":"server_info"')) resolveReconnection?.();
+      const envelope = JSON.parse(text) as {
+        type?: string;
+        message?: { type?: string; payload?: { status?: string } };
+      };
+      if (
+        envelope.type === "session" &&
+        envelope.message?.type === "status" &&
+        envelope.message.payload?.status === "server_info"
+      ) {
+        receivedServerInfo = true;
+      }
     });
   });
   return {
     async disconnect() {
       offline = true;
+      receivedServerInfo = false;
       await Promise.all(
         Array.from(sockets, (socket) =>
           socket.close({ code: 1013, reason: "History disconnect regression" }),
@@ -102,12 +113,14 @@ async function interruptibleDaemonConnection(page: Page) {
       );
       sockets.clear();
     },
-    reconnect() {
-      const connected = new Promise<void>((resolve) => {
-        resolveReconnection = resolve;
-      });
+    async reconnect() {
       offline = false;
-      return connected;
+      await expect
+        .poll(() => receivedServerInfo, {
+          timeout: 30_000,
+          message: "The real daemon sends its server_info status after reconnecting",
+        })
+        .toBe(true);
     },
   };
 }
