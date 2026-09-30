@@ -5459,7 +5459,7 @@ describe("agent snapshot MCP serialization", () => {
     );
   });
 
-  it("defaults list_agents to caller cwd and excludes archived agents", async () => {
+  it("supports cwd scope and excludes archived agents", async () => {
     const { agentManager, agentStorage, spies } = createTestDeps();
     const now = new Date().toISOString();
     spies.agentManager.getAgent.mockReturnValue(
@@ -5496,7 +5496,7 @@ describe("agent snapshot MCP serialization", () => {
       callerAgentId: "caller-agent",
     });
     const tool = registeredTool(server, "list_agents");
-    const response = await tool.handler({});
+    const response = await tool.handler({ scope: "cwd" });
 
     const agentIds = agentsOf(response).map((agent) => agent.id);
     expect(agentIds).toHaveLength(3);

@@ -289,6 +289,7 @@ export const ru: TranslationResources = {
     },
   },
   agentList: {
+    actions: en.agentList.actions,
     fallbackTitle: "Новая сессия",
     dateSections: {
       recent: "Недавние",
@@ -306,6 +307,8 @@ export const ru: TranslationResources = {
       closed: "Закрыт",
     },
     badges: {
+      rootAgent: "Корневой",
+      subagent: "Подагент · родитель {{parent}}",
       archived: "В архиве",
       pending: "На рассмотрении: {{count}}",
       attention: "Внимание",

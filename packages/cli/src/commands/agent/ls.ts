@@ -14,6 +14,8 @@ export function addLsOptions(cmd: Command): Command {
     .description("List agents. By default excludes archived agents.")
     .option("-a, --all", "Include archived agents")
     .option("-g, --global", "List agents across all directories")
+    .option("--cwd <path>", "Filter by working directory (defaults to current directory)")
+    .option("--status <status>", "Filter by lifecycle status")
     .option(
       "--label <key=value>",
       "Filter by label (can be used multiple times)",
@@ -161,9 +163,9 @@ export function buildAgentLsFetchOptions(
 
 /**
  * Agent ls command semantics:
- * - `paseo agent ls`    → active non-archived agents
+ * - `paseo agent ls`    → current-directory, active non-archived agents
  * - `paseo agent ls -g` → global non-archived agents
- * - `paseo agent ls -a` → active agents, including archived
+ * - `paseo agent ls -a` → current-directory agents, including archived
  * - `paseo agent ls -ag` → global agents, including archived
  */
 export async function runLsCommand(
@@ -196,9 +198,10 @@ export async function runLsCommand(
       agents = agents.filter((a) => a.status === options.status);
     }
 
-    // Optional cwd filter.
-    if (options.cwd) {
-      agents = agents.filter((a) => isSameOrDescendantPath(options.cwd!, a.cwd));
+    // Local listing means the current directory by default. --global opts out.
+    const cwdFilter = options.global ? options.cwd : (options.cwd ?? process.cwd());
+    if (cwdFilter) {
+      agents = agents.filter((a) => isSameOrDescendantPath(cwdFilter, a.cwd));
     }
 
     // Apply label filtering only when explicitly requested.

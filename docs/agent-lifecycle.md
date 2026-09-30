@@ -114,6 +114,12 @@ History navigation opens the selected agent without changing either archive stat
 The agent's **Unarchive** runs the provider's native unarchive hook before interactive resume and
 history hydration. Other archived agents stay archived.
 
+History rows expose the same management menu through right click, long press, and the visible
+ellipsis. Opening that menu never archives an agent. Stop, archive, and detach require a separate
+confirmation; archive explains its effect on managed children. Unarchive rechecks the current
+record before resuming, so an outdated archived row cannot reload an already-active agent.
+Disconnected hosts keep navigation and copying available and explain why mutations are disabled.
+
 Opening an agent is a navigation choice, independent of whether its details are cached. The
 layout retains that choice across reload while the panel fetches the agent from the daemon.
 Once the daemon reports the agent active, its tab follows normal archive propagation again.

@@ -291,6 +291,7 @@ export const fr: TranslationResources = {
     },
   },
   agentList: {
+    actions: en.agentList.actions,
     fallbackTitle: "Nouvelle séance",
     dateSections: {
       recent: "Récent",
@@ -308,6 +309,8 @@ export const fr: TranslationResources = {
       closed: "Fermé",
     },
     badges: {
+      rootAgent: "Principal",
+      subagent: "Sous-agent · parent {{parent}}",
       archived: "Archivé",
       pending: "{{count}}en attente",
       attention: "Attention",

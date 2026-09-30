@@ -285,6 +285,7 @@ export const ar: TranslationResources = {
     },
   },
   agentList: {
+    actions: en.agentList.actions,
     fallbackTitle: "جلسة جديدة",
     dateSections: {
       recent: "مؤخرًا",
@@ -302,6 +303,8 @@ export const ar: TranslationResources = {
       closed: "مغلق",
     },
     badges: {
+      rootAgent: "رئيسي",
+      subagent: "فرعي · الأصل {{parent}}",
       archived: "مؤرشف",
       pending: "{{count}}معلق",
       attention: "انتباه",

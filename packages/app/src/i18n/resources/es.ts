@@ -290,6 +290,7 @@ export const es: TranslationResources = {
     },
   },
   agentList: {
+    actions: en.agentList.actions,
     fallbackTitle: "Nueva sesión",
     dateSections: {
       recent: "Reciente",
@@ -307,6 +308,8 @@ export const es: TranslationResources = {
       closed: "Cerrado",
     },
     badges: {
+      rootAgent: "Principal",
+      subagent: "Subagente · padre {{parent}}",
       archived: "Archivado",
       pending: "{{count}}pendiente",
       attention: "Atención",
