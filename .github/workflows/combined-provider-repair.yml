@@ -2,7 +2,10 @@ name: Personal fork validation and macOS builds
 
 on:
   push:
-    branches: [combined/repair-provider-editor, fix/agent-lifecycle-clarity]
+    branches:
+      - combined/repair-provider-editor
+      - fix/agent-lifecycle-clarity
+      - fix/claude-api-model-catalog
   workflow_dispatch:
 
 permissions:
@@ -32,7 +35,7 @@ jobs:
         shell: bash
         run: |
           echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
-          if [[ "$GITHUB_REF_NAME" == 'fix/agent-lifecycle-clarity' ]]; then
+          if [[ "$GITHUB_REF_NAME" == 'fix/agent-lifecycle-clarity' || "$GITHUB_REF_NAME" == 'fix/claude-api-model-catalog' ]]; then
             echo 'macos-matrix={"include":[{"runner":"macos-15","arch":"arm64"}]}' >> "$GITHUB_OUTPUT"
           else
             echo 'macos-matrix={"include":[{"runner":"macos-15","arch":"arm64"},{"runner":"macos-15-intel","arch":"x64"}]}' >> "$GITHUB_OUTPUT"
