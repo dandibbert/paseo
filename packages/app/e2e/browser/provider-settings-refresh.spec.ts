@@ -454,16 +454,20 @@ for (const width of [320, 390, 800, 1280]) {
       await openAgentRoute(page, session);
       await expectComposerVisible(page);
       await page.getByRole("button", { name: /Select model/ }).click();
-      const configuration = page.getByTestId("agent-controls-model-sheet");
-      const desktopSettings = page.getByTestId("selector-header-settings-mock");
-      await expect(configuration.or(desktopSettings)).toBeVisible();
-      if (await configuration.isVisible()) {
-        await page.getByTestId("agent-controls-model").click();
-        await expect(page.getByTestId("agent-controls-model-browser-sheet")).toBeVisible();
-        await page.getByRole("button", { name: /Open .* settings/ }).click();
-      } else {
-        await desktopSettings.click();
+      const settingsAction = page.getByTestId("selector-header-settings-mock");
+      const mobileModel = page.getByTestId("agent-controls-model");
+      const providerRow = page.getByTestId("model-provider-mock");
+      await expect(
+        settingsAction.or(mobileModel).or(providerRow).filter({ visible: true }).first(),
+      ).toBeVisible();
+      if (!(await settingsAction.isVisible())) {
+        if (await mobileModel.isVisible()) {
+          await mobileModel.click();
+        } else {
+          await providerRow.click();
+        }
       }
+      await settingsAction.click();
       await expectProviderSettingsVisible(page);
 
       const edit = page.getByRole("button", { name: `Edit model ${model.id}`, exact: true });
