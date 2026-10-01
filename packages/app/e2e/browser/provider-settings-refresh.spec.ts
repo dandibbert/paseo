@@ -7,6 +7,15 @@ import { openAgentRoute, seedMockAgentWorkspace } from "../support/helpers/mock-
 
 const MOBILE_VIEWPORT = { width: 390, height: 844 };
 
+// Config validation treats the dev-only provider as custom; dev registry lookup
+// still uses its built-in mock client, so no real Claude process is involved.
+test.use({
+  e2eDaemonConfig: {
+    version: 1,
+    agents: { providers: { mock: { extends: "claude", label: "Mock Load Test" } } },
+  },
+});
+
 async function openMockAgentAtMobileBreakpoint(page: Page) {
   await page.setViewportSize(MOBILE_VIEWPORT);
   const session = await seedMockAgentWorkspace({
@@ -231,6 +240,7 @@ async function readManualModels(client: ProviderConfigClient) {
 
 async function interruptNextConfigWrite(page: Page) {
   let interrupt = true;
+  let reconnected = false;
   await page.routeWebSocket(daemonWsRoutePattern(), (browser) => {
     const server = browser.connectToServer();
     browser.onMessage((message) => {
@@ -246,19 +256,27 @@ async function interruptNextConfigWrite(page: Page) {
       }
       server.send(message);
     });
-    server.onMessage((message) => browser.send(message));
+    server.onMessage((message) => {
+      browser.send(message);
+      const text = typeof message === "string" ? message : message.toString("utf8");
+      const envelope = JSON.parse(text) as {
+        message?: { type?: string; payload?: { status?: string } };
+      };
+      if (
+        !interrupt &&
+        envelope.message?.type === "status" &&
+        envelope.message.payload?.status === "server_info"
+      ) {
+        reconnected = true;
+      }
+    });
   });
+  return {
+    waitForReconnect: () => expect.poll(() => reconnected, { timeout: 30_000 }).toBe(true),
+  };
 }
 
 test.describe("provider model management", () => {
-  // Config validation treats the dev-only provider as custom; dev registry lookup
-  // still uses its built-in mock client, so no real Claude process is involved.
-  test.use({
-    e2eDaemonConfig: {
-      version: 1,
-      agents: { providers: { mock: { extends: "claude", label: "Mock Load Test" } } },
-    },
-  });
   test("hides a discovered model with a removable override and restores it on deletion", async ({
     page,
   }, testInfo) => {
@@ -379,7 +397,7 @@ test.describe("provider model management", () => {
     const manualModel = { id: "manual-retry-model", label: "Manual retry model" };
     try {
       await client.patchDaemonConfig({ providers: { mock: { additionalModels: [manualModel] } } });
-      await interruptNextConfigWrite(page);
+      const connection = await interruptNextConfigWrite(page);
       await openAgentRoute(page, session);
       await expectComposerVisible(page);
       await openDesktopProviderSettings(page);
@@ -397,6 +415,8 @@ test.describe("provider model management", () => {
         body: await settings.screenshot(),
         contentType: "image/png",
       });
+      await connection.waitForReconnect();
+      await expect(settings.getByRole("alert")).toContainText(/disconnect|connection|closed/i);
       await remove.click();
       await expect.poll(() => readManualModels(client)).toEqual([]);
       await expect(settings.getByRole("alert")).toHaveCount(0);
