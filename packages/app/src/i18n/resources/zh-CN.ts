@@ -2576,6 +2576,9 @@ export const zhCN: TranslationResources = {
         many: "{{count}} 个 Model",
         addModel: "添加 Model",
         addCustomTitle: "添加自定义 Model",
+        editCustomTitle: "编辑手动模型",
+        editOverrideTitle: "编辑模型覆盖设置",
+        hideModel: "隐藏 {{id}}",
         modelId: "Model ID",
         modelIdPlaceholder: "例如 openai/gpt-5",
         add: "添加",
@@ -2589,7 +2592,7 @@ export const zhCN: TranslationResources = {
         noSearchMatches: "没有匹配搜索的 Model",
         noneDetected: "未检测到 Model",
         discovered: "已发现",
-        custom: "自定义 Models",
+        custom: "手动模型和覆盖设置",
         updated: "已更新 {{time}}",
       },
       diagnostic: {

@@ -2731,6 +2731,9 @@ export const en = {
         many: "{{count}} models",
         addModel: "Add model",
         addCustomTitle: "Add custom model",
+        editCustomTitle: "Edit manual model",
+        editOverrideTitle: "Edit model override",
+        hideModel: "Hide {{id}}",
         modelId: "Model ID",
         modelIdPlaceholder: "e.g. openai/gpt-5",
         add: "Add",
@@ -2744,7 +2747,7 @@ export const en = {
         noSearchMatches: "No models match your search",
         noneDetected: "No models detected",
         discovered: "Discovered",
-        custom: "Custom models",
+        custom: "Manual models and overrides",
         updated: "Updated {{time}}",
       },
       diagnostic: {

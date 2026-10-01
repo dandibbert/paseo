@@ -2608,6 +2608,9 @@ export const ja: TranslationResources = {
         many: "{{count}}つのモデル",
         addModel: "モデルを追加",
         addCustomTitle: "カスタムモデルを追加",
+        editCustomTitle: "手動モデルを編集",
+        editOverrideTitle: "モデルの上書き設定を編集",
+        hideModel: "{{id}} を非表示",
         modelId: "モデルID",
         modelIdPlaceholder: "例: openai/gpt-5",
         add: "追加",
@@ -2621,7 +2624,7 @@ export const ja: TranslationResources = {
         noSearchMatches: "検索に一致するモデルがありません",
         noneDetected: "モデルが検出されませんでした",
         discovered: "検出済み",
-        custom: "カスタムモデル",
+        custom: "手動モデルと上書き設定",
         updated: "{{time}}に更新",
       },
       diagnostic: {

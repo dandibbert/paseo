@@ -2596,6 +2596,9 @@ export const ko: TranslationResources = {
         many: "모델 {{count}}개",
         addModel: "모델 추가",
         addCustomTitle: "사용자 지정 모델 추가",
+        editCustomTitle: "수동 모델 편집",
+        editOverrideTitle: "모델 재정의 편집",
+        hideModel: "{{id}} 숨기기",
         modelId: "모델 ID",
         modelIdPlaceholder: "예: openai/gpt-5",
         add: "추가",
@@ -2609,7 +2612,7 @@ export const ko: TranslationResources = {
         noSearchMatches: "검색과 일치하는 모델이 없습니다",
         noneDetected: "감지된 모델이 없습니다",
         discovered: "발견됨",
-        custom: "사용자 지정 모델",
+        custom: "수동 모델 및 재정의",
         updated: "{{time}} 업데이트됨",
       },
       diagnostic: {

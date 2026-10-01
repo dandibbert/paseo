@@ -4,6 +4,7 @@ import { getErrorMessage } from "@getpaseo/protocol/error-utils";
 import { compactProviderSnapshot } from "@getpaseo/protocol/provider-snapshot-codec";
 import type { SessionInboundMessage, SessionOutboundMessage } from "../../messages.js";
 import {
+  hasUsableProviderCatalog,
   isGlobalProviderSnapshotKey,
   resolveSnapshotCwd,
   sameSnapshotRecords,
@@ -231,7 +232,7 @@ export class ProviderCatalogSession {
       return;
     }
 
-    if (entry.status === "ready") {
+    if (hasUsableProviderCatalog(entry)) {
       this.host.emit({
         type: "list_provider_models_response",
         payload: {
@@ -286,7 +287,7 @@ export class ProviderCatalogSession {
       return;
     }
 
-    if (entry.status === "ready") {
+    if (hasUsableProviderCatalog(entry)) {
       this.host.emit({
         type: "list_provider_modes_response",
         payload: {

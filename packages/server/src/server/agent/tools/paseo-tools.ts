@@ -47,7 +47,10 @@ import {
   type ScheduleCadence,
   type UpdateScheduleInput,
 } from "@getpaseo/protocol/schedule/types";
-import type { ProviderSnapshotManager } from "../provider-snapshot-manager.js";
+import {
+  hasUsableProviderCatalog,
+  type ProviderSnapshotManager,
+} from "../provider-snapshot-manager.js";
 import {
   AgentModelSchema,
   AgentProviderEnum,
@@ -3041,7 +3044,7 @@ export function createPaseoToolCatalog(options: PaseoToolHostDependencies): Pase
       if (!entry.enabled) {
         throw new Error(`Provider '${providerId}' is disabled`);
       }
-      if (entry.status !== "ready") {
+      if (!hasUsableProviderCatalog(entry)) {
         throw new Error(entry.error ?? `Provider '${providerId}' is unavailable`);
       }
       const selectedModel = settings?.model ?? resolvedProviderModel.model;

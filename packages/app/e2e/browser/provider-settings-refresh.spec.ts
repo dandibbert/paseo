@@ -1,3 +1,5 @@
+import { connectDaemonClient } from "../support/helpers/daemon-client-loader";
+import { daemonWsRoutePattern } from "../support/helpers/daemon-port";
 import type { Locator } from "@playwright/test";
 import { expect, test, type Page } from "../support/fixtures";
 import { expectComposerVisible } from "../support/helpers/composer";
@@ -207,6 +209,201 @@ test.describe("provider settings overlay stack", () => {
       await expect(page.getByTestId("agent-controls-settings-list")).toBeVisible();
       await closeTopSheet(page);
     } finally {
+      await session.cleanup();
+    }
+  });
+});
+
+type ProviderConfigClient = Pick<
+  import("@getpaseo/client/internal/daemon-client").DaemonClient,
+  "connect" | "close" | "getDaemonConfig" | "patchDaemonConfig"
+>;
+
+async function openDesktopProviderSettings(page: Page) {
+  await page.getByRole("button", { name: /Select model/ }).click();
+  await page.getByTestId("selector-header-settings-mock").click();
+  await expectProviderSettingsVisible(page);
+}
+
+async function readManualModels(client: ProviderConfigClient) {
+  return (await client.getDaemonConfig()).config.providers.mock?.additionalModels ?? [];
+}
+
+async function interruptNextConfigWrite(page: Page) {
+  let interrupt = true;
+  await page.routeWebSocket(daemonWsRoutePattern(), (browser) => {
+    const server = browser.connectToServer();
+    browser.onMessage((message) => {
+      const text = typeof message === "string" ? message : message.toString("utf8");
+      const envelope = JSON.parse(text) as { message?: { type?: string } };
+      if (interrupt && envelope.message?.type === "set_daemon_config_request") {
+        interrupt = false;
+        void Promise.all([
+          browser.close({ code: 1013, reason: "Provider config disconnect regression" }),
+          server.close({ code: 1013, reason: "Provider config disconnect regression" }),
+        ]);
+        return;
+      }
+      server.send(message);
+    });
+    server.onMessage((message) => browser.send(message));
+  });
+}
+
+test.describe("provider model management", () => {
+  // Config validation treats the dev-only provider as custom; dev registry lookup
+  // still uses its built-in mock client, so no real Claude process is involved.
+  test.use({
+    e2eDaemonConfig: {
+      version: 1,
+      agents: { providers: { mock: { extends: "claude", label: "Mock Load Test" } } },
+    },
+  });
+  test("hides a discovered model with a removable override and restores it on deletion", async ({
+    page,
+  }, testInfo) => {
+    const session = await seedMockAgentWorkspace({
+      repoPrefix: "provider-model-hide-",
+      title: "Provider model hide e2e",
+    });
+    const client = await connectDaemonClient<ProviderConfigClient>({
+      clientIdPrefix: "provider-model-hide",
+    });
+    try {
+      await client.patchDaemonConfig({ providers: { mock: { additionalModels: [] } } });
+      await openAgentRoute(page, session);
+      await expectComposerVisible(page);
+      await openDesktopProviderSettings(page);
+      const settings = page.getByTestId("provider-settings-sheet");
+      await settings.getByRole("button", { name: "Hide one-minute-stream", exact: true }).click();
+      await expect
+        .poll(() => readManualModels(client))
+        .toEqual([{ id: "one-minute-stream", label: "One minute stream", isSelectable: false }]);
+      await expect(
+        settings.getByRole("button", { name: "Hide one-minute-stream", exact: true }),
+      ).toHaveCount(0);
+      await expect(
+        settings.getByRole("button", { name: "Edit model one-minute-stream", exact: true }),
+      ).toHaveCount(1);
+      await expect(settings.getByText("Disabled", { exact: true })).toBeVisible();
+      await expect(
+        settings.getByRole("button", { name: "Remove one-minute-stream", exact: true }),
+      ).toBeEnabled();
+      await testInfo.attach("hidden-model-override", {
+        body: await settings.screenshot(),
+        contentType: "image/png",
+      });
+
+      await closeSheetByHeaderButton(page, "provider-settings-sheet");
+      await page.getByTestId("selector-header-settings-mock").click();
+      await settings.getByRole("button", { name: "Remove one-minute-stream", exact: true }).click();
+      await expect.poll(() => readManualModels(client)).toEqual([]);
+      await expect(
+        settings.getByRole("button", { name: "Hide one-minute-stream", exact: true }),
+      ).toBeEnabled();
+      await expect(
+        settings.getByRole("button", { name: "Remove one-minute-stream", exact: true }),
+      ).toHaveCount(0);
+    } finally {
+      await client.patchDaemonConfig({ providers: { mock: { additionalModels: [] } } });
+      await client.close();
+      await session.cleanup();
+    }
+  });
+
+  test("adds, edits, and really deletes a manual model without duplicating discovered rows", async ({
+    page,
+  }) => {
+    const session = await seedMockAgentWorkspace({
+      repoPrefix: "provider-model-manual-",
+      title: "Provider manual model e2e",
+    });
+    const client = await connectDaemonClient<ProviderConfigClient>({
+      clientIdPrefix: "provider-model-manual",
+    });
+    try {
+      await client.patchDaemonConfig({ providers: { mock: { additionalModels: [] } } });
+      await openAgentRoute(page, session);
+      await expectComposerVisible(page);
+      await openDesktopProviderSettings(page);
+      const settings = page.getByTestId("provider-settings-sheet");
+      await settings.getByRole("button", { name: "Add model", exact: true }).click();
+      const editor = page.getByTestId("provider-model-editor-sheet");
+      await editor.getByPlaceholder("e.g. openai/gpt-5").fill("manual-test-model");
+      await editor.getByPlaceholder("Defaults to model ID").fill("Manual test model");
+      await editor.getByRole("button", { name: "Save", exact: true }).click();
+      await expect(editor).not.toBeVisible();
+      await expect
+        .poll(() => readManualModels(client))
+        .toEqual([{ id: "manual-test-model", label: "Manual test model" }]);
+      await expect(settings.getByText("Manual test model", { exact: true })).toHaveCount(1);
+      await expect(
+        settings.getByRole("button", { name: "Hide manual-test-model", exact: true }),
+      ).toHaveCount(0);
+
+      await settings
+        .getByRole("button", { name: "Edit model manual-test-model", exact: true })
+        .click();
+      await editor.getByPlaceholder("e.g. openai/gpt-5").fill("manual-corrected-model");
+      await editor.getByRole("button", { name: "Save", exact: true }).click();
+      await expect(editor).not.toBeVisible();
+      await expect
+        .poll(() => readManualModels(client))
+        .toEqual([{ id: "manual-corrected-model", label: "Manual test model" }]);
+      await settings.getByRole("button", { name: "Add model", exact: true }).click();
+      await expect(editor.getByPlaceholder("e.g. openai/gpt-5")).toHaveValue("");
+      await expect(editor.getByPlaceholder("Defaults to model ID")).toHaveValue("");
+      await editor.getByRole("button", { name: "Cancel", exact: true }).click();
+      await settings
+        .getByRole("button", { name: "Remove manual-corrected-model", exact: true })
+        .click();
+      await expect.poll(() => readManualModels(client)).toEqual([]);
+      await expect(settings.getByText("Manual test model", { exact: true })).toHaveCount(0);
+    } finally {
+      await client.patchDaemonConfig({ providers: { mock: { additionalModels: [] } } });
+      await client.close();
+      await session.cleanup();
+    }
+  });
+
+  test("shows a failed deletion in the sheet and allows retry after reconnection", async ({
+    page,
+  }, testInfo) => {
+    const session = await seedMockAgentWorkspace({
+      repoPrefix: "provider-model-failure-",
+      title: "Provider deletion failure e2e",
+    });
+    const client = await connectDaemonClient<ProviderConfigClient>({
+      clientIdPrefix: "provider-model-failure",
+    });
+    const manualModel = { id: "manual-retry-model", label: "Manual retry model" };
+    try {
+      await client.patchDaemonConfig({ providers: { mock: { additionalModels: [manualModel] } } });
+      await interruptNextConfigWrite(page);
+      await openAgentRoute(page, session);
+      await expectComposerVisible(page);
+      await openDesktopProviderSettings(page);
+      const settings = page.getByTestId("provider-settings-sheet");
+      const remove = settings.getByRole("button", {
+        name: "Remove manual-retry-model",
+        exact: true,
+      });
+      await remove.click();
+      await expect(settings.getByRole("alert")).toBeVisible();
+      await expect(settings.getByRole("alert")).toContainText(/disconnect|connection|closed/i);
+      await expect.poll(() => readManualModels(client)).toEqual([manualModel]);
+      await expect(remove).toBeEnabled();
+      await testInfo.attach("model-deletion-error", {
+        body: await settings.screenshot(),
+        contentType: "image/png",
+      });
+      await remove.click();
+      await expect.poll(() => readManualModels(client)).toEqual([]);
+      await expect(settings.getByRole("alert")).toHaveCount(0);
+      await expect(remove).toHaveCount(0);
+    } finally {
+      await client.patchDaemonConfig({ providers: { mock: { additionalModels: [] } } });
+      await client.close();
       await session.cleanup();
     }
   });

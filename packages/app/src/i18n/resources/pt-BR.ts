@@ -2623,6 +2623,9 @@ export const ptBR: TranslationResources = {
         many: "{{count}} modelos",
         addModel: "Adicionar modelo",
         addCustomTitle: "Adicionar modelo personalizado",
+        editCustomTitle: "Editar modelo manual",
+        editOverrideTitle: "Editar personalização do modelo",
+        hideModel: "Ocultar {{id}}",
         modelId: "ID do modelo",
         modelIdPlaceholder: "e.g. openai/gpt-5",
         add: "Adicionar",
@@ -2636,7 +2639,7 @@ export const ptBR: TranslationResources = {
         noSearchMatches: "Nenhum modelo corresponde à sua busca",
         noneDetected: "Nenhum modelo detectado",
         discovered: "Descobertos",
-        custom: "Modelos personalizados",
+        custom: "Modelos manuais e personalizações",
         updated: "Atualizado {{time}}",
       },
       diagnostic: {

@@ -480,7 +480,7 @@ export class ProviderSnapshotManager {
     if (!provider.enabled) {
       return [{ path: ["provider"], message: `Provider '${input.provider}' is disabled` }];
     }
-    if (provider.status !== "ready") {
+    if (!hasUsableProviderCatalog(provider)) {
       return [
         {
           path: ["provider"],
@@ -501,12 +501,12 @@ export class ProviderSnapshotManager {
   }
 
   async listModels(input: ProviderSnapshotProviderOptions): Promise<AgentModelDefinition[]> {
-    const entry = await this.getReadyProvider(input);
+    const entry = await this.getUsableProvider(input);
     return filterSelectableAgentModels(entry.models);
   }
 
   async listModes(input: ProviderSnapshotProviderOptions): Promise<AgentMode[]> {
-    const entry = await this.getReadyProvider(input);
+    const entry = await this.getUsableProvider(input);
     return entry.modes ?? [];
   }
 
@@ -532,7 +532,7 @@ export class ProviderSnapshotManager {
   async resolveCreateConfig(
     input: ResolveProviderCreateConfigOptions,
   ): Promise<ResolvedProviderCreateConfig> {
-    const entry = await this.getReadyProvider({
+    const entry = await this.getUsableProvider({
       cwd: input.cwd,
       provider: input.provider,
       wait: true,
@@ -567,7 +567,7 @@ export class ProviderSnapshotManager {
       snapshotEntryPromise,
     ]);
 
-    const modelCount = entry.status === "ready" ? String(entry.models?.length ?? 0) : "—";
+    const modelCount = hasUsableProviderCatalog(entry) ? String(entry.models?.length ?? 0) : "—";
     const status = formatProviderStatus(entry);
     const diagnostic = `${baseDiagnostic}\n  Models: ${modelCount}\n  Status: ${status}`;
     return { provider, diagnostic };
@@ -746,14 +746,14 @@ export class ProviderSnapshotManager {
     return this.getOrCreateTarget(target.snapshotCwd).snapshot;
   }
 
-  private async getReadyProvider(
+  private async getUsableProvider(
     input: ProviderSnapshotProviderOptions,
   ): Promise<ProviderSnapshotEntry> {
     const entry = await this.getProvider(input);
     if (!entry.enabled) {
       throw new Error(`Provider '${entry.provider}' is disabled`);
     }
-    if (entry.status === "ready") {
+    if (hasUsableProviderCatalog(entry)) {
       return entry;
     }
     if (entry.status === "error") {
@@ -963,6 +963,7 @@ export class ProviderSnapshotManager {
           provider,
           definition,
           initial,
+          previous: current.result?.entry,
           client,
           publish: (entry) => {
             if (!isCurrent()) return false;
@@ -987,6 +988,7 @@ export class ProviderSnapshotManager {
     provider: AgentProvider;
     definition: ProviderDefinition;
     initial: ProviderSnapshotEntry;
+    previous: ProviderSnapshotEntry | undefined;
     client: AgentClient;
     publish: (entry: ProviderSnapshotEntry) => boolean;
   }): Promise<void> {
@@ -995,6 +997,7 @@ export class ProviderSnapshotManager {
       provider,
       definition,
       initial: base,
+      previous,
       client,
       publish: setEntry,
     } = options;
@@ -1040,11 +1043,13 @@ export class ProviderSnapshotManager {
         fetchedAt: new Date().toISOString(),
       });
     } catch (error) {
+      const usingLastCatalog = previous?.fetchedAt !== undefined && previous.models !== undefined;
+      const message = toErrorMessage(error);
       const emitted = setEntry({
-        ...base,
+        ...(previous ?? base),
         status: "error",
         enabled: true,
-        error: toErrorMessage(error),
+        error: usingLastCatalog ? `${message}. Using the last successful model catalog.` : message,
       });
       if (emitted) {
         this.logger.warn(
@@ -1187,6 +1192,12 @@ function toErrorMessage(error: unknown): string {
     return error;
   }
   return "Unknown error";
+}
+
+export function hasUsableProviderCatalog(entry: ProviderSnapshotEntry): boolean {
+  if (entry.status === "ready") return true;
+  if (entry.status !== "error") return false;
+  return entry.fetchedAt !== undefined && entry.models !== undefined;
 }
 
 function formatProviderStatus(entry: ProviderSnapshotEntry): string {

@@ -2631,6 +2631,9 @@ export const ru: TranslationResources = {
         many: "{{count}} моделей",
         addModel: "Добавить модель",
         addCustomTitle: "Добавить пользовательскую модель",
+        editCustomTitle: "Изменить ручную модель",
+        editOverrideTitle: "Изменить переопределение модели",
+        hideModel: "Скрыть {{id}}",
         modelId: "ID модели",
         modelIdPlaceholder: "например, openai/gpt-5",
         add: "Добавить",
@@ -2644,7 +2647,7 @@ export const ru: TranslationResources = {
         noSearchMatches: "Ни одна модель не соответствует вашему запросу",
         noneDetected: "Модели не обнаружены",
         discovered: "Обнаруженные модели",
-        custom: "Пользовательские модели",
+        custom: "Ручные модели и переопределения",
         updated: "Обновлено {{time}}",
       },
       diagnostic: {
