@@ -291,6 +291,7 @@ export const fr: TranslationResources = {
     },
   },
   agentList: {
+    actions: en.agentList.actions,
     fallbackTitle: "Nouvelle séance",
     dateSections: {
       recent: "Récent",
@@ -308,6 +309,8 @@ export const fr: TranslationResources = {
       closed: "Fermé",
     },
     badges: {
+      rootAgent: "Principal",
+      subagent: "Sous-agent · parent {{parent}}",
       archived: "Archivé",
       pending: "{{count}}en attente",
       attention: "Attention",
@@ -2644,6 +2647,9 @@ export const fr: TranslationResources = {
         many: "{{count}} modèles",
         addModel: "Ajouter un modèle",
         addCustomTitle: "Ajouter un modèle personnalisé",
+        editCustomTitle: "Modifier le modèle manuel",
+        editOverrideTitle: "Modifier la personnalisation du modèle",
+        hideModel: "Masquer {{id}}",
         modelId: "ModèleID",
         modelIdPlaceholder: "par ex. ouvert/gpt-5",
         add: "Ajouter",
@@ -2657,7 +2663,7 @@ export const fr: TranslationResources = {
         noSearchMatches: "Aucun modèle ne correspond à votre recherche",
         noneDetected: "Aucun modèle détecté",
         discovered: "Découvert",
-        custom: "Modèles personnalisés",
+        custom: "Modèles manuels et personnalisations",
         updated: "{{time}}mis à jour",
       },
       diagnostic: {

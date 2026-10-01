@@ -59,6 +59,9 @@ const mockState = vi.hoisted(() => {
     },
     isCommandAvailable: vi.fn(async (_command: string) => false),
     runtimeModels: new Map<string, AgentModelDefinition[]>(),
+    claudeShouldDiscoverModels: false,
+    claudeModelsAuthoritative: false,
+    claudeCatalogCalls: 0,
     cursorListFeaturesConfigs: [] as AgentSessionConfig[],
     reset() {
       this.constructorArgs.claude = [];
@@ -72,6 +75,9 @@ const mockState = vi.hoisted(() => {
       this.isCommandAvailable.mockReset();
       this.isCommandAvailable.mockImplementation(async (_command: string) => false);
       this.runtimeModels.clear();
+      this.claudeShouldDiscoverModels = false;
+      this.claudeModelsAuthoritative = false;
+      this.claudeCatalogCalls = 0;
       this.cursorListFeaturesConfigs = [];
     },
   };
@@ -112,10 +118,16 @@ vi.mock("./providers/claude/agent.js", async () => {
       }
 
       async fetchCatalog(): Promise<ProviderCatalog> {
+        mockState.claudeCatalogCalls += 1;
         return {
           models: mockState.runtimeModels.get(this.provider) ?? [],
+          modelsAuthoritative: mockState.claudeModelsAuthoritative,
           modes: [],
         };
+      }
+
+      async shouldDiscoverModels(): Promise<boolean> {
+        return mockState.claudeShouldDiscoverModels;
       }
 
       resolveConfiguredModel(model: AgentModelDefinition): AgentModelDefinition {
@@ -1693,10 +1705,173 @@ describe("model merging", () => {
 
     expect(models.map((model) => model.id)).toEqual(["MiniMax-M2.7", "MiniMax-M3"]);
     expect(models.find((model) => model.isDefault)?.id).toBe("MiniMax-M3");
+    expect(mockState.claudeCatalogCalls).toBe(0);
   });
 });
 
 describe("fetchCatalog", () => {
+  test.each(["claude", "gateway"])(
+    "%s authoritative discovery retains unavailable configured rows without making them selectable",
+    async (provider) => {
+      mockState.claudeShouldDiscoverModels = true;
+      mockState.claudeModelsAuthoritative = true;
+      mockState.runtimeModels.set("claude", [
+        { provider: "claude", id: "api-model", label: "API Model", isDefault: true },
+        { provider: "claude", id: "api-hidden", label: "API Hidden" },
+        { provider: "claude", id: "api-new", label: "New API Model" },
+      ]);
+      const registry = buildProviderRegistry(logger, {
+        providerOverrides: {
+          [provider]: {
+            ...(provider === "gateway" ? { extends: "claude" } : {}),
+            label: "Gateway",
+            models: [
+              { id: "api-model", label: "Profile Label" },
+              { id: "api-hidden", label: "API Hidden", isSelectable: false },
+              { id: "profile-stale", label: "Old Profile Model", isDefault: true },
+            ],
+            additionalModels: [
+              { id: "api-model", label: "Preferred Label", description: "Custom description" },
+              { id: "api-hidden", label: "Hidden Model" },
+              { id: "additional-stale", label: "Old Additional Model", isSelectable: true },
+            ],
+          },
+        },
+      });
+
+      const catalog = await registry[provider].fetchCatalog({ scope: "global", force: true });
+
+      expect(mockState.claudeCatalogCalls).toBe(1);
+      expect(catalog.modelsAuthoritative).toBe(true);
+      expect(catalog.models.map((model) => model.id)).toEqual([
+        "api-model",
+        "api-hidden",
+        "api-new",
+        "profile-stale",
+        "additional-stale",
+      ]);
+      expect(
+        catalog.models.filter((model) => model.isSelectable !== false).map((model) => model.id),
+      ).toEqual(["api-model", "api-new"]);
+      expect(catalog.models.find((model) => model.id === "api-model")).toMatchObject({
+        provider,
+        label: "Preferred Label",
+        description: "Custom description",
+        isDefault: true,
+      });
+      expect(catalog.models.find((model) => model.id === "profile-stale")).toMatchObject({
+        provider,
+        label: "Old Profile Model",
+        isSelectable: false,
+        isDefault: false,
+      });
+    },
+  );
+
+  test("wrapped authoritative catalogs cannot re-enable unavailable configured models", async () => {
+    mockState.claudeShouldDiscoverModels = true;
+    mockState.claudeModelsAuthoritative = true;
+    mockState.runtimeModels.set("claude", [
+      { provider: "claude", id: "api-model", label: "API Model", isDefault: true },
+    ]);
+    const registry = buildProviderRegistry(logger, {
+      providerOverrides: {
+        gateway: {
+          extends: "claude",
+          label: "Gateway",
+          models: [{ id: "profile-stale", label: "Old Profile", isSelectable: true }],
+          additionalModels: [
+            { id: "api-model", label: "Current Model" },
+            { id: "extra-stale", label: "Old Extra", isSelectable: true, isDefault: true },
+          ],
+        },
+      },
+    });
+    const client = registry.gateway.createClient(logger);
+    const options = { scope: "global", force: true } as const;
+
+    const clientCatalog = await client.fetchCatalog(options);
+    const registryCatalog = await registry.gateway.fetchCatalog(options, client);
+
+    expect(mockState.claudeCatalogCalls).toBe(2);
+    expect(registryCatalog).toMatchObject(clientCatalog);
+    expect(clientCatalog.models.filter((model) => model.isSelectable !== false)).toEqual([
+      expect.objectContaining({
+        provider: "gateway",
+        id: "api-model",
+        label: "Current Model",
+        isDefault: true,
+      }),
+    ]);
+    expect(clientCatalog.models.find((model) => model.id === "extra-stale")).toMatchObject({
+      isSelectable: false,
+      isDefault: false,
+    });
+  });
+
+  test("an authoritative empty catalog keeps manual entries unavailable", async () => {
+    mockState.claudeShouldDiscoverModels = true;
+    mockState.claudeModelsAuthoritative = true;
+    const registry = buildProviderRegistry(logger, {
+      providerOverrides: {
+        claude: {
+          models: [{ id: "stale-model", label: "Old Model", isDefault: true }],
+        },
+      },
+    });
+
+    const catalog = await registry.claude.fetchCatalog({ scope: "global", force: true });
+
+    expect(catalog.models).toEqual([
+      expect.objectContaining({
+        id: "stale-model",
+        isSelectable: false,
+        isDefault: false,
+      }),
+    ]);
+  });
+
+  test("non-authoritative discovery preserves explicit model replacement", async () => {
+    mockState.claudeShouldDiscoverModels = true;
+    mockState.runtimeModels.set("claude", [
+      { provider: "claude", id: "legacy-model", label: "Legacy Model" },
+    ]);
+    const registry = buildProviderRegistry(logger, {
+      providerOverrides: {
+        claude: {
+          models: [{ id: "manual-model", label: "Manual Model", isDefault: true }],
+          additionalModels: [{ id: "extra-model", label: "Extra Model" }],
+        },
+      },
+    });
+
+    const catalog = await registry.claude.fetchCatalog({ scope: "global", force: true });
+
+    expect(mockState.claudeCatalogCalls).toBe(1);
+    expect(catalog.models.map((model) => model.id)).toEqual(["manual-model", "extra-model"]);
+    expect(catalog.models.find((model) => model.isDefault)?.id).toBe("manual-model");
+    expect(catalog.models.filter((model) => model.isSelectable === false)).toEqual([]);
+  });
+
+  test("configured API discovery failures propagate instead of returning manual models", async () => {
+    mockState.claudeShouldDiscoverModels = true;
+    const registry = buildProviderRegistry(logger, {
+      providerOverrides: {
+        claude: { models: [{ id: "manual-model", label: "Manual Model" }] },
+      },
+    });
+    const client = registry.claude.createClient(logger);
+    const failure = new Error("Configured models API is unavailable");
+    client.fetchCatalog = vi.fn(async () => {
+      throw failure;
+    });
+
+    await expect(
+      registry.claude.fetchCatalog({ scope: "global", force: true }, client),
+    ).rejects.toBe(failure);
+    expect(client.fetchCatalog).toHaveBeenCalledTimes(1);
+  });
+
   test("returns merged models and modes from fetchCatalog", async () => {
     mockState.runtimeModels.set("codex", [
       { provider: "codex", id: "codex-runtime", label: "Codex Runtime" },

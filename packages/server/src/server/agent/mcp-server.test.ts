@@ -5137,6 +5137,41 @@ describe("provider MCP tools", () => {
     });
   });
 
+  it("inspects draft features using a retained successful catalog after refresh failure", async () => {
+    const { agentManager, agentStorage, spies } = createTestDeps();
+    spies.agentManager.listDraftFeatures.mockResolvedValue([]);
+    const provStub = createProviderSnapshotManagerStub();
+    provStub.getProvider.mockResolvedValue({
+      ...buildSnapshotEntry({ provider: "codex" }),
+      status: "error",
+      error: "Model discovery failed. Using the last successful model catalog.",
+      fetchedAt: "2026-10-01T00:00:00.000Z",
+      models: [{ provider: "codex", id: "astra", label: "Astra" }],
+    });
+    const server = await createAgentMcpServer({
+      agentManager,
+      agentStorage,
+      providerSnapshotManager: provStub.manager,
+      logger,
+    });
+    const response = await registeredTool(server, "inspect_provider").handler({
+      provider: "codex",
+      cwd: "~/repo",
+      settings: { model: "astra" },
+    });
+    expect(spies.agentManager.listDraftFeatures).toHaveBeenCalledWith({
+      provider: "codex",
+      cwd: expect.stringContaining("repo"),
+      model: "astra",
+    });
+    expect(response.structuredContent).toMatchObject({
+      provider: "codex",
+      status: "error",
+      selectedModel: "astra",
+      features: [],
+    });
+  });
+
   it("rejects disabled providers without fetching models", async () => {
     const { agentManager, agentStorage } = createTestDeps();
     const provStub = createProviderSnapshotManagerStub();
@@ -5459,7 +5494,7 @@ describe("agent snapshot MCP serialization", () => {
     );
   });
 
-  it("defaults list_agents to caller cwd and excludes archived agents", async () => {
+  it("supports cwd scope and excludes archived agents", async () => {
     const { agentManager, agentStorage, spies } = createTestDeps();
     const now = new Date().toISOString();
     spies.agentManager.getAgent.mockReturnValue(
@@ -5496,7 +5531,7 @@ describe("agent snapshot MCP serialization", () => {
       callerAgentId: "caller-agent",
     });
     const tool = registeredTool(server, "list_agents");
-    const response = await tool.handler({});
+    const response = await tool.handler({ scope: "cwd" });
 
     const agentIds = agentsOf(response).map((agent) => agent.id);
     expect(agentIds).toHaveLength(3);

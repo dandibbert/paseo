@@ -145,6 +145,13 @@ import { withTimeout } from "../../../../utils/promise-timeout.js";
 import { terminateWithTreeKill } from "../../../../utils/tree-kill.js";
 import { execCommand } from "../../../../utils/spawn.js";
 import { composeSystemPromptParts } from "../../system-prompt.js";
+import {
+  fetchClaudeApiModels,
+  isTruthyEnvValue,
+  resolveClaudeCatalogConfiguration,
+  type ClaudeModelCatalogTransport,
+  type ClaudeCatalogConfiguration,
+} from "./api-models.js";
 
 const fsPromises = promises;
 const CLAUDE_SETTING_SOURCES: NonNullable<ClaudeOptions["settingSources"]> = [
@@ -410,6 +417,7 @@ interface ClaudeAgentClientOptions {
   resolveBinary?: () => Promise<string>;
   resolveVersion?: (signal?: AbortSignal) => Promise<string>;
   configDir?: string;
+  modelCatalogTransport?: ClaudeModelCatalogTransport;
   rewindSdk?: ClaudeRewindSdk;
 }
 
@@ -914,18 +922,6 @@ function isMcpServersRecord(value: unknown): value is Record<string, McpServerCo
 
 function isPermissionMode(value: string | undefined): value is PermissionMode {
   return typeof value === "string" && VALID_CLAUDE_MODES.has(value);
-}
-
-function isTruthyEnvValue(value: string | undefined): boolean {
-  const normalized = value?.trim().toLowerCase();
-  return (
-    normalized !== undefined &&
-    normalized.length > 0 &&
-    normalized !== "0" &&
-    normalized !== "false" &&
-    normalized !== "no" &&
-    normalized !== "off"
-  );
 }
 
 function claudeAutoModeUnavailableOn(env: NodeJS.ProcessEnv): "Bedrock" | "Vertex" | null {
@@ -1507,6 +1503,11 @@ export class ClaudeAgentClient implements AgentClient {
   private readonly resolveBinary: () => Promise<string>;
   private readonly resolveVersion: (signal?: AbortSignal) => Promise<string>;
   private readonly configDir?: string;
+  private readonly modelCatalogTransport?: ClaudeModelCatalogTransport;
+  private readonly catalogConfigurations = new WeakMap<
+    FetchCatalogOptions,
+    ClaudeCatalogConfiguration
+  >();
   private readonly rewindSdk: ClaudeRewindSdk;
 
   constructor(options: ClaudeAgentClientOptions) {
@@ -1519,6 +1520,7 @@ export class ClaudeAgentClient implements AgentClient {
       options.resolveVersion ??
       ((signal) => resolveClaudeCodeVersion(this.runtimeSettings, signal));
     this.configDir = options.configDir;
+    this.modelCatalogTransport = options.modelCatalogTransport;
     this.rewindSdk = options.rewindSdk ?? realClaudeRewindSdk;
   }
 
@@ -1574,16 +1576,42 @@ export class ClaudeAgentClient implements AgentClient {
     });
   }
 
-  async getCatalogCacheKey(_options: FetchCatalogOptions): Promise<string> {
-    // This client discovers through host configuration, independent of project cwd.
-    return "host";
+  async getCatalogCacheKey(options: FetchCatalogOptions): Promise<string> {
+    const configuration = await this.resolveCatalogConfiguration();
+    this.catalogConfigurations.set(options, configuration);
+    return configuration.cacheKey;
+  }
+
+  async shouldDiscoverModels(options?: FetchCatalogOptions): Promise<boolean> {
+    const configuration = options ? this.catalogConfigurations.get(options) : undefined;
+    return (configuration ?? (await this.resolveCatalogConfiguration())).api !== null;
+  }
+
+  private resolveCatalogConfiguration() {
+    return resolveClaudeCatalogConfiguration({
+      baseEnv: process.env,
+      runtimeSettings: this.runtimeSettings,
+      configDir: this.configDir,
+    });
   }
 
   async fetchCatalog(
-    _options: FetchCatalogOptions,
+    options: FetchCatalogOptions,
     context?: ProviderRefreshContext,
   ): Promise<ProviderCatalog> {
-    // Claude exposes a global catalog here; cwd/force are intentionally irrelevant.
+    // Catalogs are host scoped; project-local settings remain owned by Claude Code.
+    const configuration =
+      this.catalogConfigurations.get(options) ?? (await this.resolveCatalogConfiguration());
+    if (configuration.api) {
+      const models = await runProviderRefreshActivity(context, "models-api", () =>
+        fetchClaudeApiModels({
+          configuration,
+          transport: this.modelCatalogTransport,
+          signal: context?.signal,
+        }),
+      );
+      return { models, modelsAuthoritative: true, ...claudeModeCatalog(configuration.env) };
+    }
     let claudeCodeVersion: string | undefined;
     try {
       claudeCodeVersion = await runProviderRefreshActivity(context, "version", () =>
@@ -1592,12 +1620,10 @@ export class ClaudeAgentClient implements AgentClient {
     } catch (error) {
       this.logger.warn({ err: error }, "Failed to resolve Claude Code version for model catalog");
     }
-    const models = await runProviderRefreshActivity(context, "settings", () =>
-      getClaudeModelsWithSettings(this.logger, this.configDir, claudeCodeVersion),
+    const models = await runProviderRefreshActivity(context, "settings", async () =>
+      getClaudeModelsWithSettings(configuration.settings, claudeCodeVersion),
     );
-    const modeCatalog = claudeModeCatalog(
-      createProviderEnv({ baseEnv: process.env, runtimeSettings: this.runtimeSettings }),
-    );
+    const modeCatalog = claudeModeCatalog(configuration.env);
     return {
       models,
       ...modeCatalog,

@@ -290,6 +290,7 @@ export const ja: TranslationResources = {
     },
   },
   agentList: {
+    actions: en.agentList.actions,
     fallbackTitle: "新しいセッション",
     dateSections: {
       recent: "最近",
@@ -307,6 +308,8 @@ export const ja: TranslationResources = {
       closed: "クローズ",
     },
     badges: {
+      rootAgent: "親",
+      subagent: "子 · 親 {{parent}}",
       archived: "アーカイブ済み",
       pending: "{{count}}件保留中",
       attention: "注意",
@@ -2605,6 +2608,9 @@ export const ja: TranslationResources = {
         many: "{{count}}つのモデル",
         addModel: "モデルを追加",
         addCustomTitle: "カスタムモデルを追加",
+        editCustomTitle: "手動モデルを編集",
+        editOverrideTitle: "モデルの上書き設定を編集",
+        hideModel: "{{id}} を非表示",
         modelId: "モデルID",
         modelIdPlaceholder: "例: openai/gpt-5",
         add: "追加",
@@ -2618,7 +2624,7 @@ export const ja: TranslationResources = {
         noSearchMatches: "検索に一致するモデルがありません",
         noneDetected: "モデルが検出されませんでした",
         discovered: "検出済み",
-        custom: "カスタムモデル",
+        custom: "手動モデルと上書き設定",
         updated: "{{time}}に更新",
       },
       diagnostic: {

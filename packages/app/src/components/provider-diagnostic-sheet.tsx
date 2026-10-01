@@ -1,7 +1,16 @@
 import * as Clipboard from "expo-clipboard";
-import { AlertTriangle, Copy, FileText, Pencil, Plus, RotateCw, Trash2 } from "lucide-react-native";
+import {
+  AlertTriangle,
+  Copy,
+  EyeOff,
+  FileText,
+  Pencil,
+  Plus,
+  RotateCw,
+  Trash2,
+} from "lucide-react-native";
 import type { TFunction } from "i18next";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { useTranslation } from "react-i18next";
 import { Pressable, type PressableStateCallbackType, Text, View } from "react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
@@ -23,8 +32,15 @@ import type { AgentModelDefinition, AgentProvider } from "@getpaseo/protocol/age
 import type { ProviderProfileModel } from "@getpaseo/protocol/provider-config";
 import {
   resolveProviderDiscoveredModels,
+  resolveProviderManualModels,
+  type ProviderManualModel,
   type ProviderDiscoveredModelsCache,
 } from "./provider-diagnostic-models";
+import {
+  createProviderModelMutation,
+  type ProviderModelChange,
+  type ProviderModelMutation,
+} from "./provider-model-settings";
 import { ProviderModelEditorSheet } from "./provider-model-editor-sheet";
 
 interface ProviderDiagnosticSheetProps {
@@ -51,58 +67,90 @@ function iconButtonStyle({ hovered, pressed }: PressableStateCallbackType & { ho
 
 function DiscoveredModelRow({
   model,
+  disabled,
+  saving,
   onEdit,
+  onHide,
 }: {
   model: AgentModelDefinition;
+  disabled: boolean;
+  saving: boolean;
   onEdit: (model: AgentModelDefinition) => void;
+  onHide: (model: AgentModelDefinition) => void;
 }) {
   const { theme } = useUnistyles();
+  const { t } = useTranslation();
   const handleEdit = useCallback(() => onEdit(model), [model, onEdit]);
+  const handleHide = useCallback(() => onHide(model), [model, onHide]);
   return (
     <View style={sheetStyles.modelRow}>
-      <Text style={sheetStyles.modelTitle} numberOfLines={1}>
-        {model.label}
-      </Text>
-      <Text
-        style={sheetStyles.monoHint}
-        numberOfLines={1}
-        selectable
-        dataSet={CODE_SURFACE_DATASET}
-      >
-        {model.id}
-      </Text>
-      {model.contextWindowMaxTokens ? (
-        <Text style={sheetStyles.modelMeta} numberOfLines={1}>
-          {Math.round(model.contextWindowMaxTokens / 1000)}k ctx
+      <View style={sheetStyles.modelContent}>
+        <Text style={sheetStyles.modelTitle} numberOfLines={1} accessibilityLabel={model.label}>
+          {model.label}
         </Text>
-      ) : null}
-      {model.description ? (
-        <Text style={sheetStyles.descriptionInline} numberOfLines={1}>
-          {model.description}
+        <Text
+          style={sheetStyles.monoHint}
+          numberOfLines={1}
+          selectable
+          accessibilityLabel={model.id}
+          dataSet={CODE_SURFACE_DATASET}
+        >
+          {model.id}
         </Text>
-      ) : (
-        <View style={sheetStyles.modelRowFiller} />
-      )}
-      <Pressable
-        onPress={handleEdit}
-        hitSlop={8}
-        style={iconButtonStyle}
-        accessibilityRole="button"
-        accessibilityLabel={`Edit model ${model.id}`}
-      >
-        <Pencil size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />
-      </Pressable>
+        <View style={sheetStyles.modelDetails}>
+          {model.contextWindowMaxTokens ? (
+            <Text style={sheetStyles.modelMeta} numberOfLines={1}>
+              {Math.round(model.contextWindowMaxTokens / 1000)}k ctx
+            </Text>
+          ) : null}
+          {model.description ? (
+            <Text style={sheetStyles.descriptionInline} numberOfLines={1}>
+              {model.description}
+            </Text>
+          ) : null}
+        </View>
+      </View>
+      <View style={sheetStyles.modelActions}>
+        <Pressable
+          onPress={handleEdit}
+          disabled={disabled}
+          hitSlop={8}
+          style={iconButtonStyle}
+          accessibilityRole="button"
+          accessibilityLabel={`Edit model ${model.id}`}
+        >
+          <Pencil size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />
+        </Pressable>
+        <Pressable
+          onPress={handleHide}
+          disabled={disabled}
+          hitSlop={8}
+          style={iconButtonStyle}
+          accessibilityRole="button"
+          accessibilityLabel={t("settings.providers.models.hideModel", { id: model.id })}
+        >
+          {saving ? (
+            <LoadingSpinner size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />
+          ) : (
+            <EyeOff size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />
+          )}
+        </Pressable>
+      </View>
     </View>
   );
 }
 
 function CustomModelRow({
   model,
+  status,
+  disabled,
   deleting,
   onEdit,
   onDelete,
 }: {
   model: ProviderProfileModel;
+  status: ProviderManualModel["status"];
+  disabled: boolean;
   deleting: boolean;
   onEdit: (model: ProviderProfileModel) => void;
   onDelete: (modelId: string) => void;
@@ -115,51 +163,69 @@ function CustomModelRow({
     ({ hovered, pressed }: PressableStateCallbackType & { hovered?: boolean }) => [
       sheetStyles.iconButton,
       (Boolean(hovered) || pressed) && sheetStyles.iconButtonHovered,
-      deleting ? sheetStyles.disabled : null,
+      disabled ? sheetStyles.disabled : null,
     ],
-    [deleting],
+    [disabled],
   );
 
   return (
     <View style={sheetStyles.modelRow}>
-      <Text style={sheetStyles.modelTitle} numberOfLines={1}>
-        {model.label}
-      </Text>
-      <Text
-        style={sheetStyles.monoHint}
-        numberOfLines={1}
-        selectable
-        dataSet={CODE_SURFACE_DATASET}
-      >
-        {model.id}
-      </Text>
-      {model.contextWindowMaxTokens ? (
-        <Text style={sheetStyles.modelMeta} numberOfLines={1}>
-          {Math.round(model.contextWindowMaxTokens / 1000)}k ctx
+      <View style={sheetStyles.modelContent}>
+        <Text style={sheetStyles.modelTitle} numberOfLines={1} accessibilityLabel={model.label}>
+          {model.label}
         </Text>
-      ) : null}
-      <View style={sheetStyles.modelRowFiller} />
-      <Pressable
-        onPress={handleEdit}
-        hitSlop={8}
-        style={iconButtonStyle}
-        accessibilityRole="button"
-        accessibilityLabel={`Edit model ${model.id}`}
-      >
-        <Pencil size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />
-      </Pressable>
-      <Pressable
-        onPress={handleDelete}
-        disabled={deleting}
-        hitSlop={8}
-        style={deleteButtonStyle}
-        accessibilityRole="button"
-        accessibilityLabel={t("settings.providers.models.removeModel", {
-          id: model.id,
-        })}
-      >
-        <Trash2 size={theme.iconSize.sm} color={theme.colors.destructive} />
-      </Pressable>
+        <Text
+          style={sheetStyles.monoHint}
+          numberOfLines={1}
+          selectable
+          accessibilityLabel={model.id}
+          dataSet={CODE_SURFACE_DATASET}
+        >
+          {model.id}
+        </Text>
+        <View style={sheetStyles.modelDetails}>
+          {model.contextWindowMaxTokens ? (
+            <Text style={sheetStyles.modelMeta} numberOfLines={1}>
+              {Math.round(model.contextWindowMaxTokens / 1000)}k ctx
+            </Text>
+          ) : null}
+          {status !== "available" ? (
+            <Text style={sheetStyles.modelMeta}>
+              {status === "disabled"
+                ? t("settings.providers.statuses.disabled")
+                : t("providerSelection.unavailable")}
+            </Text>
+          ) : null}
+        </View>
+      </View>
+      <View style={sheetStyles.modelActions}>
+        <Pressable
+          onPress={handleEdit}
+          disabled={disabled}
+          hitSlop={8}
+          style={iconButtonStyle}
+          accessibilityRole="button"
+          accessibilityLabel={`Edit model ${model.id}`}
+        >
+          <Pencil size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />
+        </Pressable>
+        <Pressable
+          onPress={handleDelete}
+          disabled={disabled}
+          hitSlop={8}
+          style={deleteButtonStyle}
+          accessibilityRole="button"
+          accessibilityLabel={t("settings.providers.models.removeModel", {
+            id: model.id,
+          })}
+        >
+          {deleting ? (
+            <LoadingSpinner size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />
+          ) : (
+            <Trash2 size={theme.iconSize.sm} color={theme.colors.destructive} />
+          )}
+        </Pressable>
+      </View>
     </View>
   );
 }
@@ -187,12 +253,14 @@ function AddCustomModelSubSheet({
   visible,
   onClose,
   refresh,
+  mutation,
 }: {
   provider: string;
   serverId: string;
   visible: boolean;
   onClose: () => void;
   refresh: (providers?: AgentProvider[]) => Promise<void>;
+  mutation: ProviderModelMutation;
 }) {
   return (
     <ProviderModelEditorSheet
@@ -201,6 +269,7 @@ function AddCustomModelSubSheet({
       visible={visible}
       model={null}
       originalModelId={null}
+      mutation={mutation}
       onClose={onClose}
       refresh={refresh}
     />
@@ -374,10 +443,12 @@ interface ProviderModalBodyProps {
   modelsRefreshing: boolean;
   searchActive: boolean;
   filteredDiscovered: AgentModelDefinition[];
-  filteredCustom: ProviderProfileModel[];
-  deletingModelId: string | null;
+  filteredCustom: ProviderManualModel[];
+  savingModelId: string | null;
+  mutationDisabled: boolean;
   onRefresh: () => void;
   onEditDiscovered: (model: AgentModelDefinition) => void;
+  onHideDiscovered: (model: AgentModelDefinition) => void;
   onEditCustom: (model: ProviderProfileModel) => void;
   onDeleteCustom: (modelId: string) => void;
   theme: { iconSize: { md: number }; colors: { foregroundMuted: string } };
@@ -387,6 +458,7 @@ interface ProviderSheetFooterInput {
   fetchedAtLabel: string | null;
   isCompact: boolean;
   modelsRefreshing: boolean;
+  mutationDisabled: boolean;
   t: TFunction;
   onOpenAddSheet: () => void;
   onOpenDiagSheet: () => void;
@@ -397,6 +469,7 @@ function renderProviderSheetFooter({
   fetchedAtLabel,
   isCompact,
   modelsRefreshing,
+  mutationDisabled,
   t,
   onOpenAddSheet,
   onOpenDiagSheet,
@@ -422,6 +495,7 @@ function renderProviderSheetFooter({
           size="sm"
           leftIcon={Plus}
           onPress={onOpenAddSheet}
+          disabled={mutationDisabled}
           style={buttonStyle}
         >
           {t("settings.providers.models.addModel")}
@@ -463,9 +537,11 @@ function ProviderModalBody(props: ProviderModalBodyProps) {
     searchActive,
     filteredDiscovered,
     filteredCustom,
-    deletingModelId,
+    savingModelId,
+    mutationDisabled,
     onRefresh,
     onEditDiscovered,
+    onHideDiscovered,
     onEditCustom,
     onDeleteCustom,
     theme,
@@ -516,7 +592,14 @@ function ProviderModalBody(props: ProviderModalBodyProps) {
           />
           <View style={settingsStyles.card}>
             {filteredDiscovered.map((model) => (
-              <DiscoveredModelRow key={model.id} model={model} onEdit={onEditDiscovered} />
+              <DiscoveredModelRow
+                key={model.id}
+                model={model}
+                disabled={mutationDisabled}
+                saving={savingModelId === model.id}
+                onEdit={onEditDiscovered}
+                onHide={onHideDiscovered}
+              />
             ))}
           </View>
         </View>
@@ -528,11 +611,13 @@ function ProviderModalBody(props: ProviderModalBodyProps) {
             count={filteredCustom.length}
           />
           <View style={settingsStyles.card}>
-            {filteredCustom.map((model) => (
+            {filteredCustom.map(({ model, status }) => (
               <CustomModelRow
                 key={model.id}
                 model={model}
-                deleting={deletingModelId === model.id}
+                status={status}
+                disabled={mutationDisabled}
+                deleting={savingModelId === model.id}
                 onEdit={onEditCustom}
                 onDelete={onDeleteCustom}
               />
@@ -563,7 +648,10 @@ export function ProviderDiagnosticSheet({
   >(null);
   const [editingOriginalModelId, setEditingOriginalModelId] = useState<string | null>(null);
   const [diagSheetOpen, setDiagSheetOpen] = useState(false);
-  const [deletingModelId, setDeletingModelId] = useState<string | null>(null);
+  const [modelMutation] = useState(createProviderModelMutation);
+  const mutationState = useSyncExternalStore(modelMutation.subscribe, modelMutation.getState);
+  const savingModelId = mutationState.status === "saving" ? mutationState.modelId : null;
+  const mutationDisabled = savingModelId !== null || config === null;
 
   const providerLabel = resolveProviderLabel(provider, snapshotEntries);
   const providerEntry = useMemo(
@@ -587,6 +675,8 @@ export function ProviderDiagnosticSheet({
     serverId,
     provider,
     currentModels,
+    providerConfig: config?.providers[provider],
+    additionalModels,
     providerSnapshotRefreshing,
     previousCache: stableDiscoveredRef.current,
   });
@@ -612,8 +702,9 @@ export function ProviderDiagnosticSheet({
       setEditingModel(null);
       setEditingOriginalModelId(null);
       setDiagSheetOpen(false);
+      modelMutation.clearError();
     }
-  }, [visible]);
+  }, [modelMutation, visible]);
 
   const q = query.trim();
   const filteredDiscovered = useMemo(
@@ -621,50 +712,74 @@ export function ProviderDiagnosticSheet({
     [discoveredModels, q],
   );
   const filteredCustom = useMemo(
-    () => rankModels(additionalModels, q, (m) => [m.label, m.id, m.description ?? ""]),
-    [additionalModels, q],
+    () =>
+      rankModels(resolveProviderManualModels(additionalModels, currentModels), q, ({ model }) => [
+        model.label,
+        model.id,
+        model.description ?? "",
+      ]),
+    [additionalModels, currentModels, q],
   );
 
   const handleRefreshModels = useCallback(() => {
     void refresh([provider]);
   }, [provider, refresh]);
 
-  const handleOpenAddSheet = useCallback(() => setAddSheetOpen(true), []);
+  const handleOpenAddSheet = useCallback(() => {
+    modelMutation.clearError();
+    setAddSheetOpen(true);
+  }, [modelMutation]);
   const handleCloseAddSheet = useCallback(() => setAddSheetOpen(false), []);
   const handleEditDiscovered = useCallback(
     (model: AgentModelDefinition) => {
+      modelMutation.clearError();
       const override = additionalModels.find((entry) => entry.id === model.id);
       setEditingModel(override ?? model);
       setEditingOriginalModelId(model.id);
       setEditSheetOpen(true);
     },
-    [additionalModels],
+    [additionalModels, modelMutation],
   );
-  const handleEditCustom = useCallback((model: ProviderProfileModel) => {
-    setEditingModel(model);
-    setEditingOriginalModelId(model.id);
-    setEditSheetOpen(true);
-  }, []);
+  const handleEditCustom = useCallback(
+    (model: ProviderProfileModel) => {
+      modelMutation.clearError();
+      setEditingModel(model);
+      setEditingOriginalModelId(model.id);
+      setEditSheetOpen(true);
+    },
+    [modelMutation],
+  );
   const handleCloseEditSheet = useCallback(() => setEditSheetOpen(false), []);
   const handleOpenDiagSheet = useCallback(() => setDiagSheetOpen(true), []);
   const handleCloseDiagSheet = useCallback(() => setDiagSheetOpen(false), []);
 
-  const handleDeleteCustom = useCallback(
-    (modelId: string) => {
-      setDeletingModelId(modelId);
-      void patchConfig({
-        providers: {
-          [provider]: {
-            additionalModels: additionalModels.filter((model) => model.id !== modelId),
-          },
-        },
-      })
-        .then(() => refresh([provider]))
-        .finally(() => {
-          setDeletingModelId((current) => (current === modelId ? null : current));
-        });
+  const applyModelChange = useCallback(
+    (change: ProviderModelChange) => {
+      if (!config) return;
+      void modelMutation.run({
+        provider,
+        additionalModels,
+        change,
+        patchConfig,
+        refresh,
+        fallbackError: t("settings.providers.models.failedToSave"),
+        disconnectedError: t("workspace.terminal.hostDisconnected"),
+      });
     },
-    [additionalModels, patchConfig, provider, refresh],
+    [additionalModels, config, modelMutation, patchConfig, provider, refresh, t],
+  );
+  const handleDeleteCustom = useCallback(
+    (modelId: string) => applyModelChange({ type: "remove", modelId }),
+    [applyModelChange],
+  );
+  const handleHideDiscovered = useCallback(
+    (model: AgentModelDefinition) =>
+      applyModelChange({
+        type: "save",
+        model: { id: model.id, label: model.label, isSelectable: false },
+        originalModelId: model.id,
+      }),
+    [applyModelChange],
   );
 
   const sheetHeader = useMemo<SheetHeader>(
@@ -690,6 +805,7 @@ export function ProviderDiagnosticSheet({
           fetchedAtLabel,
           isCompact,
           modelsRefreshing,
+          mutationDisabled,
           t,
           onOpenAddSheet: handleOpenAddSheet,
           onOpenDiagSheet: handleOpenDiagSheet,
@@ -697,6 +813,16 @@ export function ProviderDiagnosticSheet({
         })}
         snapPoints={MAIN_SNAP_POINTS}
       >
+        {mutationState.status === "error" ? (
+          <Text style={sheetStyles.errorText} accessibilityRole="alert">
+            {mutationState.message}
+          </Text>
+        ) : null}
+        {providerErrorMessage && (discoveredModels.length > 0 || additionalModels.length > 0) ? (
+          <Text style={sheetStyles.errorText} accessibilityRole="alert">
+            {providerErrorMessage}
+          </Text>
+        ) : null}
         <ProviderModalBody
           discoveredCount={discoveredModels.length}
           additionalCount={additionalModels.length}
@@ -706,9 +832,11 @@ export function ProviderDiagnosticSheet({
           searchActive={Boolean(q)}
           filteredDiscovered={filteredDiscovered}
           filteredCustom={filteredCustom}
-          deletingModelId={deletingModelId}
+          savingModelId={savingModelId}
+          mutationDisabled={mutationDisabled}
           onRefresh={handleRefreshModels}
           onEditDiscovered={handleEditDiscovered}
+          onHideDiscovered={handleHideDiscovered}
           onEditCustom={handleEditCustom}
           onDeleteCustom={handleDeleteCustom}
           theme={theme}
@@ -718,6 +846,7 @@ export function ProviderDiagnosticSheet({
         provider={provider}
         serverId={serverId}
         visible={addSheetOpen}
+        mutation={modelMutation}
         onClose={handleCloseAddSheet}
         refresh={refresh}
       />
@@ -727,6 +856,7 @@ export function ProviderDiagnosticSheet({
         visible={editSheetOpen}
         model={editingModel}
         originalModelId={editingOriginalModelId}
+        mutation={modelMutation}
         onClose={handleCloseEditSheet}
         refresh={refresh}
       />
@@ -749,15 +879,18 @@ const sheetStyles = StyleSheet.create((theme) => ({
     fontFamily: theme.fontFamily.mono,
     fontSize: theme.fontSize.code,
     color: theme.colors.foregroundMuted,
-    flexShrink: 0,
+    minWidth: 0,
+    flexShrink: 1,
   },
   descriptionInline: {
-    flex: 1,
+    minWidth: 0,
+    flexShrink: 1,
     fontSize: theme.fontSize.sm,
     color: theme.colors.foregroundMuted,
   },
   modelMeta: {
-    flexShrink: 0,
+    minWidth: 0,
+    flexShrink: 1,
     fontSize: theme.fontSize.sm,
     color: theme.colors.foregroundMuted,
   },
@@ -776,6 +909,7 @@ const sheetStyles = StyleSheet.create((theme) => ({
     fontSize: theme.fontSize.base,
   },
   iconButton: {
+    flexShrink: 0,
     width: 28,
     height: 28,
     borderRadius: theme.borderRadius.full,
@@ -818,13 +952,28 @@ const sheetStyles = StyleSheet.create((theme) => ({
     borderTopWidth: 1,
     borderTopColor: theme.colors.border,
   },
+  modelContent: {
+    flex: 1,
+    minWidth: 0,
+    gap: theme.spacing[1],
+  },
+  modelDetails: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    minWidth: 0,
+    gap: theme.spacing[2],
+  },
+  modelActions: {
+    flexDirection: "row",
+    flexShrink: 0,
+    alignItems: "center",
+    gap: theme.spacing[2],
+  },
   modelTitle: {
     color: theme.colors.foreground,
     fontSize: theme.fontSize.base,
-    flexShrink: 0,
-  },
-  modelRowFiller: {
-    flex: 1,
+    minWidth: 0,
+    flexShrink: 1,
   },
   emptyState: {
     paddingVertical: theme.spacing[8],

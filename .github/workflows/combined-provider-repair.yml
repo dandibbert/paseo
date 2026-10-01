@@ -1,8 +1,11 @@
-name: Combined provider editor validation and macOS builds
+name: Personal fork validation and macOS builds
 
 on:
   push:
-    branches: [combined/repair-provider-editor]
+    branches:
+      - combined/repair-provider-editor
+      - fix/agent-lifecycle-clarity
+      - fix/claude-api-model-catalog
   workflow_dispatch:
 
 permissions:
@@ -22,20 +25,28 @@ jobs:
     timeout-minutes: 5
     outputs:
       revision: ${{ steps.revision.outputs.sha }}
+      macos-matrix: ${{ steps.revision.outputs.macos-matrix }}
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
       - id: revision
-        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+        shell: bash
+        run: |
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          if [[ "$GITHUB_REF_NAME" == 'fix/agent-lifecycle-clarity' || "$GITHUB_REF_NAME" == 'fix/claude-api-model-catalog' ]]; then
+            echo 'macos-matrix={"include":[{"runner":"macos-15","arch":"arm64"}]}' >> "$GITHUB_OUTPUT"
+          else
+            echo 'macos-matrix={"include":[{"runner":"macos-15","arch":"arm64"},{"runner":"macos-15-intel","arch":"x64"}]}' >> "$GITHUB_OUTPUT"
+          fi
       - name: Regression check for personal signing policy
         run: python3 packages/desktop/scripts/verify-repair-signature.py --self-test
 
   validate:
     needs: source
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     env:
       ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
       ONNXRUNTIME_NODE_INSTALL: skip
@@ -86,6 +97,50 @@ jobs:
         run: npm run lint
       - name: Format check
         run: npm run format:check
+      - name: Build native app dependency for History browser tests
+        if: github.ref_name == 'fix/agent-lifecycle-clarity'
+        run: npm run build --workspace=@getpaseo/expo-two-way-audio
+      - name: Install History test browser
+        if: github.ref_name == 'fix/agent-lifecycle-clarity'
+        timeout-minutes: 10
+        run: npx playwright install --with-deps chromium
+      - name: Verify History search and management in the browser
+        if: github.ref_name == 'fix/agent-lifecycle-clarity'
+        env:
+          E2E_WORKERS: "1"
+        run: npm run test:e2e --workspace=@getpaseo/app -- e2e/browser/sessions-search.spec.ts e2e/browser/archive-tab.spec.ts --trace on --reporter=line,html
+      - name: Upload History browser screenshots and traces
+        uses: actions/upload-artifact@v4
+        if: ${{ always() && github.ref_name == 'fix/agent-lifecycle-clarity' }}
+        with:
+          name: Paseo-history-browser-verification
+          path: |
+            packages/app/test-results/
+            packages/app/playwright-report/
+          if-no-files-found: ignore
+          retention-days: 14
+      - name: Build native app dependency for provider browser tests
+        if: github.ref_name == 'fix/claude-api-model-catalog'
+        run: npm run build --workspace=@getpaseo/expo-two-way-audio
+      - name: Install provider test browser
+        if: github.ref_name == 'fix/claude-api-model-catalog'
+        timeout-minutes: 10
+        run: npx playwright install chromium
+      - name: Verify provider model controls at desktop and mobile widths
+        if: github.ref_name == 'fix/claude-api-model-catalog'
+        env:
+          E2E_WORKERS: "1"
+        run: npm run test:e2e --workspace=@getpaseo/app -- e2e/browser/provider-settings-refresh.spec.ts --trace on --reporter=line,html
+      - name: Upload provider browser screenshots and traces
+        uses: actions/upload-artifact@v4
+        if: ${{ always() && github.ref_name == 'fix/claude-api-model-catalog' }}
+        with:
+          name: Paseo-provider-browser-verification
+          path: |
+            packages/app/test-results/
+            packages/app/playwright-report/
+          if-no-files-found: ignore
+          retention-days: 14
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -100,12 +155,7 @@ jobs:
     needs: [source, validate]
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - runner: macos-15
-            arch: arm64
-          - runner: macos-15-intel
-            arch: x64
+      matrix: ${{ fromJSON(needs.source.outputs.macos-matrix) }}
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 45
     permissions:
@@ -127,7 +177,7 @@ jobs:
       - run: node scripts/npm-retry.mjs ci
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - name: Give the personal combined build a distinct version
+      - name: Give the personal build a distinct version
         run: |
           node <<'NODE'
           const fs = require('node:fs');
@@ -170,7 +220,7 @@ jobs:
           shasum -a 256 Paseo-*.dmg Paseo-*.zip > SHA256SUMS.txt
           printf '%s\n' \
             'Personal fork build; ad-hoc signed, not Apple notarized.' \
-            'Includes daemon/relay recovery fixes and the advanced Provider model editor.' \
+            'Includes the personal fork changes at the exact commit in SOURCE_REVISION.txt.' \
             'Hardened Runtime retained; personal main and helper signatures include the library-validation exception.' \
             'Wait until all agent tasks finish before replacing the installed desktop app.' > BUILD_NOTES.txt
       - uses: actions/upload-artifact@v4
@@ -200,12 +250,7 @@ jobs:
     needs: [source, macos]
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - runner: macos-15
-            arch: arm64
-          - runner: macos-15-intel
-            arch: x64
+      matrix: ${{ fromJSON(needs.source.outputs.macos-matrix) }}
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 20
     permissions:

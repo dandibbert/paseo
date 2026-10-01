@@ -285,6 +285,7 @@ export const ar: TranslationResources = {
     },
   },
   agentList: {
+    actions: en.agentList.actions,
     fallbackTitle: "جلسة جديدة",
     dateSections: {
       recent: "مؤخرًا",
@@ -302,6 +303,8 @@ export const ar: TranslationResources = {
       closed: "مغلق",
     },
     badges: {
+      rootAgent: "رئيسي",
+      subagent: "فرعي · الأصل {{parent}}",
       archived: "مؤرشف",
       pending: "{{count}}معلق",
       attention: "انتباه",
@@ -2578,6 +2581,9 @@ export const ar: TranslationResources = {
         many: "{{count}} نماذج",
         addModel: "إضافة نموذج",
         addCustomTitle: "إضافة نموذج مخصص",
+        editCustomTitle: "تعديل نموذج يدوي",
+        editOverrideTitle: "تعديل تجاوز النموذج",
+        hideModel: "إخفاء {{id}}",
         modelId: "الموديل ID",
         modelIdPlaceholder: "على سبيل المثال أوبيناي /gpt-5",
         add: "يضيف",
@@ -2591,7 +2597,7 @@ export const ar: TranslationResources = {
         noSearchMatches: "لا توجد نماذج تطابق بحثك",
         noneDetected: "لم يتم اكتشاف أي نماذج",
         discovered: "اكتشف",
-        custom: "نماذج مخصصة",
+        custom: "النماذج اليدوية والتجاوزات",
         updated: "تم تحديث{{time}}",
       },
       diagnostic: {
