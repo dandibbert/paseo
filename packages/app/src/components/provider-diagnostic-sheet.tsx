@@ -84,53 +84,58 @@ function DiscoveredModelRow({
   const handleHide = useCallback(() => onHide(model), [model, onHide]);
   return (
     <View style={sheetStyles.modelRow}>
-      <Text style={sheetStyles.modelTitle} numberOfLines={1}>
-        {model.label}
-      </Text>
-      <Text
-        style={sheetStyles.monoHint}
-        numberOfLines={1}
-        selectable
-        dataSet={CODE_SURFACE_DATASET}
-      >
-        {model.id}
-      </Text>
-      {model.contextWindowMaxTokens ? (
-        <Text style={sheetStyles.modelMeta} numberOfLines={1}>
-          {Math.round(model.contextWindowMaxTokens / 1000)}k ctx
+      <View style={sheetStyles.modelContent}>
+        <Text style={sheetStyles.modelTitle} numberOfLines={1} accessibilityLabel={model.label}>
+          {model.label}
         </Text>
-      ) : null}
-      {model.description ? (
-        <Text style={sheetStyles.descriptionInline} numberOfLines={1}>
-          {model.description}
+        <Text
+          style={sheetStyles.monoHint}
+          numberOfLines={1}
+          selectable
+          accessibilityLabel={model.id}
+          dataSet={CODE_SURFACE_DATASET}
+        >
+          {model.id}
         </Text>
-      ) : (
-        <View style={sheetStyles.modelRowFiller} />
-      )}
-      <Pressable
-        onPress={handleEdit}
-        disabled={disabled}
-        hitSlop={8}
-        style={iconButtonStyle}
-        accessibilityRole="button"
-        accessibilityLabel={`Edit model ${model.id}`}
-      >
-        <Pencil size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />
-      </Pressable>
-      <Pressable
-        onPress={handleHide}
-        disabled={disabled}
-        hitSlop={8}
-        style={iconButtonStyle}
-        accessibilityRole="button"
-        accessibilityLabel={t("settings.providers.models.hideModel", { id: model.id })}
-      >
-        {saving ? (
-          <LoadingSpinner size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />
-        ) : (
-          <EyeOff size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />
-        )}
-      </Pressable>
+        <View style={sheetStyles.modelDetails}>
+          {model.contextWindowMaxTokens ? (
+            <Text style={sheetStyles.modelMeta} numberOfLines={1}>
+              {Math.round(model.contextWindowMaxTokens / 1000)}k ctx
+            </Text>
+          ) : null}
+          {model.description ? (
+            <Text style={sheetStyles.descriptionInline} numberOfLines={1}>
+              {model.description}
+            </Text>
+          ) : null}
+        </View>
+      </View>
+      <View style={sheetStyles.modelActions}>
+        <Pressable
+          onPress={handleEdit}
+          disabled={disabled}
+          hitSlop={8}
+          style={iconButtonStyle}
+          accessibilityRole="button"
+          accessibilityLabel={`Edit model ${model.id}`}
+        >
+          <Pencil size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />
+        </Pressable>
+        <Pressable
+          onPress={handleHide}
+          disabled={disabled}
+          hitSlop={8}
+          style={iconButtonStyle}
+          accessibilityRole="button"
+          accessibilityLabel={t("settings.providers.models.hideModel", { id: model.id })}
+        >
+          {saving ? (
+            <LoadingSpinner size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />
+          ) : (
+            <EyeOff size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />
+          )}
+        </Pressable>
+      </View>
     </View>
   );
 }
@@ -165,56 +170,62 @@ function CustomModelRow({
 
   return (
     <View style={sheetStyles.modelRow}>
-      <Text style={sheetStyles.modelTitle} numberOfLines={1}>
-        {model.label}
-      </Text>
-      <Text
-        style={sheetStyles.monoHint}
-        numberOfLines={1}
-        selectable
-        dataSet={CODE_SURFACE_DATASET}
-      >
-        {model.id}
-      </Text>
-      {model.contextWindowMaxTokens ? (
-        <Text style={sheetStyles.modelMeta} numberOfLines={1}>
-          {Math.round(model.contextWindowMaxTokens / 1000)}k ctx
+      <View style={sheetStyles.modelContent}>
+        <Text style={sheetStyles.modelTitle} numberOfLines={1} accessibilityLabel={model.label}>
+          {model.label}
         </Text>
-      ) : null}
-      <View style={sheetStyles.modelRowFiller} />
-      {status !== "available" ? (
-        <Text style={sheetStyles.modelMeta}>
-          {status === "disabled"
-            ? t("settings.providers.statuses.disabled")
-            : t("providerSelection.unavailable")}
+        <Text
+          style={sheetStyles.monoHint}
+          numberOfLines={1}
+          selectable
+          accessibilityLabel={model.id}
+          dataSet={CODE_SURFACE_DATASET}
+        >
+          {model.id}
         </Text>
-      ) : null}
-      <Pressable
-        onPress={handleEdit}
-        disabled={disabled}
-        hitSlop={8}
-        style={iconButtonStyle}
-        accessibilityRole="button"
-        accessibilityLabel={`Edit model ${model.id}`}
-      >
-        <Pencil size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />
-      </Pressable>
-      <Pressable
-        onPress={handleDelete}
-        disabled={disabled}
-        hitSlop={8}
-        style={deleteButtonStyle}
-        accessibilityRole="button"
-        accessibilityLabel={t("settings.providers.models.removeModel", {
-          id: model.id,
-        })}
-      >
-        {deleting ? (
-          <LoadingSpinner size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />
-        ) : (
-          <Trash2 size={theme.iconSize.sm} color={theme.colors.destructive} />
-        )}
-      </Pressable>
+        <View style={sheetStyles.modelDetails}>
+          {model.contextWindowMaxTokens ? (
+            <Text style={sheetStyles.modelMeta} numberOfLines={1}>
+              {Math.round(model.contextWindowMaxTokens / 1000)}k ctx
+            </Text>
+          ) : null}
+          {status !== "available" ? (
+            <Text style={sheetStyles.modelMeta}>
+              {status === "disabled"
+                ? t("settings.providers.statuses.disabled")
+                : t("providerSelection.unavailable")}
+            </Text>
+          ) : null}
+        </View>
+      </View>
+      <View style={sheetStyles.modelActions}>
+        <Pressable
+          onPress={handleEdit}
+          disabled={disabled}
+          hitSlop={8}
+          style={iconButtonStyle}
+          accessibilityRole="button"
+          accessibilityLabel={`Edit model ${model.id}`}
+        >
+          <Pencil size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />
+        </Pressable>
+        <Pressable
+          onPress={handleDelete}
+          disabled={disabled}
+          hitSlop={8}
+          style={deleteButtonStyle}
+          accessibilityRole="button"
+          accessibilityLabel={t("settings.providers.models.removeModel", {
+            id: model.id,
+          })}
+        >
+          {deleting ? (
+            <LoadingSpinner size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />
+          ) : (
+            <Trash2 size={theme.iconSize.sm} color={theme.colors.destructive} />
+          )}
+        </Pressable>
+      </View>
     </View>
   );
 }
@@ -868,15 +879,18 @@ const sheetStyles = StyleSheet.create((theme) => ({
     fontFamily: theme.fontFamily.mono,
     fontSize: theme.fontSize.code,
     color: theme.colors.foregroundMuted,
-    flexShrink: 0,
+    minWidth: 0,
+    flexShrink: 1,
   },
   descriptionInline: {
-    flex: 1,
+    minWidth: 0,
+    flexShrink: 1,
     fontSize: theme.fontSize.sm,
     color: theme.colors.foregroundMuted,
   },
   modelMeta: {
-    flexShrink: 0,
+    minWidth: 0,
+    flexShrink: 1,
     fontSize: theme.fontSize.sm,
     color: theme.colors.foregroundMuted,
   },
@@ -895,6 +909,7 @@ const sheetStyles = StyleSheet.create((theme) => ({
     fontSize: theme.fontSize.base,
   },
   iconButton: {
+    flexShrink: 0,
     width: 28,
     height: 28,
     borderRadius: theme.borderRadius.full,
@@ -937,13 +952,28 @@ const sheetStyles = StyleSheet.create((theme) => ({
     borderTopWidth: 1,
     borderTopColor: theme.colors.border,
   },
+  modelContent: {
+    flex: 1,
+    minWidth: 0,
+    gap: theme.spacing[1],
+  },
+  modelDetails: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    minWidth: 0,
+    gap: theme.spacing[2],
+  },
+  modelActions: {
+    flexDirection: "row",
+    flexShrink: 0,
+    alignItems: "center",
+    gap: theme.spacing[2],
+  },
   modelTitle: {
     color: theme.colors.foreground,
     fontSize: theme.fontSize.base,
-    flexShrink: 0,
-  },
-  modelRowFiller: {
-    flex: 1,
+    minWidth: 0,
+    flexShrink: 1,
   },
   emptyState: {
     paddingVertical: theme.spacing[8],

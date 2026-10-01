@@ -428,3 +428,105 @@ test.describe("provider model management", () => {
     }
   });
 });
+
+for (const width of [320, 390, 800, 1280]) {
+  test(`long model actions stay reachable at ${width}px`, async ({ page }, testInfo) => {
+    test.setTimeout(120_000);
+    await page.setViewportSize({ width, height: 900 });
+    const session = await seedMockAgentWorkspace({
+      repoPrefix: "provider-model-width-",
+      title: "Provider model width e2e",
+    });
+    const client = await connectDaemonClient<ProviderConfigClient>({
+      clientIdPrefix: "provider-model-width",
+    });
+    const originalProvider = (await client.getDaemonConfig()).config.providers.mock;
+    const model = {
+      id: "vendor/" + "very-long-unbroken-model-identifier-".repeat(8),
+      label: "Very long model display name ".repeat(8),
+      description: "A long provider description ".repeat(8),
+      contextWindowMaxTokens: 1_000_000,
+    };
+    try {
+      await client.patchDaemonConfig({
+        providers: { mock: { models: [model], additionalModels: [] } },
+      });
+      await openAgentRoute(page, session);
+      await expectComposerVisible(page);
+      if (width < 500) {
+        await openProviderSettingsFromModelSelector(page);
+      } else {
+        await openDesktopProviderSettings(page);
+      }
+
+      const edit = page.getByRole("button", { name: `Edit model ${model.id}`, exact: true });
+      const hide = page.getByRole("button", { name: `Hide ${model.id}`, exact: true });
+      const assertContained = async (button: Locator) => {
+        const row = button.locator("..").locator("..");
+        const bounds = await row.boundingBox();
+        const box = await button.boundingBox();
+        expect(bounds).not.toBeNull();
+        expect(box).not.toBeNull();
+        expect(bounds!.x).toBeGreaterThanOrEqual(0);
+        expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(width);
+        expect(await row.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(
+          true,
+        );
+        expect(box!.x).toBeGreaterThanOrEqual(Math.max(0, bounds!.x));
+        expect(box!.x + box!.width).toBeLessThanOrEqual(Math.min(width, bounds!.x + bounds!.width));
+        expect(
+          await button.evaluate((element) => {
+            const rect = element.getBoundingClientRect();
+            for (let parent = element.parentElement; parent; parent = parent.parentElement) {
+              if (getComputedStyle(parent).overflowX === "visible") continue;
+              const clip = parent.getBoundingClientRect();
+              if (rect.left < clip.left || rect.right > clip.right) return false;
+            }
+            return true;
+          }),
+        ).toBe(true);
+        await button.click({ trial: true });
+      };
+      await assertContained(edit);
+      await assertContained(hide);
+      await testInfo.attach(`long-model-discovered-${width}`, {
+        body: await page.screenshot(),
+        contentType: "image/png",
+      });
+      await edit.click();
+      await expect(page.getByTestId("provider-model-editor-sheet")).toBeVisible();
+      await expect(page.getByPlaceholder("e.g. openai/gpt-5")).toHaveValue(model.id);
+      await expect(page.getByPlaceholder("Defaults to model ID")).toHaveValue(model.label);
+      await page.getByRole("button", { name: "Cancel", exact: true }).click();
+      await assertContained(hide);
+      await hide.click();
+      await expect.poll(async () => (await readManualModels(client))[0]?.isSelectable).toBe(false);
+      const remove = page.getByRole("button", { name: `Remove ${model.id}`, exact: true });
+      await assertContained(edit);
+      await assertContained(remove);
+      await testInfo.attach(`long-model-override-${width}`, {
+        body: await page.screenshot(),
+        contentType: "image/png",
+      });
+      await edit.click();
+      await expect(page.getByPlaceholder("e.g. openai/gpt-5")).toHaveValue(model.id);
+      await page.getByRole("button", { name: "Cancel", exact: true }).click();
+      await remove.click();
+      await expect.poll(() => readManualModels(client)).toEqual([]);
+      await assertContained(hide);
+    } finally {
+      try {
+        await client.patchDaemonConfig({ removeProviders: ["mock"] });
+        if (originalProvider) {
+          await client.patchDaemonConfig({ providers: { mock: originalProvider } });
+        }
+      } finally {
+        try {
+          await client.close();
+        } finally {
+          await session.cleanup();
+        }
+      }
+    }
+  });
+}

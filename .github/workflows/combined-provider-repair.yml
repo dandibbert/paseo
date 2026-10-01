@@ -119,6 +119,28 @@ jobs:
             packages/app/playwright-report/
           if-no-files-found: ignore
           retention-days: 14
+      - name: Build native app dependency for provider browser tests
+        if: github.ref_name == 'fix/claude-api-model-catalog'
+        run: npm run build --workspace=@getpaseo/expo-two-way-audio
+      - name: Install provider test browser
+        if: github.ref_name == 'fix/claude-api-model-catalog'
+        timeout-minutes: 10
+        run: npx playwright install --with-deps chromium
+      - name: Verify provider model controls at desktop and mobile widths
+        if: github.ref_name == 'fix/claude-api-model-catalog'
+        env:
+          E2E_WORKERS: "1"
+        run: npm run test:e2e --workspace=@getpaseo/app -- e2e/browser/provider-settings-refresh.spec.ts --trace on --reporter=line,html
+      - name: Upload provider browser screenshots and traces
+        uses: actions/upload-artifact@v4
+        if: ${{ always() && github.ref_name == 'fix/claude-api-model-catalog' }}
+        with:
+          name: Paseo-provider-browser-verification
+          path: |
+            packages/app/test-results/
+            packages/app/playwright-report/
+          if-no-files-found: ignore
+          retention-days: 14
       - uses: actions/upload-artifact@v4
         if: always()
         with:
