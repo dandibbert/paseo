@@ -125,7 +125,7 @@ jobs:
       - name: Install provider test browser
         if: github.ref_name == 'fix/claude-api-model-catalog'
         timeout-minutes: 10
-        run: npx playwright install --with-deps chromium
+        run: npx playwright install chromium
       - name: Verify provider model controls at desktop and mobile widths
         if: github.ref_name == 'fix/claude-api-model-catalog'
         env:

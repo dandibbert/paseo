@@ -453,38 +453,50 @@ for (const width of [320, 390, 800, 1280]) {
       });
       await openAgentRoute(page, session);
       await expectComposerVisible(page);
-      if (width < 500) {
-        await openProviderSettingsFromModelSelector(page);
+      await page.getByRole("button", { name: /Select model/ }).click();
+      const configuration = page.getByTestId("agent-controls-model-sheet");
+      const desktopSettings = page.getByTestId("selector-header-settings-mock");
+      await expect(configuration.or(desktopSettings)).toBeVisible();
+      if (await configuration.isVisible()) {
+        await page.getByTestId("agent-controls-model").click();
+        await expect(page.getByTestId("agent-controls-model-browser-sheet")).toBeVisible();
+        await page.getByRole("button", { name: /Open .* settings/ }).click();
       } else {
-        await openDesktopProviderSettings(page);
+        await desktopSettings.click();
       }
+      await expectProviderSettingsVisible(page);
 
       const edit = page.getByRole("button", { name: `Edit model ${model.id}`, exact: true });
       const hide = page.getByRole("button", { name: `Hide ${model.id}`, exact: true });
       const assertContained = async (button: Locator) => {
-        const row = button.locator("..").locator("..");
-        const bounds = await row.boundingBox();
-        const box = await button.boundingBox();
-        expect(bounds).not.toBeNull();
-        expect(box).not.toBeNull();
-        expect(bounds!.x).toBeGreaterThanOrEqual(0);
-        expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(width);
-        expect(await row.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(
-          true,
-        );
-        expect(box!.x).toBeGreaterThanOrEqual(Math.max(0, bounds!.x));
-        expect(box!.x + box!.width).toBeLessThanOrEqual(Math.min(width, bounds!.x + bounds!.width));
-        expect(
-          await button.evaluate((element) => {
-            const rect = element.getBoundingClientRect();
-            for (let parent = element.parentElement; parent; parent = parent.parentElement) {
-              if (getComputedStyle(parent).overflowX === "visible") continue;
-              const clip = parent.getBoundingClientRect();
-              if (rect.left < clip.left || rect.right > clip.right) return false;
-            }
-            return true;
-          }),
-        ).toBe(true);
+        await expect(button).toBeVisible();
+        await expect(async () => {
+          const row = button.locator("..").locator("..");
+          const bounds = await row.boundingBox();
+          const box = await button.boundingBox();
+          expect(bounds).not.toBeNull();
+          expect(box).not.toBeNull();
+          expect(bounds!.x).toBeGreaterThanOrEqual(0);
+          expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(width);
+          expect(await row.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(
+            true,
+          );
+          expect(box!.x).toBeGreaterThanOrEqual(Math.max(0, bounds!.x));
+          expect(box!.x + box!.width).toBeLessThanOrEqual(
+            Math.min(width, bounds!.x + bounds!.width),
+          );
+          expect(
+            await button.evaluate((element) => {
+              const rect = element.getBoundingClientRect();
+              for (let parent = element.parentElement; parent; parent = parent.parentElement) {
+                if (getComputedStyle(parent).overflowX === "visible") continue;
+                const clip = parent.getBoundingClientRect();
+                if (rect.left < clip.left || rect.right > clip.right) return false;
+              }
+              return true;
+            }),
+          ).toBe(true);
+        }).toPass({ timeout: 10_000 });
         await button.click({ trial: true });
       };
       await assertContained(edit);
