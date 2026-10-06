@@ -1586,6 +1586,19 @@ function ActiveAgentComposer({
         router.push(buildSettingsHostSectionRoute(serverId, "agents"));
         return;
       }
+      if (command.kind === "refresh-agent-skills" || command.kind === "sync-agent-skills") {
+        const client = getHostRuntimeStore().getClient(serverId);
+        if (!client) {
+          throw new Error("Host is not connected");
+        }
+        if (command.kind === "refresh-agent-skills") {
+          await client.getAgentSkillsStatus();
+        } else {
+          await client.reconcileAgentSkills();
+        }
+        router.push(buildSettingsHostSectionRoute(serverId, "agents"));
+        return;
+      }
       if (command.kind === "open-plugin-settings") {
         router.push(buildSettingsHostSectionRoute(serverId, "plugins"));
         return;

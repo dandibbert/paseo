@@ -69,6 +69,8 @@ describe("resolveClientSlashCommand", () => {
       ["exit", ["quit", "q"], "immediate"],
       ["clear", ["new"], "immediate"],
       ["skills", ["skill-manager"], "immediate"],
+      ["skills-refresh", ["refresh-skills"], "immediate"],
+      ["skills-sync", ["sync-skills"], "immediate"],
       ["plugins", ["plugin-manager"], "immediate"],
       ["providers", ["provider-settings"], "immediate"],
       ["terminals", ["terminal-settings"], "immediate"],
@@ -101,6 +103,18 @@ describe("resolveClientSlashCommand", () => {
     expect(resolveClientSlashCommand({ text: "/skills", hasAttachments: false })).toMatchObject({
       name: "skills",
       kind: "open-agent-settings",
+    });
+    expect(
+      resolveClientSlashCommand({ text: "/refresh-skills", hasAttachments: false }),
+    ).toMatchObject({
+      name: "skills-refresh",
+      kind: "refresh-agent-skills",
+    });
+    expect(
+      resolveClientSlashCommand({ text: "/skills-sync", hasAttachments: false }),
+    ).toMatchObject({
+      name: "skills-sync",
+      kind: "sync-agent-skills",
     });
     expect(
       resolveClientSlashCommand({ text: "/plugin-manager", hasAttachments: false }),

@@ -6,6 +6,8 @@ export type ClientSlashCommandKind =
   | "replace-agent-with-draft"
   | "open-settings"
   | "open-agent-settings"
+  | "refresh-agent-skills"
+  | "sync-agent-skills"
   | "open-plugin-settings"
   | "open-provider-settings"
   | "open-terminal-settings";
@@ -54,6 +56,24 @@ export const CLIENT_SLASH_COMMANDS: readonly ClientSlashCommand[] = [
     descriptionKey: "composer.clientCommands.skills",
     argumentHint: "",
     kind: "open-agent-settings",
+    execution: "immediate",
+  },
+  {
+    name: "skills-refresh",
+    aliases: ["refresh-skills"],
+    description: "Rescan agent skill status for this host",
+    descriptionKey: "composer.clientCommands.skills",
+    argumentHint: "",
+    kind: "refresh-agent-skills",
+    execution: "immediate",
+  },
+  {
+    name: "skills-sync",
+    aliases: ["sync-skills"],
+    description: "Reconcile installed agent skills for this host",
+    descriptionKey: "composer.clientCommands.skills",
+    argumentHint: "",
+    kind: "sync-agent-skills",
     execution: "immediate",
   },
   {
