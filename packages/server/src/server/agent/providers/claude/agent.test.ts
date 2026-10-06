@@ -635,6 +635,7 @@ describe("ClaudeAgentSession features", () => {
       applyFlagSettings: vi.fn(async () => undefined),
       setModel: vi.fn(async () => undefined),
       getContextUsage: vi.fn(async () => undefined),
+      supportedCommands: vi.fn(async () => []),
       [Symbol.asyncIterator](): AsyncIterator<SDKMessage, void> {
         return {
           next: async () => {
@@ -651,6 +652,85 @@ describe("ClaudeAgentSession features", () => {
     });
     return { queryFactory, queryMock, launches };
   }
+
+  test("manages native Claude skills through skillOverrides instead of Paseo orchestration skills", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "paseo-claude-provider-skills-"));
+    const workspace = path.join(root, "workspace");
+    const configDir = path.join(root, "claude-config");
+    await fs.mkdir(path.join(workspace, ".git"), { recursive: true });
+    await fs.mkdir(path.join(configDir, "skills", "personal-skill"), { recursive: true });
+    await fs.writeFile(
+      path.join(configDir, "skills", "personal-skill", "SKILL.md"),
+      "---\nname: personal-skill\ndescription: Personal native skill\n---\n",
+    );
+    await fs.mkdir(path.join(workspace, ".claude", "skills", "project-skill"), {
+      recursive: true,
+    });
+    await fs.writeFile(
+      path.join(workspace, ".claude", "skills", "project-skill", "SKILL.md"),
+      "---\nname: project-skill\ndescription: Project native skill\n---\n",
+    );
+    await fs.writeFile(
+      path.join(workspace, ".claude", "settings.local.json"),
+      `${JSON.stringify({ skillOverrides: { "project-skill": "off" } }, null, 2)}\n`,
+    );
+
+    const { queryFactory, queryMock } = createQueryMock();
+    queryMock.supportedCommands.mockResolvedValue([
+      { name: "personal-skill", description: "Personal from SDK", argumentHint: "" },
+      { name: "project-skill", description: "Project from SDK", argumentHint: "" },
+    ]);
+    const session = await new ClaudeAgentClient({
+      logger,
+      queryFactory,
+      resolveBinary: async () => "/test/claude/bin",
+      runtimeSettings: { env: { CLAUDE_CONFIG_DIR: configDir } },
+    }).createSession({ provider: "claude", cwd: workspace, modeId: "default" });
+
+    try {
+      const skills = await session.listProviderSkills?.();
+      expect(skills).toContainEqual(
+        expect.objectContaining({
+          name: "personal-skill",
+          description: "Personal from SDK",
+          enabled: true,
+          source: "personal",
+          toggleSupported: true,
+        }),
+      );
+      expect(skills).toContainEqual(
+        expect.objectContaining({
+          name: "project-skill",
+          description: "Project from SDK",
+          enabled: false,
+          visibility: "off",
+          source: "project",
+          toggleSupported: true,
+          visibilityCycleSupported: true,
+        }),
+      );
+
+      const updated = await session.setProviderSkillEnabled?.({
+        name: "project-skill",
+        enabled: true,
+        visibility: "name-only",
+      });
+      expect(updated).toContainEqual(
+        expect.objectContaining({
+          name: "project-skill",
+          enabled: true,
+          visibility: "name-only",
+        }),
+      );
+      const localSettings = JSON.parse(
+        await fs.readFile(path.join(workspace, ".claude", "settings.local.json"), "utf8"),
+      ) as { skillOverrides?: Record<string, string> };
+      expect(localSettings.skillOverrides?.["project-skill"]).toBe("name-only");
+    } finally {
+      await session.close();
+      await fs.rm(root, { recursive: true, force: true });
+    }
+  });
 
   test("publishes a resolution when the SDK aborts a permission callback", async () => {
     const { queryFactory } = createQueryMock();

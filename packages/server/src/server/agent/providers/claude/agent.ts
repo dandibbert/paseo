@@ -1,4 +1,5 @@
 import { validateProviderOptions } from "../../provider-options.js";
+import type { ProviderPlugin, ProviderSkill } from "@getpaseo/protocol/messages";
 import type { ChildProcess } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import fs from "node:fs";
@@ -12,6 +13,7 @@ import {
   type PermissionResult,
   type PermissionUpdate,
   type Query,
+  type SlashCommand as ClaudeSlashCommand,
   type SDKMessage,
   type SDKPartialAssistantMessage,
   type SDKResultMessage,
@@ -372,13 +374,38 @@ const CLAUDE_ROOT_ONLY_COMMANDS = new Set([
   "clear",
   "compact",
   "context",
-  "debug",
   "extra-usage",
   "heapdump",
   "init",
-  "loop",
   "schedule",
   "usage",
+]);
+// Claude's Agent SDK exposes one flat slash-command list without a source/type
+// discriminator. Keep the bundled skills that Claude documents as skills in a
+// narrow allowlist so `/skills` never mistakes `/model`, `/permissions`, etc.
+// for editable skills. User/project/plugin/synced skills are discovered from
+// their real on-disk/provider sources below.
+const CLAUDE_BUNDLED_SKILL_NAMES = new Set([
+  "artifact-capabilities",
+  "artifact-diagramming",
+  "batch",
+  "claude-api",
+  "claude-in-chrome",
+  "code-review",
+  "dataviz",
+  "debug",
+  "design",
+  "design-sync",
+  "doctor",
+  "fewer-permission-prompts",
+  "loop",
+  "run",
+  "run-skill-generator",
+  "simplify",
+  "slides",
+  "update-config",
+  "verify",
+  "workflow-authoring",
 ]);
 const INTERRUPT_TOOL_USE_PLACEHOLDER = "[Request interrupted by user for tool use]";
 const INTERRUPT_PLACEHOLDER_PATTERN = /^\[Request interrupted by user(?:[^\]]*)\]$/;
@@ -394,10 +421,484 @@ interface SlashCommandInvocation {
 }
 
 function classifyClaudeSlashCommand(commandName: string): AgentSlashCommand["kind"] {
+  if (CLAUDE_BUNDLED_SKILL_NAMES.has(commandName)) return "skill";
   // Claude exposes commands and skills as one flat SDK list, without structured source
   // metadata. Keep obvious root-only/session controls out of inline autocomplete and
   // treat the rest as skills; the worst failure mode is an inert inline suggestion.
   return CLAUDE_ROOT_ONLY_COMMANDS.has(commandName) ? "command" : "skill";
+}
+
+type ClaudeSkillOverrideState = "on" | "name-only" | "user-invocable-only" | "off";
+
+async function readJsonObject(filePath: string): Promise<Record<string, unknown>> {
+  const raw = await fsPromises.readFile(filePath, "utf8").catch(() => null);
+  if (!raw) return {};
+  try {
+    const value: unknown = JSON.parse(raw);
+    return toObjectRecord(value) ?? {};
+  } catch {
+    return {};
+  }
+}
+
+async function findClaudeWorkspaceRoot(cwd: string): Promise<string> {
+  let current = path.resolve(cwd);
+  while (true) {
+    const git = await fsPromises.lstat(path.join(current, ".git")).catch(() => null);
+    if (git) return current;
+    const parent = path.dirname(current);
+    if (parent === current) return path.resolve(cwd);
+    current = parent;
+  }
+}
+
+function parseClaudeSkillHeader(markdown: string, fallbackName: string) {
+  const lines = markdown.split(/\r?\n/);
+  const values: Record<string, string> = {};
+  if (lines[0]?.trim() === "---") {
+    for (let index = 1; index < lines.length; index += 1) {
+      const line = lines[index]!;
+      if (line.trim() === "---") break;
+      const separator = line.indexOf(":");
+      if (separator <= 0) continue;
+      const key = line.slice(0, separator).trim();
+      let value = line.slice(separator + 1).trim();
+      value = value.replace(/^['"]/, "").replace(/['"]$/, "");
+      if (key && value) values[key] = value;
+    }
+  }
+  return {
+    name: values.name ?? fallbackName,
+    description: values.description ?? "",
+    disableModelInvocation: values["disable-model-invocation"] === "true",
+  };
+}
+
+async function listClaudeSkillDir(
+  root: string,
+  scope: string,
+  source: string,
+): Promise<ProviderSkill[]> {
+  const entries = await fsPromises.readdir(root, { withFileTypes: true }).catch(() => []);
+  const skills: ProviderSkill[] = [];
+  for (const entry of entries) {
+    if (!entry.isDirectory() && !entry.isSymbolicLink()) continue;
+    if (entry.name === ".trash") continue;
+    const skillPath = path.join(root, entry.name, "SKILL.md");
+    const raw = await fsPromises.readFile(skillPath, "utf8").catch(() => null);
+    if (!raw) continue;
+    const header = parseClaudeSkillHeader(raw, entry.name);
+    skills.push({
+      name: header.name,
+      description: header.description,
+      enabled: true,
+      visibility: "on",
+      path: skillPath,
+      scope,
+      source,
+      pluginId: null,
+      toggleSupported: !header.disableModelInvocation,
+      visibilityCycleSupported: !header.disableModelInvocation,
+    });
+  }
+  return skills;
+}
+
+async function listClaudeCommandDir(
+  root: string,
+  scope: string,
+  source: string,
+): Promise<ProviderSkill[]> {
+  const skills: ProviderSkill[] = [];
+  const walk = async (directory: string): Promise<void> => {
+    const entries = await fsPromises.readdir(directory, { withFileTypes: true }).catch(() => []);
+    for (const entry of entries) {
+      const absolute = path.join(directory, entry.name);
+      if (entry.isDirectory()) {
+        await walk(absolute);
+        continue;
+      }
+      if (!entry.isFile() || !entry.name.toLowerCase().endsWith(".md")) continue;
+      const relative = path.relative(root, absolute).replace(/\.md$/i, "");
+      const commandName = relative.split(path.sep).join(":");
+      const raw = await fsPromises.readFile(absolute, "utf8").catch(() => null);
+      if (!raw) continue;
+      const header = parseClaudeSkillHeader(raw, commandName);
+      skills.push({
+        // Legacy command files don't support frontmatter `name`; their relative
+        // path is the canonical slash-command name.
+        name: commandName,
+        description: header.description,
+        enabled: true,
+        visibility: "on",
+        path: absolute,
+        scope,
+        source,
+        pluginId: null,
+        toggleSupported: !header.disableModelInvocation,
+        visibilityCycleSupported: !header.disableModelInvocation,
+      });
+    }
+  };
+  await walk(root);
+  return skills;
+}
+
+async function listClaudePluginSkillDir(plugin: ProviderPlugin): Promise<ProviderSkill[]> {
+  if (!plugin.installPath) return [];
+  const skills = await listClaudeSkillDir(
+    path.join(plugin.installPath, "skills"),
+    plugin.scope ?? "plugin",
+    "plugin",
+  );
+  const pluginSkills: ProviderSkill[] = [];
+  for (const skill of skills) {
+    pluginSkills.push({
+      ...skill,
+      name: `${plugin.name}:${skill.name}`,
+      enabled: plugin.enabled,
+      visibility: plugin.enabled ? "on" : "off",
+      pluginId: plugin.id,
+      toggleSupported: false,
+      visibilityCycleSupported: false,
+    });
+  }
+  return pluginSkills;
+}
+
+async function readClaudeSkillOverrides(
+  configDir: string,
+  workspaceRoot: string,
+): Promise<Record<string, ClaudeSkillOverrideState>> {
+  const files = [
+    path.join(configDir, "settings.json"),
+    path.join(workspaceRoot, ".claude", "settings.json"),
+    path.join(workspaceRoot, ".claude", "settings.local.json"),
+  ];
+  const merged: Record<string, ClaudeSkillOverrideState> = {};
+  for (const file of files) {
+    const settings = await readJsonObject(file);
+    const overrides = toObjectRecord(settings.skillOverrides);
+    if (!overrides) continue;
+    for (const [name, value] of Object.entries(overrides)) {
+      if (
+        value === "on" ||
+        value === "name-only" ||
+        value === "user-invocable-only" ||
+        value === "off"
+      ) {
+        merged[name] = value;
+      }
+    }
+  }
+  return merged;
+}
+
+async function writeClaudeLocalSkillOverride(
+  workspaceRoot: string,
+  name: string,
+  visibility: ClaudeSkillOverrideState,
+): Promise<void> {
+  const settingsDir = path.join(workspaceRoot, ".claude");
+  const settingsPath = path.join(settingsDir, "settings.local.json");
+  const settings = await readJsonObject(settingsPath);
+  const overrides = Object.assign({}, toObjectRecord(settings.skillOverrides));
+  overrides[name] = visibility;
+  settings.skillOverrides = overrides;
+  await fsPromises.mkdir(settingsDir, { recursive: true });
+  const tempPath = `${settingsPath}.paseo-${process.pid}-${Date.now()}.tmp`;
+  await fsPromises.writeFile(tempPath, `${JSON.stringify(settings, null, 2)}\n`, "utf8");
+  await fsPromises.rename(tempPath, settingsPath);
+}
+
+function normalizeClaudePluginRecord(value: unknown): ProviderPlugin | null {
+  const record = toObjectRecord(value);
+  if (!record) return null;
+  const marketplace = resolveClaudePluginMarketplace(record);
+  const identity = resolveClaudePluginIdentity(record, marketplace);
+  if (!identity) return null;
+  const installed = isClaudePluginInstalled(record, identity.explicitId);
+  const enabled = installed && record.enabled !== false;
+  const scope = readNonEmptyString(record.scope);
+  const specialSource = isClaudePluginSpecialSource(identity.id);
+  const managed = scope === "managed";
+  const mutableEnablement = installed && !managed && !identity.id.endsWith("@inline");
+  const marketplaceInstall = installed && !specialSource && !managed;
+  return {
+    id: identity.id,
+    name: identity.name,
+    description: readNonEmptyString(record.description) ?? "",
+    installed,
+    enabled,
+    version:
+      readNonEmptyString(record.version) ??
+      readNonEmptyString(record.installedVersion) ??
+      readNonEmptyString(record.localVersion),
+    scope,
+    source: "claude",
+    installPath:
+      readNonEmptyString(record.readFromFolder) ?? readNonEmptyString(record.installPath),
+    marketplace,
+    canInstall: !installed,
+    canEnable: mutableEnablement && !enabled,
+    canDisable: mutableEnablement && enabled,
+    canUpdate: marketplaceInstall,
+    canUninstall: marketplaceInstall,
+  };
+}
+
+function resolveClaudePluginMarketplace(record: Record<string, unknown>): string | null {
+  return readNonEmptyString(record.marketplaceName) ?? readNonEmptyString(record.marketplace);
+}
+
+function resolveClaudePluginIdentity(
+  record: Record<string, unknown>,
+  marketplace: string | null,
+): { id: string; name: string; explicitId: string | null } | null {
+  const explicitId = readNonEmptyString(record.id);
+  const pluginId = readNonEmptyString(record.pluginId);
+  const rawName = readNonEmptyString(record.name);
+  let id = explicitId ?? pluginId;
+  if (!id && rawName && marketplace) id = `${rawName}@${marketplace}`;
+  if (!id) id = rawName;
+  if (!id) return null;
+  const name = rawName ?? id.split("@", 1)[0];
+  if (!name) return null;
+  return { id, name, explicitId };
+}
+
+function isClaudePluginInstalled(
+  record: Record<string, unknown>,
+  explicitId: string | null,
+): boolean {
+  const installPath = readNonEmptyString(record.installPath);
+  const readFromFolder = readNonEmptyString(record.readFromFolder);
+  const scope = readNonEmptyString(record.scope);
+  return [
+    record.installed === true,
+    explicitId !== null,
+    installPath !== null,
+    readFromFolder !== null,
+    scope !== null,
+  ].some(Boolean);
+}
+
+function isClaudePluginSpecialSource(id: string): boolean {
+  return ["@synced", "@skills-dir", "@inline"].some((suffix) => id.endsWith(suffix));
+}
+
+function applyClaudeSkillVisibility(
+  skill: ProviderSkill,
+  overrides: Record<string, ClaudeSkillOverrideState>,
+  overrideName = skill.name,
+): ProviderSkill {
+  const visibility = overrides[overrideName] ?? "on";
+  return {
+    ...skill,
+    enabled: visibility !== "off",
+    visibility,
+  };
+}
+
+function addClaudeBundledProviderSkills(
+  skillsByName: Map<string, ProviderSkill>,
+  commands: ClaudeSlashCommand[],
+  overrides: Record<string, ClaudeSkillOverrideState>,
+): void {
+  for (const command of commands) {
+    if (!CLAUDE_BUNDLED_SKILL_NAMES.has(command.name)) continue;
+    skillsByName.set(
+      command.name,
+      applyClaudeSkillVisibility(
+        {
+          name: command.name,
+          description: command.description ?? "",
+          enabled: true,
+          visibility: "on",
+          path: null,
+          scope: "bundled",
+          source: "bundled",
+          pluginId: null,
+          toggleSupported: true,
+          visibilityCycleSupported: true,
+        },
+        overrides,
+      ),
+    );
+  }
+}
+
+async function addClaudePersonalProviderSkills(
+  skillsByName: Map<string, ProviderSkill>,
+  commandByName: Map<string, ClaudeSlashCommand>,
+  overrides: Record<string, ClaudeSkillOverrideState>,
+  configDir: string,
+): Promise<void> {
+  const personalSkills = [
+    ...(await listClaudeSkillDir(path.join(configDir, "skills"), "user", "personal")),
+    ...(await listClaudeCommandDir(path.join(configDir, "commands"), "user", "personal command")),
+  ];
+  for (const skill of personalSkills) {
+    const command = commandByName.get(skill.name);
+    skillsByName.set(
+      skill.name,
+      applyClaudeSkillVisibility(
+        {
+          ...skill,
+          description: command?.description || skill.description,
+        },
+        overrides,
+      ),
+    );
+  }
+}
+
+async function collectClaudeProjectProviderSkills(
+  cwd: string,
+  workspaceRoot: string,
+): Promise<ProviderSkill[][]> {
+  const projectSkillSets: ProviderSkill[][] = [];
+  let current = path.resolve(cwd);
+  while (true) {
+    projectSkillSets.push([
+      ...(await listClaudeSkillDir(path.join(current, ".claude", "skills"), "project", "project")),
+      ...(await listClaudeCommandDir(
+        path.join(current, ".claude", "commands"),
+        "project",
+        "project command",
+      )),
+    ]);
+    if (current === workspaceRoot) break;
+    const parent = path.dirname(current);
+    if (parent === current || !current.startsWith(`${workspaceRoot}${path.sep}`)) break;
+    current = parent;
+  }
+  return projectSkillSets;
+}
+
+function addClaudeProjectProviderSkills(
+  skillsByName: Map<string, ProviderSkill>,
+  commandByName: Map<string, ClaudeSlashCommand>,
+  overrides: Record<string, ClaudeSkillOverrideState>,
+  groups: ProviderSkill[][],
+): void {
+  for (const group of groups) {
+    for (const skill of group) {
+      // Personal entries win. A project skill does replace a bundled skill.
+      if (skillsByName.get(skill.name)?.scope === "user") continue;
+      const command = commandByName.get(skill.name);
+      skillsByName.set(
+        skill.name,
+        applyClaudeSkillVisibility(
+          {
+            ...skill,
+            description: command?.description || skill.description,
+          },
+          overrides,
+        ),
+      );
+    }
+  }
+}
+
+async function addClaudePluginProviderSkills(
+  skillsByName: Map<string, ProviderSkill>,
+  commandByName: Map<string, ClaudeSlashCommand>,
+  commands: ClaudeSlashCommand[],
+  installedPlugins: ProviderPlugin[],
+): Promise<void> {
+  const pluginByName = new Map(
+    installedPlugins.map((plugin) => [plugin.name.toLocaleLowerCase(), plugin]),
+  );
+  for (const plugin of installedPlugins) {
+    for (const skill of await listClaudePluginSkillDir(plugin)) {
+      const command = commandByName.get(skill.name);
+      skillsByName.set(skill.name, {
+        ...skill,
+        description: command?.description || skill.description,
+      });
+    }
+  }
+  for (const command of commands) {
+    if (!command.name.includes(":") || command.name.startsWith("anthropic-skills:")) continue;
+    const [prefix] = command.name.split(":", 1);
+    const plugin = prefix ? pluginByName.get(prefix.toLocaleLowerCase()) : undefined;
+    if (!plugin || skillsByName.has(command.name)) continue;
+    skillsByName.set(command.name, {
+      name: command.name,
+      description: command.description ?? "",
+      enabled: plugin.enabled,
+      visibility: plugin.enabled ? "on" : "off",
+      path: null,
+      scope: plugin.scope ?? "plugin",
+      source: "plugin",
+      pluginId: plugin.id,
+      toggleSupported: false,
+      visibilityCycleSupported: false,
+    });
+  }
+}
+
+async function addClaudeSyncedProviderSkills(
+  skillsByName: Map<string, ProviderSkill>,
+  commandByName: Map<string, ClaudeSlashCommand>,
+  overrides: Record<string, ClaudeSkillOverrideState>,
+  configDir: string,
+): Promise<void> {
+  const syncedSkills = await listClaudeSkillDir(
+    path.join(configDir, "skills", "synced"),
+    "user",
+    "claude.ai sync",
+  );
+  for (const synced of syncedSkills) {
+    const shortName = synced.name;
+    const fullName = `anthropic-skills:${shortName}`;
+    const displayName = skillsByName.has(shortName) ? fullName : shortName;
+    const command = commandByName.get(displayName) ?? commandByName.get(shortName);
+    skillsByName.set(
+      displayName,
+      applyClaudeSkillVisibility(
+        {
+          ...synced,
+          name: displayName,
+          description: command?.description || synced.description,
+          source: "claude.ai sync",
+          toggleSupported: synced.toggleSupported,
+          visibilityCycleSupported: synced.visibilityCycleSupported,
+        },
+        overrides,
+        displayName,
+      ),
+    );
+  }
+}
+
+function addClaudeAdvertisedSyncedProviderSkills(
+  skillsByName: Map<string, ProviderSkill>,
+  commands: ClaudeSlashCommand[],
+  overrides: Record<string, ClaudeSkillOverrideState>,
+): void {
+  for (const command of commands) {
+    if (!command.name.startsWith("anthropic-skills:") || skillsByName.has(command.name)) continue;
+    skillsByName.set(
+      command.name,
+      applyClaudeSkillVisibility(
+        {
+          name: command.name,
+          description: command.description ?? "",
+          enabled: true,
+          visibility: "on",
+          path: null,
+          scope: "user",
+          source: "claude.ai sync",
+          pluginId: null,
+          toggleSupported: true,
+          visibilityCycleSupported: true,
+        },
+        overrides,
+      ),
+    );
+  }
 }
 
 type ClaudeAgentConfig = Omit<AgentSessionConfig, "providerOptions"> & {
@@ -2780,6 +3281,121 @@ class ClaudeAgentSession implements AgentSession {
       commandMap.set(REWIND_COMMAND_NAME, REWIND_COMMAND);
     }
     return Array.from(commandMap.values()).sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  async listProviderSkills(options?: { forceReload?: boolean }): Promise<ProviderSkill[]> {
+    if (options?.forceReload) {
+      this.queryRestartNeeded = true;
+    }
+    const q = await this.ensureQuery();
+    const commands = await q.supportedCommands();
+    const configDir = claudeConfigDir(this.harnessEnvironment);
+    const workspaceRoot = await findClaudeWorkspaceRoot(this.config.cwd);
+    const overrides = await readClaudeSkillOverrides(configDir, workspaceRoot);
+    const skillsByName = new Map<string, ProviderSkill>();
+    const commandByName = new Map(commands.map((command) => [command.name, command]));
+    const installedPlugins = await this.listProviderPlugins().catch(() => [] as ProviderPlugin[]);
+    addClaudeBundledProviderSkills(skillsByName, commands, overrides);
+    await addClaudePersonalProviderSkills(skillsByName, commandByName, overrides, configDir);
+    const projectSkillSets = await collectClaudeProjectProviderSkills(
+      this.config.cwd,
+      workspaceRoot,
+    );
+    addClaudeProjectProviderSkills(skillsByName, commandByName, overrides, projectSkillSets);
+    await addClaudePluginProviderSkills(skillsByName, commandByName, commands, installedPlugins);
+    await addClaudeSyncedProviderSkills(skillsByName, commandByName, overrides, configDir);
+    addClaudeAdvertisedSyncedProviderSkills(skillsByName, commands, overrides);
+
+    return Array.from(skillsByName.values()).sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  async setProviderSkillEnabled(input: {
+    name: string;
+    path?: string | null;
+    enabled: boolean;
+    visibility?: "on" | "name-only" | "user-invocable-only" | "off";
+  }): Promise<ProviderSkill[]> {
+    if (input.name.includes(":") && !input.name.startsWith("anthropic-skills:")) {
+      throw new Error("Claude Code plugin skills are managed by their plugin, not skillOverrides");
+    }
+    const workspaceRoot = await findClaudeWorkspaceRoot(this.config.cwd);
+    const visibility = input.visibility ?? (input.enabled ? "on" : "off");
+    await writeClaudeLocalSkillOverride(workspaceRoot, input.name, visibility);
+    // Claude's /skills TUI writes the same local setting. Restart the SDK query
+    // on the next control-plane access so the running Paseo session sees it.
+    this.queryRestartNeeded = true;
+    return this.listProviderSkills({ forceReload: true });
+  }
+
+  private async runClaudePluginCli(args: string[]): Promise<{ stdout: string; stderr: string }> {
+    const launch = await resolveProviderLaunch({
+      commandConfig: this.runtimeSettings?.command,
+      defaultBinary: "claude",
+    });
+    const availability = await checkProviderLaunchAvailable(launch);
+    if (!availability.available) {
+      throw new Error("Claude Code binary is not available");
+    }
+    const executable = availability.resolvedPath ?? launch.command;
+    return execCommand(executable, [...launch.args, "plugin", ...args], {
+      cwd: this.config.cwd,
+      ...createProviderEnvSpec({
+        runtimeSettings: this.runtimeSettings,
+        overlays: [this.launchEnv],
+      }),
+      timeout: 60_000,
+      maxBuffer: 16 * 1024 * 1024,
+    });
+  }
+
+  async listProviderPlugins(options?: {
+    includeAvailable?: boolean;
+    forceReload?: boolean;
+  }): Promise<ProviderPlugin[]> {
+    const args = ["list", "--json"];
+    if (options?.includeAvailable) args.push("--available");
+    const { stdout } = await this.runClaudePluginCli(args);
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(stdout.trim());
+    } catch (error) {
+      throw new Error(`Claude Code returned invalid plugin JSON: ${String(error)}`, {
+        cause: error,
+      });
+    }
+    const root = toObjectRecord(parsed);
+    const values = Array.isArray(parsed)
+      ? parsed
+      : [
+          ...(Array.isArray(root?.plugins) ? root.plugins : []),
+          ...(Array.isArray(root?.installed) ? root.installed : []),
+          ...(options?.includeAvailable && Array.isArray(root?.available) ? root.available : []),
+        ];
+    const plugins = new Map<string, ProviderPlugin>();
+    for (const value of values) {
+      const plugin = normalizeClaudePluginRecord(value);
+      if (!plugin) continue;
+      const previous = plugins.get(plugin.id);
+      if (!previous || (!previous.installed && plugin.installed)) plugins.set(plugin.id, plugin);
+    }
+    return Array.from(plugins.values())
+      .filter((plugin) => options?.includeAvailable || plugin.installed)
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  async manageProviderPlugin(input: {
+    pluginId: string;
+    action: "install" | "enable" | "disable" | "update" | "uninstall";
+  }): Promise<ProviderPlugin[]> {
+    const current = await this.listProviderPlugins({ includeAvailable: true });
+    const plugin = current.find((candidate) => candidate.id === input.pluginId);
+    const args = [input.action, input.pluginId];
+    if (input.action === "uninstall" && plugin?.scope) {
+      args.push("--scope", plugin.scope);
+    }
+    await this.runClaudePluginCli(args);
+    this.queryRestartNeeded = true;
+    return this.listProviderPlugins({ includeAvailable: true, forceReload: true });
   }
 
   async revertConversation(input: { messageId: string }): Promise<void> {

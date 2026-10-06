@@ -1,4 +1,5 @@
 import { validateProviderOptions } from "../provider-options.js";
+import type { ProviderPlugin, ProviderSkill } from "@getpaseo/protocol/messages";
 import {
   getAgentStreamEventTurnId,
   type AgentPermissionAction,
@@ -3389,6 +3390,92 @@ function enabledCodexSkills(
   return Array.from(skillsByName.values());
 }
 
+function providerCodexSkills(entries: unknown[]): ProviderSkill[] {
+  const skills = new Map<string, ProviderSkill>();
+  for (const entry of entries) {
+    const skillRecord = toObjectRecord(entry);
+    if (!skillRecord || typeof skillRecord.name !== "string") continue;
+    const pathValue = typeof skillRecord.path === "string" ? skillRecord.path : null;
+    const key = pathValue ?? skillRecord.name;
+    if (skills.has(key)) continue;
+    skills.set(key, {
+      name: skillRecord.name,
+      description: resolveSkillDescription(skillRecord),
+      enabled: skillRecord.enabled !== false,
+      visibility: skillRecord.enabled === false ? "off" : "on",
+      path: pathValue,
+      scope: typeof skillRecord.scope === "string" ? skillRecord.scope : null,
+      source: "codex",
+      pluginId: typeof skillRecord.pluginId === "string" ? skillRecord.pluginId : null,
+      toggleSupported: true,
+      visibilityCycleSupported: false,
+    });
+  }
+  return Array.from(skills.values()).sort((a, b) => a.name.localeCompare(b.name));
+}
+
+function codexPluginVersion(plugin: Record<string, unknown>): string | null {
+  if (typeof plugin.localVersion === "string") return plugin.localVersion;
+  if (typeof plugin.version === "string") return plugin.version;
+  return null;
+}
+
+function normalizeProviderCodexPlugin(
+  pluginValue: unknown,
+  marketplaceName: string | null,
+  marketplacePath: string | null,
+): ProviderPlugin | null {
+  const plugin = toObjectRecord(pluginValue);
+  if (!plugin || typeof plugin.id !== "string" || typeof plugin.name !== "string") return null;
+  const installed = plugin.installed === true;
+  const enabled = plugin.enabled === true;
+  const installPolicy =
+    typeof plugin.installPolicy === "string" ? plugin.installPolicy : "NOT_AVAILABLE";
+  const availability = typeof plugin.availability === "string" ? plugin.availability : "AVAILABLE";
+  const managedByAdmin = installPolicy === "INSTALLED_BY_DEFAULT";
+  const disabledByAdmin = availability === "DISABLED_BY_ADMIN";
+  const canToggle = installed && !managedByAdmin && !disabledByAdmin;
+  const pluginInterface = toObjectRecord(plugin.interface);
+  const description =
+    typeof pluginInterface?.description === "string" ? pluginInterface.description : "";
+  const hasMarketplace = marketplacePath !== null || marketplaceName !== null;
+  return {
+    id: plugin.id,
+    name: plugin.name,
+    description,
+    installed,
+    enabled,
+    version: codexPluginVersion(plugin),
+    scope: null,
+    source: "codex",
+    marketplace: marketplaceName,
+    marketplacePath,
+    canInstall: !installed && installPolicy === "AVAILABLE" && !disabledByAdmin && hasMarketplace,
+    canEnable: canToggle && !enabled,
+    canDisable: canToggle && enabled,
+    canUpdate: false,
+    canUninstall: installed && !managedByAdmin && !disabledByAdmin,
+  };
+}
+
+function providerCodexPlugins(response: unknown): ProviderPlugin[] {
+  const root = toObjectRecord(response);
+  const marketplaces = Array.isArray(root?.marketplaces) ? root.marketplaces : [];
+  const plugins = new Map<string, ProviderPlugin>();
+  for (const marketplaceValue of marketplaces) {
+    const marketplace = toObjectRecord(marketplaceValue);
+    const marketplaceName = typeof marketplace?.name === "string" ? marketplace.name : null;
+    const marketplacePath = typeof marketplace?.path === "string" ? marketplace.path : null;
+    const entries = Array.isArray(marketplace?.plugins) ? marketplace.plugins : [];
+    for (const pluginValue of entries) {
+      const plugin = normalizeProviderCodexPlugin(pluginValue, marketplaceName, marketplacePath);
+      if (!plugin || plugins.has(plugin.id)) continue;
+      plugins.set(plugin.id, plugin);
+    }
+  }
+  return Array.from(plugins.values()).sort((a, b) => a.name.localeCompare(b.name));
+}
+
 type CodexPromptContentBlock = AgentPromptContentBlock | CodexSkillPromptBlock;
 type CodexPromptInput = string | CodexPromptContentBlock[];
 interface CodexTextElement {
@@ -5289,6 +5376,104 @@ export class CodexAppServerAgentSession implements AgentSession {
     return [...builtin, ...appServerSkills, ...fallbackSkills, ...prompts].sort((a, b) =>
       a.name.localeCompare(b.name),
     );
+  }
+
+  async listProviderSkills(options?: { forceReload?: boolean }): Promise<ProviderSkill[]> {
+    if (this.connectionState === "disconnected") {
+      await this.connect();
+    }
+    if (!this.client) return [];
+    const response = toObjectRecord(
+      await this.client.request("skills/list", {
+        cwds: [this.config.cwd],
+        ...(options?.forceReload ? { forceReload: true } : {}),
+      }),
+    );
+    const entries = Array.isArray(response?.data) ? response.data : [];
+    const allSkills: unknown[] = [];
+    for (const entry of entries) {
+      const record = toObjectRecord(entry);
+      if (Array.isArray(record?.skills)) allSkills.push(...record.skills);
+    }
+    const skills = providerCodexSkills(allSkills);
+    this.cachedSkills = skills
+      .filter((skill) => skill.enabled && skill.path)
+      .map((skill) => ({
+        name: skill.name,
+        description: skill.description,
+        path: skill.path!,
+      }));
+    return skills;
+  }
+
+  async setProviderSkillEnabled(input: {
+    name: string;
+    path?: string | null;
+    enabled: boolean;
+    visibility?: "on" | "name-only" | "user-invocable-only" | "off";
+  }): Promise<ProviderSkill[]> {
+    if (this.connectionState === "disconnected") {
+      await this.connect();
+    }
+    if (!this.client) throw new Error("Codex app server is not connected");
+    await this.client.request("skills/config/write", {
+      ...(input.path ? { path: input.path } : { name: input.name }),
+      enabled: input.visibility ? input.visibility !== "off" : input.enabled,
+    });
+    return this.listProviderSkills({ forceReload: true });
+  }
+
+  async listProviderPlugins(options?: {
+    includeAvailable?: boolean;
+    forceReload?: boolean;
+  }): Promise<ProviderPlugin[]> {
+    if (this.connectionState === "disconnected") {
+      await this.connect();
+    }
+    if (!this.client) return [];
+    const response = await this.client.request("plugin/list", {
+      cwds: [this.config.cwd],
+      ...(options?.forceReload ? { forceRefetch: true } : {}),
+    });
+    const plugins = providerCodexPlugins(response);
+    return options?.includeAvailable ? plugins : plugins.filter((plugin) => plugin.installed);
+  }
+
+  async manageProviderPlugin(input: {
+    pluginId: string;
+    action: "install" | "enable" | "disable" | "update" | "uninstall";
+  }): Promise<ProviderPlugin[]> {
+    if (this.connectionState === "disconnected") {
+      await this.connect();
+    }
+    if (!this.client) throw new Error("Codex app server is not connected");
+    if (input.action === "install") {
+      const plugin = (await this.listProviderPlugins({ includeAvailable: true })).find(
+        (candidate) => candidate.id === input.pluginId,
+      );
+      if (!plugin) throw new Error(`Codex plugin not found: ${input.pluginId}`);
+      const location: Record<string, string> = {};
+      if (plugin.marketplacePath) {
+        location.marketplacePath = plugin.marketplacePath;
+      } else if (plugin.marketplace) {
+        location.remoteMarketplaceName = plugin.marketplace;
+      }
+      await this.client.request("plugin/install", {
+        ...location,
+        pluginName: plugin.name,
+      });
+    } else if (input.action === "enable" || input.action === "disable") {
+      await this.client.request("config/value/write", {
+        keyPath: `plugins.${input.pluginId}`,
+        value: { enabled: input.action === "enable" },
+        mergeStrategy: "upsert",
+      });
+    } else if (input.action === "uninstall") {
+      await this.client.request("plugin/uninstall", { pluginId: input.pluginId });
+    } else {
+      throw new Error("Codex does not expose a per-plugin update mutation");
+    }
+    return this.listProviderPlugins({ includeAvailable: true, forceReload: true });
   }
 
   tryHandleOutOfBand(prompt: AgentPromptInput): {

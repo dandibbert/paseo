@@ -8,7 +8,7 @@ import type {
   ProviderOptions,
   ToolPolicy,
 } from "@getpaseo/protocol/agent-types";
-import type { AgentAttachment } from "@getpaseo/protocol/messages";
+import type { AgentAttachment, ProviderPlugin, ProviderSkill } from "@getpaseo/protocol/messages";
 import type { PaseoToolCatalog } from "./tools/types.js";
 
 export type {
@@ -687,6 +687,21 @@ export interface AgentSession {
   /** Release live runtime resources without archiving or deleting the durable native session. */
   close(): Promise<void>;
   listCommands?(): Promise<AgentSlashCommand[]>;
+  listProviderSkills?(options?: { forceReload?: boolean }): Promise<ProviderSkill[]>;
+  setProviderSkillEnabled?(input: {
+    name: string;
+    path?: string | null;
+    enabled: boolean;
+    visibility?: "on" | "name-only" | "user-invocable-only" | "off";
+  }): Promise<ProviderSkill[]>;
+  listProviderPlugins?(options?: {
+    includeAvailable?: boolean;
+    forceReload?: boolean;
+  }): Promise<ProviderPlugin[]>;
+  manageProviderPlugin?(input: {
+    pluginId: string;
+    action: "install" | "enable" | "disable" | "update" | "uninstall";
+  }): Promise<ProviderPlugin[]>;
   setModel?(modelId: string | null): Promise<void>;
   setThinkingOption?(thinkingOptionId: string | null): Promise<void | AgentProviderNotice>;
   setFeature?(featureId: string, value: unknown): Promise<void>;

@@ -3013,6 +3013,14 @@ export class Session {
         return this.providerCatalogSession.handleRefreshProvidersSnapshotRequest(msg);
       case "provider_diagnostic_request":
         return this.providerCatalogSession.handleProviderDiagnosticRequest(msg);
+      case "agent.provider.skills.list.request":
+        return this.handleProviderSkillsListRequest(msg);
+      case "agent.provider.skills.set_enabled.request":
+        return this.handleProviderSkillSetEnabledRequest(msg);
+      case "agent.provider.plugins.list.request":
+        return this.handleProviderPluginsListRequest(msg);
+      case "agent.provider.plugins.action.request":
+        return this.handleProviderPluginActionRequest(msg);
       case "provider.usage.list.request":
         return this.usageSession.handleLegacyList(msg);
       case "usage.list_reports.request":
@@ -4920,6 +4928,221 @@ export class Session {
     this.currentClientMetadata().pushToken = token;
     this.pushNotifications.renew(token);
     this.sessionLogger.info("Registered push token");
+  }
+
+  private async loadProviderResourceAgent(agentId: string) {
+    const existing = this.agentManager.getAgent(agentId);
+    const stored = existing ? null : await this.agentStorage.get(agentId);
+    return existing || (stored && !stored.archivedAt)
+      ? await ensureAgentLoaded(agentId, {
+          agentManager: this.agentManager,
+          agentStorage: this.agentStorage,
+          logger: this.sessionLogger,
+        })
+      : null;
+  }
+
+  private async handleProviderSkillsListRequest(
+    msg: Extract<SessionInboundMessage, { type: "agent.provider.skills.list.request" }>,
+  ): Promise<void> {
+    const agent = await this.loadProviderResourceAgent(msg.agentId);
+    const provider = agent?.provider ?? "unknown";
+    if (!agent) {
+      this.emit({
+        type: "agent.provider.skills.list.response",
+        payload: {
+          requestId: msg.requestId,
+          agentId: msg.agentId,
+          provider,
+          supported: false,
+          skills: [],
+          error: `Agent not found: ${msg.agentId}`,
+        },
+      });
+      return;
+    }
+    if (!agent.session?.listProviderSkills) {
+      this.emit({
+        type: "agent.provider.skills.list.response",
+        payload: {
+          requestId: msg.requestId,
+          agentId: msg.agentId,
+          provider,
+          supported: false,
+          skills: [],
+          error: null,
+        },
+      });
+      return;
+    }
+    try {
+      const skills = await agent.session.listProviderSkills({ forceReload: msg.forceReload });
+      this.emit({
+        type: "agent.provider.skills.list.response",
+        payload: {
+          requestId: msg.requestId,
+          agentId: msg.agentId,
+          provider,
+          supported: true,
+          skills,
+          error: null,
+        },
+      });
+    } catch (error) {
+      this.emit({
+        type: "agent.provider.skills.list.response",
+        payload: {
+          requestId: msg.requestId,
+          agentId: msg.agentId,
+          provider,
+          supported: true,
+          skills: [],
+          error: error instanceof Error ? error.message : String(error),
+        },
+      });
+    }
+  }
+
+  private async handleProviderSkillSetEnabledRequest(
+    msg: Extract<SessionInboundMessage, { type: "agent.provider.skills.set_enabled.request" }>,
+  ): Promise<void> {
+    const agent = await this.loadProviderResourceAgent(msg.agentId);
+    const provider = agent?.provider ?? "unknown";
+    try {
+      if (!agent) throw new Error(`Agent not found: ${msg.agentId}`);
+      if (!agent.session?.setProviderSkillEnabled) {
+        throw new Error(`${provider} does not support changing skill state from Paseo`);
+      }
+      const skills = await agent.session.setProviderSkillEnabled({
+        name: msg.name,
+        path: msg.path,
+        enabled: msg.enabled,
+        ...(msg.visibility ? { visibility: msg.visibility } : {}),
+      });
+      this.emit({
+        type: "agent.provider.skills.set_enabled.response",
+        payload: {
+          requestId: msg.requestId,
+          agentId: msg.agentId,
+          provider,
+          skills,
+          error: null,
+        },
+      });
+    } catch (error) {
+      this.emit({
+        type: "agent.provider.skills.set_enabled.response",
+        payload: {
+          requestId: msg.requestId,
+          agentId: msg.agentId,
+          provider,
+          skills: [],
+          error: error instanceof Error ? error.message : String(error),
+        },
+      });
+    }
+  }
+
+  private async handleProviderPluginsListRequest(
+    msg: Extract<SessionInboundMessage, { type: "agent.provider.plugins.list.request" }>,
+  ): Promise<void> {
+    const agent = await this.loadProviderResourceAgent(msg.agentId);
+    const provider = agent?.provider ?? "unknown";
+    if (!agent) {
+      this.emit({
+        type: "agent.provider.plugins.list.response",
+        payload: {
+          requestId: msg.requestId,
+          agentId: msg.agentId,
+          provider,
+          supported: false,
+          plugins: [],
+          error: `Agent not found: ${msg.agentId}`,
+        },
+      });
+      return;
+    }
+    if (!agent.session?.listProviderPlugins) {
+      this.emit({
+        type: "agent.provider.plugins.list.response",
+        payload: {
+          requestId: msg.requestId,
+          agentId: msg.agentId,
+          provider,
+          supported: false,
+          plugins: [],
+          error: null,
+        },
+      });
+      return;
+    }
+    try {
+      const plugins = await agent.session.listProviderPlugins({
+        includeAvailable: msg.includeAvailable,
+        forceReload: msg.forceReload,
+      });
+      this.emit({
+        type: "agent.provider.plugins.list.response",
+        payload: {
+          requestId: msg.requestId,
+          agentId: msg.agentId,
+          provider,
+          supported: true,
+          plugins,
+          error: null,
+        },
+      });
+    } catch (error) {
+      this.emit({
+        type: "agent.provider.plugins.list.response",
+        payload: {
+          requestId: msg.requestId,
+          agentId: msg.agentId,
+          provider,
+          supported: true,
+          plugins: [],
+          error: error instanceof Error ? error.message : String(error),
+        },
+      });
+    }
+  }
+
+  private async handleProviderPluginActionRequest(
+    msg: Extract<SessionInboundMessage, { type: "agent.provider.plugins.action.request" }>,
+  ): Promise<void> {
+    const agent = await this.loadProviderResourceAgent(msg.agentId);
+    const provider = agent?.provider ?? "unknown";
+    try {
+      if (!agent) throw new Error(`Agent not found: ${msg.agentId}`);
+      if (!agent.session?.manageProviderPlugin) {
+        throw new Error(`${provider} does not support plugin management from Paseo`);
+      }
+      const plugins = await agent.session.manageProviderPlugin({
+        pluginId: msg.pluginId,
+        action: msg.action,
+      });
+      this.emit({
+        type: "agent.provider.plugins.action.response",
+        payload: {
+          requestId: msg.requestId,
+          agentId: msg.agentId,
+          provider,
+          plugins,
+          error: null,
+        },
+      });
+    } catch (error) {
+      this.emit({
+        type: "agent.provider.plugins.action.response",
+        payload: {
+          requestId: msg.requestId,
+          agentId: msg.agentId,
+          provider,
+          plugins: [],
+          error: error instanceof Error ? error.message : String(error),
+        },
+      });
+    }
   }
 
   /**

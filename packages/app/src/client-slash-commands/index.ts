@@ -6,8 +6,9 @@ export type ClientSlashCommandKind =
   | "replace-agent-with-draft"
   | "open-settings"
   | "open-agent-settings"
-  | "refresh-agent-skills"
-  | "sync-agent-skills"
+  | "open-provider-skills"
+  | "refresh-provider-skills"
+  | "open-provider-plugins"
   | "open-plugin-settings"
   | "open-provider-settings"
   | "open-terminal-settings";
@@ -52,33 +53,42 @@ export const CLIENT_SLASH_COMMANDS: readonly ClientSlashCommand[] = [
   {
     name: "skills",
     aliases: ["skill-manager"],
-    description: "Manage agent skills for this host",
+    description: "Manage skills for the current agent provider",
+    descriptionKey: "composer.clientCommands.skills",
+    argumentHint: "",
+    kind: "open-provider-skills",
+    execution: "immediate",
+  },
+  {
+    name: "skills-refresh",
+    aliases: ["refresh-skills"],
+    description: "Reload skills from the current agent provider",
+    descriptionKey: "composer.clientCommands.skills",
+    argumentHint: "",
+    kind: "refresh-provider-skills",
+    execution: "immediate",
+  },
+  {
+    name: "paseo-skills",
+    aliases: [],
+    description: "Manage Paseo orchestration skills for this host",
     descriptionKey: "composer.clientCommands.skills",
     argumentHint: "",
     kind: "open-agent-settings",
     execution: "immediate",
   },
   {
-    name: "skills-refresh",
-    aliases: ["refresh-skills"],
-    description: "Rescan agent skill status for this host",
-    descriptionKey: "composer.clientCommands.skills",
-    argumentHint: "",
-    kind: "refresh-agent-skills",
-    execution: "immediate",
-  },
-  {
-    name: "skills-sync",
-    aliases: ["sync-skills"],
-    description: "Reconcile installed agent skills for this host",
-    descriptionKey: "composer.clientCommands.skills",
-    argumentHint: "",
-    kind: "sync-agent-skills",
-    execution: "immediate",
-  },
-  {
     name: "plugins",
     aliases: ["plugin-manager"],
+    description: "Manage plugins for the current agent provider",
+    descriptionKey: "composer.clientCommands.plugins",
+    argumentHint: "",
+    kind: "open-provider-plugins",
+    execution: "immediate",
+  },
+  {
+    name: "paseo-plugins",
+    aliases: [],
     description: "Manage Paseo plugins for this host",
     descriptionKey: "composer.clientCommands.plugins",
     argumentHint: "",

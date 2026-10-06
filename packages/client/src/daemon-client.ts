@@ -127,6 +127,8 @@ import type {
   AgentSkillSelection,
   AgentSkillsStatus,
   AgentSkillsSaveResult,
+  ProviderPlugin,
+  ProviderSkill,
 } from "@getpaseo/protocol/messages";
 import type {
   AgentPermissionRequest,
@@ -5382,6 +5384,105 @@ export class DaemonClient {
         ...(options.draftConfig ? { draftConfig: options.draftConfig } : {}),
       },
       responseType: "list_commands_response",
+    });
+  }
+
+  async listProviderSkills(
+    agentId: string,
+    options?: { forceReload?: boolean },
+  ): Promise<{
+    agentId: string;
+    provider: string;
+    supported: boolean;
+    skills: ProviderSkill[];
+    error: string | null;
+  }> {
+    const requestId = this.createRequestId();
+    return this.sendCorrelatedSessionRequest({
+      requestId,
+      message: {
+        type: "agent.provider.skills.list.request",
+        requestId,
+        agentId,
+        ...(options?.forceReload ? { forceReload: true } : {}),
+      },
+      responseType: "agent.provider.skills.list.response",
+    });
+  }
+
+  async setProviderSkillEnabled(input: {
+    agentId: string;
+    name: string;
+    path?: string | null;
+    enabled: boolean;
+    visibility?: "on" | "name-only" | "user-invocable-only" | "off";
+  }): Promise<{
+    agentId: string;
+    provider: string;
+    skills: ProviderSkill[];
+    error: string | null;
+  }> {
+    const requestId = this.createRequestId();
+    return this.sendCorrelatedSessionRequest({
+      requestId,
+      message: {
+        type: "agent.provider.skills.set_enabled.request",
+        requestId,
+        agentId: input.agentId,
+        name: input.name,
+        path: input.path,
+        enabled: input.enabled,
+        ...(input.visibility ? { visibility: input.visibility } : {}),
+      },
+      responseType: "agent.provider.skills.set_enabled.response",
+    });
+  }
+
+  async listProviderPlugins(
+    agentId: string,
+    options?: { includeAvailable?: boolean; forceReload?: boolean },
+  ): Promise<{
+    agentId: string;
+    provider: string;
+    supported: boolean;
+    plugins: ProviderPlugin[];
+    error: string | null;
+  }> {
+    const requestId = this.createRequestId();
+    return this.sendCorrelatedSessionRequest({
+      requestId,
+      message: {
+        type: "agent.provider.plugins.list.request",
+        requestId,
+        agentId,
+        ...(options?.includeAvailable ? { includeAvailable: true } : {}),
+        ...(options?.forceReload ? { forceReload: true } : {}),
+      },
+      responseType: "agent.provider.plugins.list.response",
+    });
+  }
+
+  async manageProviderPlugin(input: {
+    agentId: string;
+    pluginId: string;
+    action: "install" | "enable" | "disable" | "update" | "uninstall";
+  }): Promise<{
+    agentId: string;
+    provider: string;
+    plugins: ProviderPlugin[];
+    error: string | null;
+  }> {
+    const requestId = this.createRequestId();
+    return this.sendCorrelatedSessionRequest({
+      requestId,
+      message: {
+        type: "agent.provider.plugins.action.request",
+        requestId,
+        agentId: input.agentId,
+        pluginId: input.pluginId,
+        action: input.action,
+      },
+      responseType: "agent.provider.plugins.action.response",
     });
   }
 
