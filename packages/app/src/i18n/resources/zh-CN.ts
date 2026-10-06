@@ -185,6 +185,11 @@ export const zhCN: TranslationResources = {
     clientCommands: {
       archiveAgent: "归档当前 Agent",
       freshDraft: "归档此 Agent 并开始新的草稿",
+      settings: "打开 Paseo 设置",
+      skills: "管理此 Host 的 Agent skills",
+      plugins: "管理此 Host 的 Paseo 插件",
+      providers: "管理此 Host 的 Agent providers",
+      terminals: "管理此 Host 的终端配置",
     },
     github: {
       searching: "正在搜索...",

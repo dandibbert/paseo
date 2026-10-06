@@ -68,6 +68,11 @@ describe("resolveClientSlashCommand", () => {
     ).toEqual([
       ["exit", ["quit", "q"], "immediate"],
       ["clear", ["new"], "immediate"],
+      ["skills", ["skill-manager"], "immediate"],
+      ["plugins", ["plugin-manager"], "immediate"],
+      ["providers", ["provider-settings"], "immediate"],
+      ["terminals", ["terminal-settings"], "immediate"],
+      ["settings", [], "immediate"],
     ]);
   });
 
@@ -92,6 +97,20 @@ describe("resolveClientSlashCommand", () => {
     expect(resolveClientSlashCommand({ text: "/new", hasAttachments: false })).toMatchObject({
       name: "clear",
       kind: "replace-agent-with-draft",
+    });
+    expect(resolveClientSlashCommand({ text: "/skills", hasAttachments: false })).toMatchObject({
+      name: "skills",
+      kind: "open-agent-settings",
+    });
+    expect(
+      resolveClientSlashCommand({ text: "/plugin-manager", hasAttachments: false }),
+    ).toMatchObject({
+      name: "plugins",
+      kind: "open-plugin-settings",
+    });
+    expect(resolveClientSlashCommand({ text: "/settings", hasAttachments: false })).toMatchObject({
+      name: "settings",
+      kind: "open-settings",
     });
   });
 

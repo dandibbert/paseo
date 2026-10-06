@@ -784,10 +784,7 @@ function buildResolvedBuiltinProviders(
             managedProcesses: options.managedProcesses,
             ompRuntime: options.ompRuntime,
             openCodeBridge: options.openCodeBridge,
-            configuredModels: [
-              ...(override?.models ?? []),
-              ...(override?.additionalModels ?? []),
-            ],
+            configuredModels: [...(override?.models ?? []), ...(override?.additionalModels ?? [])],
           }),
         contract: PROVIDER_CONTRACTS[definition.id] ?? UNSUPPORTED_PROVIDER_CONTRACT,
       }),

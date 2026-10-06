@@ -96,6 +96,8 @@ import { applyLegacyDaemonWorkspaceOwnership } from "@/workspace/legacy-daemon-w
 import type { WorkspaceFileOpenRequest } from "@/workspace/file-open";
 import { deriveSidebarStateBucket } from "@/utils/sidebar-agent-state";
 import { buildDraftAgentSetup, type ClientSlashCommand } from "@/client-slash-commands";
+import { router } from "expo-router";
+import { buildSettingsHostSectionRoute, buildSettingsRoute } from "@/utils/host-routes";
 
 interface ChatAgentStateShape {
   serverId: string | null;
@@ -1576,6 +1578,27 @@ function ActiveAgentComposer({
 
   const handleClientSlashCommand = useCallback(
     async (command: ClientSlashCommand) => {
+      if (command.kind === "open-settings") {
+        router.push(buildSettingsRoute());
+        return;
+      }
+      if (command.kind === "open-agent-settings") {
+        router.push(buildSettingsHostSectionRoute(serverId, "agents"));
+        return;
+      }
+      if (command.kind === "open-plugin-settings") {
+        router.push(buildSettingsHostSectionRoute(serverId, "plugins"));
+        return;
+      }
+      if (command.kind === "open-provider-settings") {
+        router.push(buildSettingsHostSectionRoute(serverId, "providers"));
+        return;
+      }
+      if (command.kind === "open-terminal-settings") {
+        router.push(buildSettingsHostSectionRoute(serverId, "terminals"));
+        return;
+      }
+
       const agent = resolveChatAgentFromSession(useSessionStore.getState(), serverId, agentId);
       if (!agent) {
         throw new Error("Agent not found");

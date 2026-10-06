@@ -187,6 +187,11 @@ export const ru: TranslationResources = {
     clientCommands: {
       archiveAgent: "Архивировать текущего агента",
       freshDraft: "Архивировать этого агента и создать новый черновик",
+      settings: "Открыть настройки Paseo",
+      skills: "Управлять навыками агентов этого хоста",
+      plugins: "Управлять плагинами Paseo этого хоста",
+      providers: "Управлять провайдерами агентов этого хоста",
+      terminals: "Управлять профилями терминала этого хоста",
     },
     github: {
       searching: "Идет поиск...",

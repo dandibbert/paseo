@@ -188,6 +188,11 @@ export const fr: TranslationResources = {
     clientCommands: {
       archiveAgent: "Archiver l’agent actuel",
       freshDraft: "Archiver cet agent et démarrer un nouveau brouillon",
+      settings: "Ouvrir les réglages de Paseo",
+      skills: "Gérer les skills d’agent de cet hôte",
+      plugins: "Gérer les plugins Paseo de cet hôte",
+      providers: "Gérer les fournisseurs d’agents de cet hôte",
+      terminals: "Gérer les profils de terminal de cet hôte",
     },
     github: {
       searching: "Recherche…",

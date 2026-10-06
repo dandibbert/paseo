@@ -1,14 +1,28 @@
 import type { Agent } from "@/stores/session-store";
 import type { WorkspaceDraftTabSetup } from "@/workspace-tabs/model";
 
-export type ClientSlashCommandKind = "archive-agent" | "replace-agent-with-draft";
+export type ClientSlashCommandKind =
+  | "archive-agent"
+  | "replace-agent-with-draft"
+  | "open-settings"
+  | "open-agent-settings"
+  | "open-plugin-settings"
+  | "open-provider-settings"
+  | "open-terminal-settings";
 export type ClientSlashCommandExecution = "immediate" | "insert";
 
 export interface ClientSlashCommand {
   name: string;
   aliases: readonly string[];
   description: string;
-  descriptionKey: "composer.clientCommands.archiveAgent" | "composer.clientCommands.freshDraft";
+  descriptionKey:
+    | "composer.clientCommands.archiveAgent"
+    | "composer.clientCommands.freshDraft"
+    | "composer.clientCommands.settings"
+    | "composer.clientCommands.skills"
+    | "composer.clientCommands.plugins"
+    | "composer.clientCommands.providers"
+    | "composer.clientCommands.terminals";
   argumentHint: string;
   kind: ClientSlashCommandKind;
   execution: ClientSlashCommandExecution;
@@ -31,6 +45,51 @@ export const CLIENT_SLASH_COMMANDS: readonly ClientSlashCommand[] = [
     descriptionKey: "composer.clientCommands.freshDraft",
     argumentHint: "",
     kind: "replace-agent-with-draft",
+    execution: "immediate",
+  },
+  {
+    name: "skills",
+    aliases: ["skill-manager"],
+    description: "Manage agent skills for this host",
+    descriptionKey: "composer.clientCommands.skills",
+    argumentHint: "",
+    kind: "open-agent-settings",
+    execution: "immediate",
+  },
+  {
+    name: "plugins",
+    aliases: ["plugin-manager"],
+    description: "Manage Paseo plugins for this host",
+    descriptionKey: "composer.clientCommands.plugins",
+    argumentHint: "",
+    kind: "open-plugin-settings",
+    execution: "immediate",
+  },
+  {
+    name: "providers",
+    aliases: ["provider-settings"],
+    description: "Manage agent providers for this host",
+    descriptionKey: "composer.clientCommands.providers",
+    argumentHint: "",
+    kind: "open-provider-settings",
+    execution: "immediate",
+  },
+  {
+    name: "terminals",
+    aliases: ["terminal-settings"],
+    description: "Manage terminal profiles for this host",
+    descriptionKey: "composer.clientCommands.terminals",
+    argumentHint: "",
+    kind: "open-terminal-settings",
+    execution: "immediate",
+  },
+  {
+    name: "settings",
+    aliases: [],
+    description: "Open Paseo settings",
+    descriptionKey: "composer.clientCommands.settings",
+    argumentHint: "",
+    kind: "open-settings",
     execution: "immediate",
   },
 ];
