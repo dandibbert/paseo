@@ -4,6 +4,12 @@ on:
   push:
     branches: [combined/repair-provider-editor]
   workflow_dispatch:
+    inputs:
+      verify_build_run_id:
+        description: "Existing build run to verify without rebuilding installers (empty builds anew)."
+        required: false
+        default: ""
+        type: string
 
 permissions:
   contents: read
@@ -20,20 +26,44 @@ jobs:
     if: github.repository == 'dandibbert/paseo'
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: read
     outputs:
       revision: ${{ steps.revision.outputs.sha }}
+      artifact_run_id: ${{ steps.revision.outputs.artifact_run_id }}
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
       - id: revision
-        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BUILD_RUN_ID: ${{ inputs.verify_build_run_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "$BUILD_RUN_ID" ]; then
+            echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+            echo "artifact_run_id=$GITHUB_RUN_ID" >> "$GITHUB_OUTPUT"
+          else
+            [[ "$BUILD_RUN_ID" =~ ^[0-9]+$ ]]
+            metadata=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$BUILD_RUN_ID")
+            test "$(jq -r .path <<< "$metadata")" = .github/workflows/combined-provider-repair.yml
+            jobs=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$BUILD_RUN_ID/jobs?per_page=100")
+            jq -e '.jobs | map(select(.name == "source" or .name == "validate" or (.name | startswith("macos (")))) | length == 4 and all(.[]; .conclusion == "success")' <<< "$jobs"
+            revision=$(jq -r .head_sha <<< "$metadata")
+            [[ "$revision" =~ ^[0-9a-f]{40}$ ]]
+            echo "sha=$revision" >> "$GITHUB_OUTPUT"
+            echo "artifact_run_id=$BUILD_RUN_ID" >> "$GITHUB_OUTPUT"
+          fi
       - name: Regression check for personal signing policy
         run: python3 packages/desktop/scripts/verify-repair-signature.py --self-test
 
   validate:
     needs: source
+    if: inputs.verify_build_run_id == ''
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
@@ -98,6 +128,7 @@ jobs:
 
   macos:
     needs: [source, validate]
+    if: inputs.verify_build_run_id == ''
     strategy:
       fail-fast: false
       matrix:
@@ -202,6 +233,7 @@ jobs:
 
   installed:
     needs: [source, macos]
+    if: ${{ always() && !cancelled() && needs.source.result == 'success' && (needs.macos.result == 'success' || needs.macos.result == 'skipped') }}
     strategy:
       fail-fast: false
       matrix:
@@ -230,10 +262,14 @@ jobs:
           cache: npm
       - name: Install the test harness, not a new app build
         run: node scripts/npm-retry.mjs ci
+      - name: Build the SDK and built-in plugin test harness
+        run: npm run build:server
       - uses: actions/download-artifact@v4
         with:
           name: Paseo-combined-macos-${{ matrix.arch }}
           path: install-artifacts
+          github-token: ${{ github.token }}
+          run-id: ${{ needs.source.outputs.artifact_run_id }}
       - name: Validate final ZIP and DMG on a separate macOS 15 runner
         shell: bash
         run: |
