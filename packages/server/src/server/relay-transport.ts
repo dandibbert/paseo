@@ -464,6 +464,7 @@ export function startRelayTransport({
         socket.terminate();
         return;
       }
+      clearTimeout(openTimeout);
       keepalive = setInterval(() => {
         if (!isCurrent()) return;
         // Count data/application traffic, not edge-generated protocol pongs.
@@ -497,7 +498,6 @@ export function startRelayTransport({
       void attach
         .then(() => {
           if (!isCurrent()) return undefined;
-          clearTimeout(openTimeout);
           dataRetryAttempts.delete(connectionId);
           return undefined;
         })
@@ -539,6 +539,10 @@ async function attachEncryptedSocket(
   metadata?: ExternalSocketMetadata,
   isCurrent: () => boolean = () => true,
 ): Promise<void> {
+  const handshakeTimeout = setTimeout(() => {
+    logger.warn("relay_e2ee_handshake_timeout_terminating");
+    socket.terminate();
+  }, 15_000);
   try {
     const relayTransport = createRelayTransportAdapter(socket, logger);
     const emitter = new EventEmitter();
@@ -559,6 +563,7 @@ async function attachEncryptedSocket(
         if (emitter.listenerCount("error") > 0) emitter.emit("error", error);
       },
     });
+    clearTimeout(handshakeTimeout);
     if (!isCurrent() || socket.readyState !== WebSocket.OPEN) {
       socket.terminate();
       return;
@@ -582,10 +587,12 @@ async function attachEncryptedSocket(
   } catch (error) {
     logger.warn({ err: error }, "relay_e2ee_handshake_failed");
     try {
-      socket.terminate();
+      if (socket.readyState !== WebSocket.CLOSED) socket.terminate();
     } catch {
       // ignore
     }
+  } finally {
+    clearTimeout(handshakeTimeout);
   }
 }
 
