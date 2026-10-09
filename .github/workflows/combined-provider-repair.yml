@@ -209,7 +209,7 @@ jobs:
           (cd release-assets && sha256sum -c SHA256SUMS.txt)
           printf '%s\n' "$SOURCE_REVISION" > release-assets/SOURCE_REVISION.txt
           cp installers/Paseo-combined-macos-arm64/BUILD_NOTES.txt release-assets/
-          cp docs/releases/0.11.1-personal.md release-notes.md
+          cp "docs/releases/$root_version-personal.md" release-notes.md
           printf '\n版本：`%s`。源码：`%s`。\n\n构建：%s\n\n独立安装验证：https://github.com/%s/actions/runs/%s\n' \
             "$version" "$SOURCE_REVISION" "$(jq -r .html_url <<< "$metadata")" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID" >> release-notes.md
           releases=$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100")
