@@ -104,8 +104,10 @@ jobs:
         include:
           - runner: macos-15
             arch: arm64
+            node_heap_mb: 4096
           - runner: macos-15-intel
             arch: x64
+            node_heap_mb: 8192
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 45
     permissions:
@@ -138,6 +140,8 @@ jobs:
           fs.writeFileSync(p, JSON.stringify(pkg, null, 2) + '\n');
           NODE
       - name: Build ad-hoc signed macOS app without publishing
+        env:
+          NODE_OPTIONS: --max-old-space-size=${{ matrix.node_heap_mb }}
         run: |
           npm run build:desktop -- --publish never --mac --${{ matrix.arch }} \
             -c.mac.identity=- -c.mac.notarize=false \
