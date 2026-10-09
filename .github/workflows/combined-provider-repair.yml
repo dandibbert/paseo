@@ -10,6 +10,11 @@ on:
         required: false
         default: ""
         type: string
+      publish_release:
+        description: "Publish the personal GitHub prerelease after both installation checks pass."
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -125,6 +130,101 @@ jobs:
             ${{ runner.temp }}/timeline-memory.json
             ${{ runner.temp }}/source-revision.txt
           retention-days: 14
+
+  release:
+    needs: [source, installed]
+    if: ${{ !cancelled() && inputs.publish_release && needs.source.result == 'success' && needs.installed.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: write
+      actions: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+      SOURCE_REVISION: ${{ needs.source.outputs.revision }}
+      BUILD_RUN_ID: ${{ needs.source.outputs.artifact_run_id }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Require green CI for the installer source
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 60); do
+            runs=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?head_sha=$SOURCE_REVISION&per_page=100")
+            latest=$(jq -c --arg sha "$SOURCE_REVISION" '[.workflow_runs[] | select(.head_sha == $sha)] | sort_by(.run_number) | last' <<< "$runs")
+            test "$latest" != null
+            if [ "$(jq -r .status <<< "$latest")" = completed ]; then
+              test "$(jq -r .conclusion <<< "$latest")" = success
+              echo "Source CI passed: $(jq -r .html_url <<< "$latest")"
+              exit 0
+            fi
+            echo "Waiting for source CI: $(jq -r .html_url <<< "$latest")"
+            sleep 30
+          done
+          echo 'Source CI did not finish within 30 minutes.' >&2
+          exit 1
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: Paseo-combined-macos-*
+          path: installers
+          github-token: ${{ github.token }}
+          run-id: ${{ needs.source.outputs.artifact_run_id }}
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: Paseo-combined-install-verification-*
+          path: verification
+      - name: Publish the verified personal installers
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$SOURCE_REVISION" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$BUILD_RUN_ID" =~ ^[0-9]+$ ]]
+          metadata=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$BUILD_RUN_ID")
+          test "$(jq -r .head_sha <<< "$metadata")" = "$SOURCE_REVISION"
+          build_number=$(jq -r .run_number <<< "$metadata")
+          [[ "$build_number" =~ ^[0-9]+$ ]]
+          root_version=$(gh api "repos/$GITHUB_REPOSITORY/contents/package.json?ref=$SOURCE_REVISION" --jq .content | base64 --decode | jq -r .version)
+          [[ "$root_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          version="$root_version-personal.$build_number"
+          tag="personal-v$version"
+          mkdir release-assets
+          for arch in arm64 x64; do
+            installer="installers/Paseo-combined-macos-$arch"
+            evidence="verification/Paseo-combined-install-verification-$arch/install-evidence"
+            test "$(cat "$installer/SOURCE_REVISION.txt")" = "$SOURCE_REVISION"
+            test "$(cat "$evidence/SOURCE_REVISION.txt")" = "$SOURCE_REVISION"
+            (cd "$installer" && sha256sum -c SHA256SUMS.txt)
+            cp "$installer/Paseo-$version-$arch.dmg" "$installer/Paseo-$version-$arch.zip" release-assets/
+            cat "$installer/SHA256SUMS.txt" >> release-assets/SHA256SUMS.txt
+            cp "$installer/SIGNATURE_REPORT.json" "release-assets/SIGNATURE_REPORT-$arch.json"
+            for format in zip dmg; do
+              jq -e . "$evidence/$format-signatures.json" > /dev/null
+              cp "$evidence/$format-signatures.json" "release-assets/INSTALL_SIGNATURES-$arch-$format.json"
+            done
+            cp "$evidence/system.txt" "release-assets/INSTALL_SYSTEM-$arch.txt"
+          done
+          (cd release-assets && sha256sum -c SHA256SUMS.txt)
+          printf '%s\n' "$SOURCE_REVISION" > release-assets/SOURCE_REVISION.txt
+          cp installers/Paseo-combined-macos-arm64/BUILD_NOTES.txt release-assets/
+          cp docs/releases/0.11.1-personal.md release-notes.md
+          printf '\n版本：`%s`。源码：`%s`。\n\n构建：%s\n\n独立安装验证：https://github.com/%s/actions/runs/%s\n' \
+            "$version" "$SOURCE_REVISION" "$(jq -r .html_url <<< "$metadata")" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID" >> release-notes.md
+          releases=$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100")
+          existing=$(jq -c --arg tag "$tag" '.[] | select(.tag_name == $tag)' <<< "$releases")
+          if [ -n "$existing" ]; then
+            test "$(jq -r .draft <<< "$existing")" = true
+            test "$(jq -r .target_commitish <<< "$existing")" = "$SOURCE_REVISION"
+            gh release edit "$tag" --repo "$GITHUB_REPOSITORY" --title "Paseo $version（macOS 个人版）" --notes-file release-notes.md --prerelease
+          else
+            gh release create "$tag" --repo "$GITHUB_REPOSITORY" --draft --prerelease --target "$SOURCE_REVISION" \
+              --title "Paseo $version（macOS 个人版）" --notes-file release-notes.md
+          fi
+          gh release upload "$tag" release-assets/* --repo "$GITHUB_REPOSITORY" --clobber
+          gh release edit "$tag" --repo "$GITHUB_REPOSITORY" --draft=false --prerelease
+          gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json url,isDraft,assets
 
   macos:
     needs: [source, validate]
