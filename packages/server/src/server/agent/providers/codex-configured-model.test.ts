@@ -104,6 +104,31 @@ describe("augmentCodexModelCatalog", () => {
     });
   });
 
+  it("keeps the native model's speed tiers for a source-prefixed slug", () => {
+    const fastTier = { id: "priority", name: "Fast", description: "Faster processing" };
+    const native = {
+      ...bundledTemplate,
+      slug: "gpt-5.5",
+      service_tiers: [fastTier],
+      additional_speed_tiers: ["fast"],
+      default_service_tier: null,
+    };
+    const result = augmentCodexModelCatalog({ models: [bundledTemplate, native] }, [
+      { id: "magpie/gpt-5.5", label: "GPT-5.5", contextWindowMaxTokens: 500000 },
+      { id: "grok-4.6", label: "Grok 4.6", contextWindowMaxTokens: 500000 },
+    ]);
+    const models = result?.models as Array<Record<string, unknown>>;
+    expect(models.find((model) => model.slug === "magpie/gpt-5.5")).toMatchObject({
+      context_window: 500000,
+      service_tiers: [fastTier],
+      additional_speed_tiers: ["fast"],
+    });
+    expect(models.find((model) => model.slug === "grok-4.6")).toMatchObject({
+      service_tiers: [],
+      additional_speed_tiers: [],
+    });
+  });
+
   it("does nothing when no model has an explicit context window", () => {
     expect(
       augmentCodexModelCatalog({ models: [bundledTemplate] }, [

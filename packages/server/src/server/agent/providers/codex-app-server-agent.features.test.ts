@@ -239,6 +239,33 @@ describe("Codex app-server provider features", () => {
     },
   );
 
+  test("a source-prefixed model offers and sends the native model's tiers", async () => {
+    const { session, appServer } = await createConnectedSession({ model: "magpie/gpt-5.5" });
+    try {
+      expect(session.features).toContainEqual(speedFeature("default"));
+      await session.setFeature?.("service_tier", "priority");
+      await session.startTurn("hello");
+      await expect(appServer.waitForTurnStart()).resolves.toMatchObject({
+        model: "magpie/gpt-5.5",
+        serviceTier: "priority",
+      });
+    } finally {
+      await session.close();
+    }
+  });
+
+  test.each(["magpie/team/gpt-5.5", "my source/gpt-5.5", "magpie/gpt-5.5-pro", "claude-sonnet-5"])(
+    "%s gets no speed tiers because Codex would not resolve it",
+    async (model) => {
+      const { session } = await createConnectedSession({ model });
+      try {
+        expect(session.features.some((feature) => feature.id === "service_tier")).toBe(false);
+      } finally {
+        await session.close();
+      }
+    },
+  );
+
   test("rejects unadvertised tiers and non-string values", async () => {
     const { session } = await createConnectedSession();
     try {

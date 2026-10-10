@@ -30,6 +30,7 @@ export const ar: TranslationResources = {
     back: "خلف",
     loading: "تحميل...",
     actions: {
+      save: "حفظ",
       back: "خلف",
       cancel: "يلغي",
       close: "يغلق",
@@ -185,6 +186,11 @@ export const ar: TranslationResources = {
     clientCommands: {
       archiveAgent: "أرشفة الوكيل الحالي",
       freshDraft: "أرشفة هذا الوكيل وابدأ مسودة جديدة",
+      settings: "فتح إعدادات Paseo",
+      skills: "إدارة مهارات الوكلاء لهذا المضيف",
+      plugins: "إدارة إضافات Paseo لهذا المضيف",
+      providers: "إدارة موفري الوكلاء لهذا المضيف",
+      terminals: "إدارة ملفات تعريف الطرفية لهذا المضيف",
     },
     github: {
       searching: "جارٍ البحث...",
@@ -286,6 +292,7 @@ export const ar: TranslationResources = {
     },
   },
   agentList: {
+    actions: en.agentList.actions,
     fallbackTitle: "جلسة جديدة",
     dateSections: {
       recent: "مؤخرًا",
@@ -303,6 +310,8 @@ export const ar: TranslationResources = {
       closed: "مغلق",
     },
     badges: {
+      rootAgent: "رئيسي",
+      subagent: "فرعي · الأصل {{parent}}",
       archived: "مؤرشف",
       pending: "{{count}}معلق",
       attention: "انتباه",
@@ -1147,6 +1156,7 @@ export const ar: TranslationResources = {
       done: "تم",
     },
     display: {
+      showBackground: "إظهار مساحات العمل في الخلفية",
       trigger: "تفضيلات العرض",
       heading: "العرض",
       grouping: {
@@ -2004,6 +2014,17 @@ export const ar: TranslationResources = {
     accessibility: "تم استخدام نافذة السياق{{percentage}}%",
   },
   review: {
+    feedback: {
+      send: "إرسال الملاحظات ({{count}})",
+      sending: "جارٍ إرسال الملاحظات ({{count}})",
+      chooseAgent: "اختر وكيلاً",
+      sent: "تم إرسال الملاحظات إلى {{recipient}}",
+      "no-agents": "افتح علامة تبويب وكيل في مساحة العمل هذه لإرسال الملاحظات.",
+      disconnected: "اتصل بالمضيف لإرسال الملاحظات.",
+      "no-context": "لم تعد التعليقات المحفوظة تتطابق مع هذا الفرق.",
+      failed: "تعذر إرسال الملاحظات. حاول مرة أخرى.",
+      prompt: "يرجى معالجة مراجعة الكود هذه.",
+    },
     comment: {
       add: "إضافة تعليق المراجعة",
       edit: "تحرير تعليق المراجعة",
@@ -2686,6 +2707,9 @@ export const ar: TranslationResources = {
         many: "{{count}} نماذج",
         addModel: "إضافة نموذج",
         addCustomTitle: "إضافة نموذج مخصص",
+        editCustomTitle: "تعديل نموذج يدوي",
+        editOverrideTitle: "تعديل تجاوز النموذج",
+        hideModel: "إخفاء {{id}}",
         modelId: "الموديل ID",
         modelIdPlaceholder: "على سبيل المثال أوبيناي /gpt-5",
         add: "يضيف",
@@ -2699,7 +2723,7 @@ export const ar: TranslationResources = {
         noSearchMatches: "لا توجد نماذج تطابق بحثك",
         noneDetected: "لم يتم اكتشاف أي نماذج",
         discovered: "اكتشف",
-        custom: "نماذج مخصصة",
+        custom: "النماذج اليدوية والتجاوزات",
         updated: "تم تحديث{{time}}",
       },
       diagnostic: {

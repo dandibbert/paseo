@@ -2892,6 +2892,136 @@ describe("Codex app-server provider", () => {
     expect(skillCommands.find((command) => command.name === "disabled-skill")).toBeUndefined();
   });
 
+  test("lists enabled and disabled Codex skills for provider-native management", async () => {
+    const session = createSession();
+    const request = vi.fn(async (method: string, params?: unknown) => {
+      if (method === "skills/list") {
+        expect(params).toEqual({ cwds: ["/tmp/codex-question-test"], forceReload: true });
+        return {
+          data: [
+            {
+              cwd: "/tmp/codex-question-test",
+              skills: [
+                {
+                  name: "enabled-skill",
+                  description: "Enabled skill",
+                  path: "/tmp/skills/enabled/SKILL.md",
+                  scope: "user",
+                  enabled: true,
+                },
+                {
+                  name: "disabled-skill",
+                  description: "Disabled skill",
+                  path: "/tmp/skills/disabled/SKILL.md",
+                  scope: "user",
+                  enabled: false,
+                },
+              ],
+            },
+          ],
+        };
+      }
+      throw new Error(`Unexpected request: ${method}`);
+    });
+    session.client = createStub<CodexClientLike>({ request });
+
+    await expect(session.listProviderSkills({ forceReload: true })).resolves.toEqual([
+      expect.objectContaining({ name: "disabled-skill", enabled: false, toggleSupported: true }),
+      expect.objectContaining({ name: "enabled-skill", enabled: true, toggleSupported: true }),
+    ]);
+  });
+
+  test("writes Codex skill enabled state through skills/config/write", async () => {
+    const session = createSession();
+    let enabled = true;
+    const request = vi.fn(async (method: string, params?: unknown) => {
+      if (method === "skills/config/write") {
+        expect(params).toEqual({ path: "/tmp/skills/toggle/SKILL.md", enabled: false });
+        enabled = false;
+        return {};
+      }
+      if (method === "skills/list") {
+        return {
+          data: [
+            {
+              cwd: "/tmp/codex-question-test",
+              skills: [
+                {
+                  name: "toggle-skill",
+                  description: "Toggle me",
+                  path: "/tmp/skills/toggle/SKILL.md",
+                  enabled,
+                },
+              ],
+            },
+          ],
+        };
+      }
+      throw new Error(`Unexpected request: ${method}`);
+    });
+    session.client = createStub<CodexClientLike>({ request });
+
+    const skills = await session.setProviderSkillEnabled({
+      name: "toggle-skill",
+      path: "/tmp/skills/toggle/SKILL.md",
+      enabled: false,
+    });
+    expect(skills).toContainEqual(
+      expect.objectContaining({ name: "toggle-skill", enabled: false }),
+    );
+  });
+
+  test("toggles Codex plugins through the same config/value/write path as the TUI", async () => {
+    const session = createSession();
+    let enabled = true;
+    const request = vi.fn(async (method: string, params?: unknown) => {
+      if (method === "config/value/write") {
+        expect(params).toEqual({
+          keyPath: "plugins.demo@local",
+          value: { enabled: false },
+          mergeStrategy: "upsert",
+        });
+        enabled = false;
+        return {};
+      }
+      if (method === "plugin/list") {
+        return {
+          marketplaces: [
+            {
+              name: "local",
+              path: "/tmp/marketplace.json",
+              plugins: [
+                {
+                  id: "demo@local",
+                  name: "demo",
+                  installed: true,
+                  enabled,
+                  installPolicy: "AVAILABLE",
+                  availability: "AVAILABLE",
+                },
+              ],
+            },
+          ],
+        };
+      }
+      throw new Error(`Unexpected request: ${method}`);
+    });
+    session.client = createStub<CodexClientLike>({ request });
+
+    const plugins = await session.manageProviderPlugin({
+      pluginId: "demo@local",
+      action: "disable",
+    });
+    expect(plugins).toContainEqual(
+      expect.objectContaining({
+        id: "demo@local",
+        installed: true,
+        enabled: false,
+        canEnable: true,
+      }),
+    );
+  });
+
   test("does not rediscover disabled Codex skills through filesystem fallback", async () => {
     const commands = await listCommandsFromFakeCodex(
       [

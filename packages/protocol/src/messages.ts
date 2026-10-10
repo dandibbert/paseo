@@ -839,6 +839,8 @@ export const AgentSnapshotPayloadSchema = z.object({
   attentionTimestamp: z.string().nullable().optional(),
   archivedAt: z.string().nullable().optional(),
   providerUnavailable: z.boolean().optional(),
+  // Private helper marker, retained for exact-ID snapshots and older wire messages.
+  internal: z.boolean().optional(),
 });
 
 export type AgentSnapshotPayload = z.infer<typeof AgentSnapshotPayloadSchema>;
@@ -910,6 +912,9 @@ const AgentDirectoryFilterSchema = z.object({
   includeArchived: z.boolean().optional(),
   requiresAttention: z.boolean().optional(),
   thinkingOptionId: z.string().nullable().optional(),
+  // Retained for wire parsing; private helpers are excluded from public discovery.
+  includeInternal: z.boolean().optional(),
+  includeBackground: z.boolean().optional(),
 });
 
 export const DeleteAgentRequestMessageSchema = z.object({
@@ -1237,6 +1242,7 @@ export const FetchAgentsRequestMessageSchema = z.object({
   type: z.literal("fetch_agents_request"),
   requestId: z.string(),
   scope: z.enum(["active"]).optional(),
+  includeBackground: z.boolean().optional(),
   filter: AgentDirectoryFilterSchema.optional(),
   sort: z
     .array(
@@ -1270,6 +1276,7 @@ const WorkspaceStateBucketSchema = z.enum([
 ]);
 
 export const FetchWorkspacesRequestMessageSchema = z.object({
+  includeBackground: z.boolean().optional(),
   type: z.literal("fetch_workspaces_request"),
   requestId: z.string(),
   filter: z
@@ -1278,6 +1285,9 @@ export const FetchWorkspacesRequestMessageSchema = z.object({
       projectId: z.string().optional(),
       // Unused: accepted so older clients still parse, but the server does not filter on it.
       idPrefix: z.string().optional(),
+      // Retained for wire parsing of older requests.
+      includeInternal: z.boolean().optional(),
+      includeBackground: z.boolean().optional(),
     })
     .optional(),
   sort: z
@@ -1606,6 +1616,83 @@ export const AgentSkillsImportLegacySelectionRequestSchema = z
   })
   .strict();
 
+// Provider-native skills/plugins. These are deliberately separate from
+// `agent.skills.*`, which manages Paseo's own orchestration-skill bundle.
+export const ProviderSkillVisibilitySchema = z.enum([
+  "on",
+  "name-only",
+  "user-invocable-only",
+  "off",
+]);
+export type ProviderSkillVisibility = z.infer<typeof ProviderSkillVisibilitySchema>;
+
+export const ProviderSkillSchema = z.object({
+  name: z.string(),
+  description: z.string().default(""),
+  enabled: z.boolean(),
+  visibility: ProviderSkillVisibilitySchema.optional(),
+  path: z.string().nullable().optional(),
+  scope: z.string().nullable().optional(),
+  source: z.string().nullable().optional(),
+  pluginId: z.string().nullable().optional(),
+  toggleSupported: z.boolean().default(false),
+  visibilityCycleSupported: z.boolean().default(false),
+});
+export type ProviderSkill = z.infer<typeof ProviderSkillSchema>;
+
+export const ProviderPluginSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  description: z.string().default(""),
+  installed: z.boolean(),
+  enabled: z.boolean(),
+  version: z.string().nullable().optional(),
+  scope: z.string().nullable().optional(),
+  source: z.string().nullable().optional(),
+  installPath: z.string().nullable().optional(),
+  marketplace: z.string().nullable().optional(),
+  marketplacePath: z.string().nullable().optional(),
+  canInstall: z.boolean().default(false),
+  canEnable: z.boolean().default(false),
+  canDisable: z.boolean().default(false),
+  canUpdate: z.boolean().default(false),
+  canUninstall: z.boolean().default(false),
+});
+export type ProviderPlugin = z.infer<typeof ProviderPluginSchema>;
+
+export const ProviderSkillsListRequestSchema = z.object({
+  type: z.literal("agent.provider.skills.list.request"),
+  requestId: z.string(),
+  agentId: z.string(),
+  forceReload: z.boolean().optional(),
+});
+
+export const ProviderSkillSetEnabledRequestSchema = z.object({
+  type: z.literal("agent.provider.skills.set_enabled.request"),
+  requestId: z.string(),
+  agentId: z.string(),
+  name: z.string().min(1),
+  path: z.string().nullable().optional(),
+  enabled: z.boolean(),
+  visibility: ProviderSkillVisibilitySchema.optional(),
+});
+
+export const ProviderPluginsListRequestSchema = z.object({
+  type: z.literal("agent.provider.plugins.list.request"),
+  requestId: z.string(),
+  agentId: z.string(),
+  includeAvailable: z.boolean().optional(),
+  forceReload: z.boolean().optional(),
+});
+
+export const ProviderPluginActionRequestSchema = z.object({
+  type: z.literal("agent.provider.plugins.action.request"),
+  requestId: z.string(),
+  agentId: z.string(),
+  pluginId: z.string().min(1),
+  action: z.enum(["install", "enable", "disable", "update", "uninstall"]),
+});
+
 export const GetDaemonConfigRequestMessageSchema = z.object({
   type: z.literal("get_daemon_config_request"),
   requestId: z.string(),
@@ -1714,6 +1801,13 @@ export const CreateAgentRequestMessageSchema = z.object({
   git: GitSetupOptionsSchema.optional(),
   worktree: CreateAgentWorktreeTargetSchema.optional(),
   autoArchive: z.boolean().optional(),
+  // An ephemeral helper: the daemon never persists, lists, flags or announces
+  // it, and plugin lifecycle hooks skip it. Lives on the request rather than
+  // in the config schema, which is reused for updates. Retained for wire parsing;
+  // public internal creation is no longer supported.
+  internal: z.boolean().optional(),
+  // Workspace creation intent, rejected when selecting an existing workspace.
+  background: z.boolean().optional(),
   labels: z.record(z.string(), z.string()).default({}),
   requestId: z.string(),
 });
@@ -2633,6 +2727,10 @@ export const WorkspaceCreateRequestSchema = z.object({
   title: z.string().optional(),
   // Optional prompt context for workspace-level name/branch generation.
   firstAgentContext: FirstAgentContextSchema.optional(),
+  // Retained for wire parsing; public internal creation is no longer supported.
+  internal: z.boolean().optional(),
+  background: z.boolean().optional(),
+  callerAgentId: z.string().optional(),
   source: z.discriminatedUnion("kind", [
     z.object({
       kind: z.literal("directory"),
@@ -3344,6 +3442,10 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   ClientHeartbeatMessageSchema,
   PingMessageSchema,
   ListCommandsRequestSchema,
+  ProviderSkillsListRequestSchema,
+  ProviderSkillSetEnabledRequestSchema,
+  ProviderPluginsListRequestSchema,
+  ProviderPluginActionRequestSchema,
   RegisterPushTokenMessageSchema,
   PushUnregisterRequestSchema,
   ListTerminalsRequestSchema,
@@ -3558,6 +3660,11 @@ export const ServerInfoStatusPayloadSchema = z
         creationLifecycle: z.boolean().optional(),
         // COMPAT(hubAgentRpc): added in v0.8.0; remove gate after 2027-03-05.
         hubAgentRpc: z.boolean().optional(),
+        // COMPAT(internalAgents): added in v0.9.0; remove gate after 2027-03-17.
+        internalAgents: z.boolean().optional(),
+        // COMPAT(internalWorkspaces): added in v0.9.0; remove gate after 2027-03-17.
+        internalWorkspaces: z.boolean().optional(),
+        backgroundWorkspaces: z.boolean().optional(),
         providersSnapshot: z.boolean().optional(),
         usageSources: z.boolean().optional(),
         // COMPAT(providersSnapshotCwd): added in v0.3.2, remove gate after 2027-02-10.
@@ -4024,6 +4131,9 @@ export const WorkspaceDescriptorPayloadSchema = z
     pinnedAt: z.string().nullable().optional(),
     // COMPAT(workspaceLabels): added in v0.5.0, remove optional after 2027-08-14.
     labels: z.array(z.string()).optional(),
+    // Retained for wire parsing of older daemon descriptors.
+    internal: z.boolean().optional(),
+    background: z.boolean().optional(),
     archivingAt: z.string().nullable().optional().default(null),
     status: WorkspaceStateBucketSchema,
     // Best-effort workspace status entry timestamp. Old daemons omit the
@@ -6813,6 +6923,52 @@ export const AgentSkillsImportLegacySelectionResponseSchema = z.object({
   }),
 });
 
+export const ProviderSkillsListResponseSchema = z.object({
+  type: z.literal("agent.provider.skills.list.response"),
+  payload: z.object({
+    requestId: z.string(),
+    agentId: z.string(),
+    provider: z.string(),
+    supported: z.boolean(),
+    skills: z.array(ProviderSkillSchema),
+    error: z.string().nullable(),
+  }),
+});
+
+export const ProviderSkillSetEnabledResponseSchema = z.object({
+  type: z.literal("agent.provider.skills.set_enabled.response"),
+  payload: z.object({
+    requestId: z.string(),
+    agentId: z.string(),
+    provider: z.string(),
+    skills: z.array(ProviderSkillSchema),
+    error: z.string().nullable(),
+  }),
+});
+
+export const ProviderPluginsListResponseSchema = z.object({
+  type: z.literal("agent.provider.plugins.list.response"),
+  payload: z.object({
+    requestId: z.string(),
+    agentId: z.string(),
+    provider: z.string(),
+    supported: z.boolean(),
+    plugins: z.array(ProviderPluginSchema),
+    error: z.string().nullable(),
+  }),
+});
+
+export const ProviderPluginActionResponseSchema = z.object({
+  type: z.literal("agent.provider.plugins.action.response"),
+  payload: z.object({
+    requestId: z.string(),
+    agentId: z.string(),
+    provider: z.string(),
+    plugins: z.array(ProviderPluginSchema),
+    error: z.string().nullable(),
+  }),
+});
+
 export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   BrowserHostRegisterResponseSchema,
   SubscriptionReleaseResponseSchema,
@@ -6844,6 +7000,10 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   AgentSkillsUninstallResponseSchema,
   AgentSkillsSaveSelectionResponseSchema,
   AgentSkillsImportLegacySelectionResponseSchema,
+  ProviderSkillsListResponseSchema,
+  ProviderSkillSetEnabledResponseSchema,
+  ProviderPluginsListResponseSchema,
+  ProviderPluginActionResponseSchema,
   ActivityLogMessageSchema,
   AssistantChunkMessageSchema,
   AudioOutputMessageSchema,

@@ -30,6 +30,7 @@ export const ko: TranslationResources = {
     back: "뒤로",
     loading: "불러오는 중...",
     actions: {
+      save: "저장",
       back: "뒤로",
       cancel: "취소",
       close: "닫기",
@@ -185,6 +186,11 @@ export const ko: TranslationResources = {
     clientCommands: {
       archiveAgent: "현재 에이전트 보관",
       freshDraft: "이 에이전트를 보관하고 새 초안을 시작합니다",
+      settings: "Paseo 설정 열기",
+      skills: "이 호스트의 에이전트 스킬 관리",
+      plugins: "이 호스트의 Paseo 플러그인 관리",
+      providers: "이 호스트의 에이전트 공급자 관리",
+      terminals: "이 호스트의 터미널 프로필 관리",
     },
     github: {
       searching: "검색 중...",
@@ -287,6 +293,7 @@ export const ko: TranslationResources = {
     },
   },
   agentList: {
+    actions: en.agentList.actions,
     fallbackTitle: "새 세션",
     dateSections: {
       recent: "최근",
@@ -304,6 +311,8 @@ export const ko: TranslationResources = {
       closed: "종료됨",
     },
     badges: {
+      rootAgent: "루트",
+      subagent: "하위 · 부모 {{parent}}",
       archived: "보관됨",
       pending: "대기 {{count}}개",
       attention: "주의",
@@ -1154,6 +1163,7 @@ export const ko: TranslationResources = {
       done: "완료",
     },
     display: {
+      showBackground: "백그라운드 표시",
       trigger: "표시 설정",
       heading: "표시",
       grouping: {
@@ -2014,6 +2024,17 @@ export const ko: TranslationResources = {
     accessibility: "컨텍스트 윈도우 {{percentage}}% 사용됨",
   },
   review: {
+    feedback: {
+      send: "피드백 보내기 ({{count}})",
+      sending: "피드백 전송 중 ({{count}})",
+      chooseAgent: "에이전트 선택",
+      sent: "{{recipient}}에게 피드백을 보냈습니다",
+      "no-agents": "피드백을 보내려면 이 작업 공간에서 에이전트 탭을 여세요.",
+      disconnected: "피드백을 보내려면 호스트에 연결하세요.",
+      "no-context": "저장된 댓글이 더 이상 이 변경 사항과 일치하지 않습니다.",
+      failed: "피드백 전송에 실패했습니다. 다시 시도하세요.",
+      prompt: "이 코드 리뷰를 반영해 주세요.",
+    },
     comment: {
       add: "리뷰 댓글 추가",
       edit: "리뷰 댓글 편집",
@@ -2701,6 +2722,9 @@ export const ko: TranslationResources = {
         many: "모델 {{count}}개",
         addModel: "모델 추가",
         addCustomTitle: "사용자 지정 모델 추가",
+        editCustomTitle: "수동 모델 편집",
+        editOverrideTitle: "모델 재정의 편집",
+        hideModel: "{{id}} 숨기기",
         modelId: "모델 ID",
         modelIdPlaceholder: "예: openai/gpt-5",
         add: "추가",
@@ -2714,7 +2738,7 @@ export const ko: TranslationResources = {
         noSearchMatches: "검색과 일치하는 모델이 없습니다",
         noneDetected: "감지된 모델이 없습니다",
         discovered: "발견됨",
-        custom: "사용자 지정 모델",
+        custom: "수동 모델 및 재정의",
         updated: "{{time}} 업데이트됨",
       },
       diagnostic: {

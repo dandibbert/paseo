@@ -31,6 +31,7 @@ export const ja: TranslationResources = {
     back: "戻る",
     loading: "読み込み中...",
     actions: {
+      save: "保存",
       back: "戻る",
       cancel: "キャンセル",
       close: "閉じる",
@@ -187,6 +188,11 @@ export const ja: TranslationResources = {
     clientCommands: {
       archiveAgent: "現在のエージェントをアーカイブ",
       freshDraft: "このエージェントをアーカイブして新しい下書きを開始",
+      settings: "Paseo の設定を開く",
+      skills: "このホストのエージェントスキルを管理",
+      plugins: "このホストの Paseo プラグインを管理",
+      providers: "このホストのエージェントプロバイダーを管理",
+      terminals: "このホストのターミナルプロファイルを管理",
     },
     github: {
       searching: "検索中...",
@@ -291,6 +297,7 @@ export const ja: TranslationResources = {
     },
   },
   agentList: {
+    actions: en.agentList.actions,
     fallbackTitle: "新しいセッション",
     dateSections: {
       recent: "最近",
@@ -308,6 +315,8 @@ export const ja: TranslationResources = {
       closed: "クローズ",
     },
     badges: {
+      rootAgent: "親",
+      subagent: "子 · 親 {{parent}}",
       archived: "アーカイブ済み",
       pending: "{{count}}件保留中",
       attention: "注意",
@@ -1160,6 +1169,7 @@ export const ja: TranslationResources = {
       done: "完了",
     },
     display: {
+      showBackground: "バックグラウンドを表示",
       trigger: "表示設定",
       heading: "表示",
       grouping: {
@@ -2024,6 +2034,18 @@ export const ja: TranslationResources = {
     accessibility: "コンテキストウィンドウ{{percentage}}%使用",
   },
   review: {
+    feedback: {
+      send: "フィードバックを送信 ({{count}})",
+      sending: "フィードバックを送信中 ({{count}})",
+      chooseAgent: "エージェントを選択",
+      sent: "{{recipient}} にフィードバックを送信しました",
+      "no-agents":
+        "フィードバックを送信するには、このワークスペースでエージェントタブを開いてください。",
+      disconnected: "フィードバックを送信するにはホストに接続してください。",
+      "no-context": "保存したコメントはこの差分と一致しなくなりました。",
+      failed: "フィードバックを送信できませんでした。もう一度お試しください。",
+      prompt: "このコードレビューに対応してください。",
+    },
     comment: {
       add: "レビューコメントを追加",
       edit: "レビューコメントを編集",
@@ -2714,6 +2736,9 @@ export const ja: TranslationResources = {
         many: "{{count}}つのモデル",
         addModel: "モデルを追加",
         addCustomTitle: "カスタムモデルを追加",
+        editCustomTitle: "手動モデルを編集",
+        editOverrideTitle: "モデルの上書き設定を編集",
+        hideModel: "{{id}} を非表示",
         modelId: "モデルID",
         modelIdPlaceholder: "例: openai/gpt-5",
         add: "追加",
@@ -2727,7 +2752,7 @@ export const ja: TranslationResources = {
         noSearchMatches: "検索に一致するモデルがありません",
         noneDetected: "モデルが検出されませんでした",
         discovered: "検出済み",
-        custom: "カスタムモデル",
+        custom: "手動モデルと上書き設定",
         updated: "{{time}}に更新",
       },
       diagnostic: {

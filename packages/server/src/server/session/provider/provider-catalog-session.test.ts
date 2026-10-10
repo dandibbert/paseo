@@ -296,6 +296,89 @@ describe("ProviderCatalogSession", () => {
     });
   });
 
+  it("serves retained models and modes to legacy clients while snapshots keep the refresh warning", async () => {
+    const entry: ProviderSnapshotEntry = {
+      ...makeEntries()[0]!,
+      status: "error",
+      error: "Discovery failed. Using the last successful model catalog.",
+      fetchedAt: "2026-10-01T00:00:00.000Z",
+      models: [{ provider: "codex", id: "astra", label: "Astra" }],
+    };
+    const { subsystem, emitted, pushSnapshotChange } = makeSubsystem({
+      snapshot: { getSnapshot: () => createProviderSnapshot([entry]) },
+    });
+    subsystem.start();
+    pushSnapshotChange(createProviderSnapshot([entry]));
+    await subsystem.handleListProviderModelsRequest({
+      type: "list_provider_models_request",
+      provider: "codex",
+      requestId: "retained-models",
+    });
+    await subsystem.handleListProviderModesRequest({
+      type: "list_provider_modes_request",
+      provider: "codex",
+      requestId: "retained-modes",
+    });
+
+    expect(findByType(emitted, "list_provider_models_response")?.payload).toEqual({
+      provider: "codex",
+      models: entry.models,
+      error: null,
+      fetchedAt: entry.fetchedAt,
+      requestId: "retained-models",
+    });
+    expect(findByType(emitted, "list_provider_modes_response")?.payload).toEqual({
+      provider: "codex",
+      modes: [
+        { id: "default", label: "Default", icon: "ShieldCheck" },
+        { id: "safe", label: "Safe", icon: "ShieldCheck" },
+      ],
+      error: null,
+      fetchedAt: entry.fetchedAt,
+      requestId: "retained-modes",
+    });
+    expect(findByType(emitted, "providers_snapshot_update")?.payload.entries[0]).toMatchObject({
+      status: "error",
+      error: entry.error,
+      fetchedAt: entry.fetchedAt,
+      models: entry.models,
+    });
+    subsystem.dispose();
+  });
+
+  it.each([{}, { models: [] }, { fetchedAt: "2026-10-01T00:00:00.000Z" }])(
+    "keeps legacy catalog reads blocked without complete successful catalog evidence: %j",
+    async (evidence) => {
+      const entry: ProviderSnapshotEntry = {
+        provider: "codex",
+        enabled: true,
+        status: "error",
+        error: "Initial discovery failed",
+        ...evidence,
+      };
+      const { subsystem, emitted } = makeSubsystem({
+        snapshot: { getSnapshot: () => createProviderSnapshot([entry]) },
+      });
+      await subsystem.handleListProviderModelsRequest({
+        type: "list_provider_models_request",
+        provider: "codex",
+        requestId: "failed-models",
+      });
+      await subsystem.handleListProviderModesRequest({
+        type: "list_provider_modes_request",
+        provider: "codex",
+        requestId: "failed-modes",
+      });
+
+      const models = findByType(emitted, "list_provider_models_response")?.payload;
+      const modes = findByType(emitted, "list_provider_modes_response")?.payload;
+      expect(models).toMatchObject({ error: "Initial discovery failed" });
+      expect(models).not.toHaveProperty("models");
+      expect(modes).toMatchObject({ error: "Initial discovery failed" });
+      expect(modes).not.toHaveProperty("modes");
+    },
+  );
+
   it("surfaces a feature-list failure inline, not as an rpc_error", async () => {
     const { subsystem, emitted } = makeSubsystem({
       host: {

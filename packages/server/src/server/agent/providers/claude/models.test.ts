@@ -13,7 +13,14 @@ import {
   parseClaudeCodeVersion,
   resolveClaudeDisabledThinkingForModel,
 } from "./model-manifest.js";
+import { discoverClaudeModels } from "./model-discovery.js";
+import type { ModelInfo } from "@anthropic-ai/claude-agent-sdk";
 import { findClaudeModel, getClaudeModels, normalizeClaudeRuntimeModelId } from "./models.js";
+import {
+  fetchClaudeApiModels,
+  resolveClaudeCatalogConfiguration,
+  type ClaudeModelCatalogTransport,
+} from "./api-models.js";
 
 const createdClaudeConfigDirs: string[] = [];
 
@@ -43,6 +50,14 @@ function createCatalogClient(claudeCodeVersion = "2.1.293"): ClaudeAgentClient {
   return new ClaudeAgentClient({
     logger: createTestLogger(),
     resolveVersion: async () => claudeCodeVersion,
+    discoverModels: async () => [
+      {
+        value: "mythos",
+        resolvedModel: "claude-mythos-5-1",
+        displayName: "Mythos",
+        description: "",
+      },
+    ],
   });
 }
 
@@ -52,6 +67,7 @@ describe("getClaudeModels", () => {
     expect(models.map((m) => m.id)).toEqual([
       "claude-opus-5-5",
       "claude-opus-5",
+      "claude-mythos-5-1",
       "claude-fable-5-1",
       "claude-fable-5",
       "claude-fable-5[1m]",
@@ -87,6 +103,7 @@ describe("getClaudeModels", () => {
       new Map([
         ["claude-opus-5-5", 1_000_000],
         ["claude-opus-5", 1_000_000],
+        ["claude-mythos-5-1", 1_000_000],
         ["claude-fable-5-1", 1_000_000],
         ["claude-fable-5", 1_000_000],
         ["claude-fable-5[1m]", 1_000_000],
@@ -221,6 +238,118 @@ describe("getClaudeModels", () => {
 });
 
 describe("ClaudeAgentClient.fetchCatalog", () => {
+  it.each([
+    { value: "mythos", resolvedModel: "claude-mythos-5-1", expected: true },
+    { value: "claude-mythos-5-1", expected: true },
+    { value: "claude-mythos-5-1[1m]", expected: true },
+    { value: "global.anthropic.claude-mythos-5-1", expected: true },
+    { value: "mythos", expected: false },
+    { value: "mythos", resolvedModel: "claude-mythos-5-2", expected: false },
+    { value: "claude-mythos-5-1", resolvedModel: "claude-fable-5-1", expected: false },
+  ])(
+    "uses advertised identity $value / $resolvedModel to gate Mythos",
+    async ({ value, resolvedModel, expected }) => {
+      const configDir = await createClaudeConfigDir({});
+      const client = new ClaudeAgentClient({
+        logger: createTestLogger(),
+        resolveVersion: async () => "2.1.293",
+        runtimeSettings: { env: { CLAUDE_CONFIG_DIR: configDir } },
+        discoverModels: async () => [
+          { value, resolvedModel, displayName: "Untrusted label", description: "" },
+        ],
+      });
+      const { models } = await client.fetchCatalog({
+        scope: "workspace",
+        cwd: configDir,
+        force: false,
+      });
+      expect(models.find((model) => model.id === "claude-mythos-5-1")).toEqual(
+        expected ? findClaudeModel("claude-mythos-5-1") : undefined,
+      );
+    },
+  );
+
+  it("preserves the curated catalog and explicitly configured models after discovery failure", async () => {
+    const configDir = await createClaudeConfigDir({ model: "claude-mythos-5-1" });
+    const client = new ClaudeAgentClient({
+      logger: createTestLogger(),
+      resolveVersion: async () => "2.1.293",
+      runtimeSettings: { env: { CLAUDE_CONFIG_DIR: configDir } },
+      discoverModels: async () => {
+        throw new Error("discovery unavailable");
+      },
+    });
+    const { models } = await client.fetchCatalog({
+      scope: "workspace",
+      cwd: configDir,
+      force: false,
+    });
+    expect(models.filter((model) => model.id !== "claude-mythos-5-1")).toEqual(
+      getClaudeModels("2.1.293").filter((model) => model.id !== "claude-mythos-5-1"),
+    );
+    expect(models.find((model) => model.id === "claude-mythos-5-1")).toEqual({
+      ...findClaudeModel("claude-mythos-5-1"),
+      label: "claude-mythos-5-1",
+      description: "From Claude settings.json model",
+    });
+  });
+
+  it("omits unconfirmed Mythos after a failed probe and retries on refresh", async () => {
+    const configDir = await createClaudeConfigDir({});
+    let fail = true;
+    const client = new ClaudeAgentClient({
+      logger: createTestLogger(),
+      resolveVersion: async () => "2.1.293",
+      runtimeSettings: { env: { CLAUDE_CONFIG_DIR: configDir } },
+      discoverModels: async () => {
+        if (fail) throw new Error("discovery unavailable");
+        return [
+          {
+            value: "mythos",
+            resolvedModel: "claude-mythos-5-1",
+            displayName: "Mythos",
+            description: "",
+          },
+        ];
+      },
+    });
+    const options = { scope: "workspace" as const, cwd: configDir, force: true };
+    expect(
+      (await client.fetchCatalog(options)).models.some((model) => model.id === "claude-mythos-5-1"),
+    ).toBe(false);
+    fail = false;
+    expect(
+      (await client.fetchCatalog(options)).models.find((model) => model.id === "claude-mythos-5-1"),
+    ).toEqual(findClaudeModel("claude-mythos-5-1"));
+  });
+
+  it("keeps the curated catalog when discovery does not advertise Mythos", async () => {
+    const configDir = await createClaudeConfigDir({});
+    const client = new ClaudeAgentClient({
+      logger: createTestLogger(),
+      resolveVersion: async () => "2.1.293",
+      runtimeSettings: { env: { CLAUDE_CONFIG_DIR: configDir } },
+      discoverModels: async () => [
+        {
+          value: "opus",
+          resolvedModel: "claude-opus-5-5",
+          displayName: "Opus",
+          description: "Latest",
+        },
+      ],
+    });
+    const { models } = await client.fetchCatalog({
+      scope: "workspace",
+      cwd: configDir,
+      force: false,
+    });
+    expect(models.map((model) => model.id)).toEqual(
+      getClaudeModels("2.1.293")
+        .filter((model) => model.id !== "claude-mythos-5-1")
+        .map((model) => model.id),
+    );
+  });
+
   it("appends concrete models from Claude settings.json", async () => {
     const configDir = await createClaudeConfigDir({
       model: "us.anthropic.claude-opus-4-7[1m]",
@@ -298,6 +427,7 @@ describe("ClaudeAgentClient.fetchCatalog", () => {
     const client = new ClaudeAgentClient({
       logger: createTestLogger(),
       resolveVersion: async () => "2.1.280",
+      discoverModels: async () => [],
       runtimeSettings: { env: { CLAUDE_CONFIG_DIR: providerConfigDir } },
     });
 
@@ -325,18 +455,18 @@ describe("ClaudeAgentClient.fetchCatalog", () => {
     expect(models).toEqual(getClaudeModels());
   });
 
-  it("falls back to hardcoded models when settings.json is malformed", async () => {
+  it("rejects malformed settings instead of discovering against an unintended endpoint", async () => {
     const configDir = await createClaudeConfigDirWithRawSettings("{ nope");
     vi.stubEnv("CLAUDE_CONFIG_DIR", configDir);
     const client = createCatalogClient();
 
-    const { models } = await client.fetchCatalog({
-      scope: "workspace",
-      cwd: os.tmpdir(),
-      force: true,
-    });
-
-    expect(models).toEqual(getClaudeModels());
+    await expect(
+      client.fetchCatalog({
+        scope: "workspace",
+        cwd: os.tmpdir(),
+        force: true,
+      }),
+    ).rejects.toThrow("Cannot read Claude settings.json for model discovery");
   });
 
   it("ignores empty env blocks and unexpected settings shapes", async () => {
@@ -723,4 +853,404 @@ describe("claudeManifestModelSupportsFastMode", () => {
     expect(claudeManifestModelSupportsFastMode("claude-fable-5")).toBe(false);
     expect(claudeManifestModelSupportsFastMode("claude-fable-5-1")).toBe(false);
   });
+});
+
+describe("Claude Mythos 5.1 catalog", () => {
+  it("offers one 1M model with high default effort and always-on thinking", () => {
+    const models = getClaudeModels().filter((model) => model.id.startsWith("claude-mythos"));
+    expect(models).toHaveLength(1);
+    expect(models[0]).toMatchObject({
+      id: "claude-mythos-5-1",
+      label: "Mythos 5.1",
+      contextWindowMaxTokens: 1_000_000,
+      defaultThinkingOptionId: "high",
+    });
+    expect(models[0].thinkingOptions?.map((option) => option.id)).toEqual([
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max",
+      CLAUDE_ULTRACODE_THINKING_OPTION_ID,
+    ]);
+    expect(
+      models[0].thinkingOptions?.filter((option) => option.isDefault).map((option) => option.id),
+    ).toEqual(["high"]);
+    expect(resolveClaudeDisabledThinkingForModel("claude-mythos-5-1")).toEqual({
+      supported: false,
+      fallbackThinkingOptionId: "high",
+    });
+    expect(claudeManifestModelSupportsFastMode("claude-mythos-5-1")).toBe(false);
+    expect(getClaudeModels().find((model) => model.isDefault)?.id).toBe("claude-opus-5-5");
+  });
+
+  it.each([
+    "claude-mythos-5-1[1m]",
+    "claude-mythos-5-1-20260901",
+    "claude-mythos-5-1-20260901[1m]",
+    "Mythos 5.1",
+  ])("resolves %s to the single catalog entry", (id) => {
+    expect(findClaudeModel(id)?.id).toBe("claude-mythos-5-1");
+  });
+
+  it.each(["anthropic/claude-mythos-5-1", "us.anthropic.claude-mythos-5-1-v1:0"])(
+    "normalizes runtime identity without granting first-party capabilities: %s",
+    (id) => {
+      expect(normalizeClaudeRuntimeModelId(id)).toBe("claude-mythos-5-1");
+      expect(normalizeClaudeManifestModelId(id)).toBeNull();
+    },
+  );
+});
+
+describe("Claude model discovery process", () => {
+  it("does not send a prompt or persist a session and closes after discovery", async () => {
+    let closed = false;
+    let promptEnded: Promise<IteratorResult<unknown>> | undefined;
+    const advertised: ModelInfo[] = [
+      {
+        value: "mythos",
+        resolvedModel: "claude-mythos-5-1",
+        displayName: "Mythos",
+        description: "",
+      },
+    ];
+    const models = await discoverClaudeModels(
+      { resolveBinary: async () => "/claude", env: { CLAUDE_CONFIG_DIR: "/provider-config" } },
+      (input) => {
+        expect(input.options).toMatchObject({
+          pathToClaudeCodeExecutable: "/claude",
+          env: { CLAUDE_CONFIG_DIR: "/provider-config" },
+          persistSession: false,
+          tools: [],
+          mcpServers: {},
+          strictMcpConfig: true,
+          settingSources: ["user"],
+          settings: { disableAllHooks: true },
+        });
+        if (typeof input.prompt === "string") throw new Error("unexpected inference prompt");
+        promptEnded = input.prompt[Symbol.asyncIterator]().next();
+        return {
+          supportedModels: async () => advertised,
+          close: () => {
+            closed = true;
+          },
+        };
+      },
+    );
+    expect(models).toEqual(advertised);
+    expect(closed).toBe(true);
+    await expect(promptEnded).resolves.toEqual({ done: true, value: undefined });
+  });
+
+  it("times out and closes an unresponsive discovery process", async () => {
+    let closed = false;
+    await expect(
+      discoverClaudeModels({ resolveBinary: async () => "/claude", env: {} }, () => ({
+        supportedModels: () => new Promise(() => {}),
+        close: () => {
+          closed = true;
+        },
+      })),
+    ).rejects.toThrow("Claude model discovery timed out");
+    expect(closed).toBe(true);
+  }, 10_000);
+
+  it("closes a stalled probe when its refresh is canceled", async () => {
+    const controller = new AbortController();
+    const failure = new Error("refresh canceled");
+    let closed = false;
+    const result = discoverClaudeModels(
+      { resolveBinary: async () => "/claude", env: {}, signal: controller.signal },
+      () => ({
+        supportedModels: () => {
+          controller.abort(failure);
+          return new Promise(() => {});
+        },
+        close: () => {
+          closed = true;
+        },
+      }),
+    );
+    await expect(result).rejects.toBe(failure);
+    expect(closed).toBe(true);
+  });
+});
+
+class CatalogTransport implements ClaudeModelCatalogTransport {
+  readonly requests: Array<{ url: string; init: RequestInit | undefined }> = [];
+  constructor(private readonly responses: Array<Response | Error>) {}
+  fetch: typeof fetch = async (input, init) => {
+    this.requests.push({ url: String(input), init });
+    const response = this.responses.shift();
+    if (response instanceof Error) throw response;
+    if (!response) throw new Error("Unexpected catalog request");
+    return response;
+  };
+}
+
+function catalogPage(data: unknown, status = 200): Response {
+  return new Response(JSON.stringify(data), { status });
+}
+
+async function apiConfiguration(env: NodeJS.ProcessEnv = {}) {
+  return resolveClaudeCatalogConfiguration({
+    configDir: await createClaudeConfigDir({}),
+    baseEnv: { ANTHROPIC_BASE_URL: "https://gateway.example/anthropic", ...env },
+  });
+}
+
+describe("configured Claude API catalog", () => {
+  it("uses configured endpoint and token, replaces static models, and preserves exact gateway IDs", async () => {
+    const configDir = await createClaudeConfigDir({
+      env: {
+        ANTHROPIC_BASE_URL: "https://gateway.example/anthropic/v1/",
+        ANTHROPIC_AUTH_TOKEN: "test-token",
+        ANTHROPIC_MODEL: "stale-model",
+      },
+    });
+    const transport = new CatalogTransport([
+      catalogPage({
+        data: [
+          { id: "gateway/claude-opus-4-6", display_name: "Gateway Opus" },
+          { id: "vendor/custom-model", name: "Custom", max_input_tokens: 32000 },
+        ],
+        has_more: false,
+      }),
+    ]);
+    const client = new ClaudeAgentClient({
+      logger: createTestLogger(),
+      configDir,
+      modelCatalogTransport: transport,
+    });
+    expect(await client.shouldDiscoverModels()).toBe(true);
+    const catalog = await client.fetchCatalog({ scope: "global", force: true });
+    expect(catalog.modelsAuthoritative).toBe(true);
+    expect(catalog.models.map(({ id, label }) => ({ id, label }))).toEqual([
+      { id: "gateway/claude-opus-4-6", label: "Gateway Opus" },
+      { id: "vendor/custom-model", label: "Custom" },
+    ]);
+    expect(catalog.models[1].contextWindowMaxTokens).toBe(32000);
+    expect(transport.requests[0].url).toBe("https://gateway.example/anthropic/v1/models");
+    expect(transport.requests[0].init?.headers).toEqual({
+      "anthropic-version": "2023-06-01",
+      accept: "application/json",
+      authorization: "Bearer test-token",
+    });
+    expect(transport.requests[0].init?.redirect).toBe("error");
+  });
+
+  it("uses runtime config directories and settings env precedence without exposing credentials in cache keys", async () => {
+    const configDir = await createClaudeConfigDir({
+      env: {
+        ANTHROPIC_BASE_URL: "https://settings.example/prefix",
+        ANTHROPIC_AUTH_TOKEN: "settings-secret",
+      },
+    });
+    const configuration = await resolveClaudeCatalogConfiguration({
+      baseEnv: {
+        ANTHROPIC_BASE_URL: "https://shell.example",
+        ANTHROPIC_AUTH_TOKEN: "shell-secret",
+      },
+      runtimeSettings: {
+        env: { CLAUDE_CONFIG_DIR: configDir, ANTHROPIC_BASE_URL: "https://runtime.example" },
+      },
+    });
+    expect(configuration.configDir).toBe(configDir);
+    expect(configuration.api).toEqual({
+      url: "https://settings.example/prefix/v1/models",
+      headers: {
+        "anthropic-version": "2023-06-01",
+        accept: "application/json",
+        authorization: "Bearer settings-secret",
+      },
+    });
+    expect(configuration.cacheKey).not.toContain("secret");
+    expect(configuration.cacheKey).not.toContain("settings.example");
+    await fs.writeFile(
+      path.join(configDir, "settings.json"),
+      JSON.stringify({
+        env: {
+          ANTHROPIC_BASE_URL: "https://settings.example/prefix",
+          ANTHROPIC_AUTH_TOKEN: "rotated-secret",
+        },
+      }),
+    );
+    const changed = await resolveClaudeCatalogConfiguration({ baseEnv: {}, configDir });
+    expect(changed.cacheKey).not.toBe(configuration.cacheKey);
+  });
+
+  it("pins API configuration to the exact cache identity during a refresh", async () => {
+    const configDir = await createClaudeConfigDir({
+      env: { ANTHROPIC_BASE_URL: "https://first.example", ANTHROPIC_AUTH_TOKEN: "first-token" },
+    });
+    const transport = new CatalogTransport([
+      catalogPage({ data: [{ id: "first" }] }),
+      catalogPage({ data: [{ id: "second" }] }),
+    ]);
+    const client = new ClaudeAgentClient({
+      logger: createTestLogger(),
+      configDir,
+      modelCatalogTransport: transport,
+    });
+    const options = { scope: "global" as const, force: true };
+    const oldKey = await client.getCatalogCacheKey(options);
+    await fs.writeFile(
+      path.join(configDir, "settings.json"),
+      JSON.stringify({
+        env: { ANTHROPIC_BASE_URL: "https://second.example", ANTHROPIC_AUTH_TOKEN: "second-token" },
+      }),
+    );
+    await client.fetchCatalog(options);
+    const nextOptions = { scope: "global" as const, force: true };
+    expect(await client.getCatalogCacheKey(nextOptions)).not.toBe(oldKey);
+    await client.fetchCatalog(nextOptions);
+    expect(transport.requests.map(({ url }) => url)).toEqual([
+      "https://first.example/v1/models",
+      "https://second.example/v1/models",
+    ]);
+    expect(transport.requests[0].init?.headers).toMatchObject({
+      authorization: "Bearer first-token",
+    });
+    expect(transport.requests[1].init?.headers).toMatchObject({
+      authorization: "Bearer second-token",
+    });
+  });
+
+  it("pins native settings models and invalidates their cache when model changes", async () => {
+    const configDir = await createClaudeConfigDir({ model: "custom-first" });
+    const client = new ClaudeAgentClient({
+      logger: createTestLogger(),
+      configDir,
+      resolveVersion: async () => "2.1.280",
+    });
+    const options = { scope: "global" as const, force: true };
+    const oldKey = await client.getCatalogCacheKey(options);
+    await fs.writeFile(
+      path.join(configDir, "settings.json"),
+      JSON.stringify({ model: "custom-second" }),
+    );
+    const pinned = await client.fetchCatalog(options);
+    expect(pinned.models.map(({ id }) => id)).toContain("custom-first");
+    expect(pinned.models.map(({ id }) => id)).not.toContain("custom-second");
+    expect(await client.getCatalogCacheKey({ scope: "global", force: true })).not.toBe(oldKey);
+  });
+
+  it.each([" TRUE ", "yes", "on"])(
+    "honors runtime truthiness for cloud transports (%s)",
+    async (value) => {
+      const configuration = await apiConfiguration({
+        CLAUDE_CODE_USE_BEDROCK: value,
+        ANTHROPIC_API_KEY: "test",
+      });
+      expect(configuration.api).toBeNull();
+    },
+  );
+
+  it("supports API-key auth and custom headers without forwarding a key alongside bearer auth", async () => {
+    const key = await apiConfiguration({
+      ANTHROPIC_API_KEY: "api-key",
+      ANTHROPIC_CUSTOM_HEADERS: "X-Gateway-Tenant: test\nX-Extra: yes",
+    });
+    expect(key.api?.headers).toEqual({
+      "anthropic-version": "2023-06-01",
+      accept: "application/json",
+      "x-api-key": "api-key",
+      "x-gateway-tenant": "test",
+      "x-extra": "yes",
+    });
+    const both = await apiConfiguration({
+      ANTHROPIC_API_KEY: "api-key",
+      ANTHROPIC_AUTH_TOKEN: "token",
+    });
+    expect(both.api?.headers["x-api-key"]).toBeUndefined();
+    expect(both.api?.headers.authorization).toBe("Bearer token");
+  });
+
+  it("collects all pages before returning, deduplicates IDs, and supports compatibility data arrays", async () => {
+    const transport = new CatalogTransport([
+      catalogPage({ data: [{ id: "a" }], has_more: true, last_id: "a" }),
+      catalogPage({ data: [{ id: "a" }, { id: "b" }], has_more: false }),
+    ]);
+    const models = await fetchClaudeApiModels({
+      configuration: await apiConfiguration(),
+      transport,
+    });
+    expect(models.map(({ id }) => id)).toEqual(["a", "b"]);
+    expect(transport.requests.map(({ url }) => url)).toEqual([
+      "https://gateway.example/anthropic/v1/models",
+      "https://gateway.example/anthropic/v1/models?after_id=a",
+    ]);
+    const empty = await fetchClaudeApiModels({
+      configuration: await apiConfiguration(),
+      transport: new CatalogTransport([catalogPage({ data: [] })]),
+    });
+    expect(empty).toEqual([]);
+  });
+
+  it.each([401, 403, 404, 405, 429, 500])(
+    "reports HTTP %i without exposing the response body or using built-ins",
+    async (status) => {
+      await expect(
+        fetchClaudeApiModels({
+          configuration: await apiConfiguration(),
+          transport: new CatalogTransport([catalogPage({ error: "secret-response" }, status)]),
+        }),
+      ).rejects.toThrow(`HTTP ${status}`);
+    },
+  );
+
+  it("rejects incomplete, malformed, and repeating pages instead of returning a partial catalog", async () => {
+    for (const secondPage of [
+      catalogPage({ error: "bad" }),
+      catalogPage({ data: [{ id: "b" }], has_more: true, last_id: "a" }),
+      catalogPage({ data: [], has_more: true, last_id: "b" }),
+    ]) {
+      const transport = new CatalogTransport([
+        catalogPage({ data: [{ id: "a" }], has_more: true, last_id: "a" }),
+        secondPage,
+      ]);
+      await expect(
+        fetchClaudeApiModels({ configuration: await apiConfiguration(), transport }),
+      ).rejects.toThrow("No model changes were applied");
+    }
+  });
+
+  it("sanitizes transport errors and passes cancellation to fetch", async () => {
+    const controller = new AbortController();
+    controller.abort();
+    const transport = new CatalogTransport([new Error("secret-token in https://private.example")]);
+    await expect(
+      fetchClaudeApiModels({
+        configuration: await apiConfiguration(),
+        transport,
+        signal: controller.signal,
+      }),
+    ).rejects.toThrow("canceled or timed out");
+    expect(transport.requests[0].init?.signal?.aborted).toBe(true);
+    await expect(
+      fetchClaudeApiModels({
+        configuration: await apiConfiguration(),
+        transport: new CatalogTransport([new Error("secret-token")]),
+      }),
+    ).rejects.toThrow("Could not reach the configured Claude models API");
+  });
+
+  it("rejects credential-bearing base URLs and non-HTTP schemes", async () => {
+    for (const ANTHROPIC_BASE_URL of [
+      "https://user:secret@example.com",
+      "https://example.com?key=secret",
+      "file:///tmp/models",
+      "not-a-url",
+    ]) {
+      await expect(apiConfiguration({ ANTHROPIC_BASE_URL })).rejects.toThrow("HTTP(S) base URL");
+    }
+  });
+
+  it.each(["CLAUDE_CODE_USE_BEDROCK", "CLAUDE_CODE_USE_VERTEX", "CLAUDE_CODE_USE_FOUNDRY"])(
+    "does not send Anthropic API discovery for %s",
+    async (transport) => {
+      const configuration = await apiConfiguration({ [transport]: "1", ANTHROPIC_API_KEY: "test" });
+      expect(configuration.api).toBeNull();
+    },
+  );
 });

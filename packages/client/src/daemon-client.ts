@@ -127,6 +127,8 @@ import type {
   AgentSkillSelection,
   AgentSkillsStatus,
   AgentSkillsSaveResult,
+  ProviderPlugin,
+  ProviderSkill,
 } from "@getpaseo/protocol/messages";
 import type {
   AgentPermissionRequest,
@@ -460,6 +462,7 @@ export interface CreateAgentRequestOptions extends AgentConfigOverrides {
   git?: GitSetupOptions;
   worktree?: CreateAgentRequestMessage["worktree"];
   autoArchive?: CreateAgentRequestMessage["autoArchive"];
+  background?: CreateAgentRequestMessage["background"];
   // COMPAT(createAgentWorktree): low-level old callers may still send the
   // create-agent worktree field. Added in v0.2.0; remove after 2027-01-17.
   worktreeName?: string;
@@ -470,6 +473,9 @@ export interface CreateAgentRequestOptions extends AgentConfigOverrides {
 export interface CreateWorkspaceRequestOptions {
   source: WorkspaceCreateRequest["source"];
   title?: string;
+  /** Workspace discovery visibility; contents retain normal durability. */
+  background?: boolean;
+  callerAgentId?: string;
   idempotencyKey?: string;
   workspaceId?: string;
   agent?: Omit<
@@ -1194,6 +1200,25 @@ interface PingProbe {
 // COMPAT(providerUsageList): added in v0.1.98, remove after 2027-03-26.
 export function supportsUsageReports(features: ServerInfoStatusPayload["features"]): boolean {
   return features?.usageSources === true || features?.providerUsageList === true;
+}
+
+function buildFetchAgentsRequest(
+  options: FetchAgentsOptions | undefined,
+  requestId: string,
+): SessionInboundMessage {
+  return SessionInboundMessageSchema.parse({
+    type: "fetch_agents_request",
+    requestId,
+    ...(options?.scope ? { scope: options.scope } : {}),
+    ...(options?.filter ? { filter: options.filter } : {}),
+    ...(options?.sort ? { sort: options.sort } : {}),
+    ...(options?.page ? { page: options.page } : {}),
+    ...(options?.subscribe ? { subscribe: options.subscribe } : {}),
+    ...(options?.sync ? { sync: options.sync } : {}),
+    ...(options?.includeBackground !== undefined
+      ? { includeBackground: options.includeBackground }
+      : {}),
+  });
 }
 
 export class DaemonClient {
@@ -2342,6 +2367,8 @@ export class DaemonClient {
   observeAgents(
     options: Omit<FetchAgentsOptions, "subscribe"> = {},
   ): OwnedSubscription<FetchAgentsPayload> {
+    if (options.includeBackground || options.filter?.includeBackground)
+      this.requireBackgroundWorkspaces();
     const { signal, requestId, timeout, ...query } = options;
     return this.observe(
       "fetch_agents_response",
@@ -2353,6 +2380,8 @@ export class DaemonClient {
   observeWorkspaces(
     options: Omit<FetchWorkspacesOptions, "subscribe"> = {},
   ): OwnedSubscription<FetchWorkspacesPayload> {
+    if (options.includeBackground || options.filter?.includeBackground)
+      this.requireBackgroundWorkspaces();
     const { signal, requestId, ...query } = options;
     return this.observe(
       "fetch_workspaces_response",
@@ -2368,6 +2397,8 @@ export class DaemonClient {
   async fetchAgents(
     options?: FetchAgentsOptions,
   ): Promise<FetchAgentsPayload & { subscription?: OwnedSubscription<FetchAgentsPayload> }> {
+    if (options?.includeBackground || options?.filter?.includeBackground)
+      this.requireBackgroundWorkspaces();
     if (options?.subscribe) {
       if (options.subscribe.subscriptionId !== undefined)
         throw new Error("Subscription IDs are assigned by the host");
@@ -2375,16 +2406,7 @@ export class DaemonClient {
       return { ...(await subscription.ready), subscription };
     }
     const resolvedRequestId = this.createRequestId(options?.requestId);
-    const message = SessionInboundMessageSchema.parse({
-      type: "fetch_agents_request",
-      requestId: resolvedRequestId,
-      ...(options?.scope ? { scope: options.scope } : {}),
-      ...(options?.filter ? { filter: options.filter } : {}),
-      ...(options?.sort ? { sort: options.sort } : {}),
-      ...(options?.page ? { page: options.page } : {}),
-      ...(options?.subscribe ? { subscribe: options.subscribe } : {}),
-      ...(options?.sync ? { sync: options.sync } : {}),
-    });
+    const message = buildFetchAgentsRequest(options, resolvedRequestId);
     return this.sendRequest({
       requestId: resolvedRequestId,
       message,
@@ -2403,6 +2425,7 @@ export class DaemonClient {
   }
 
   async fetchAgentHistory(options?: FetchAgentHistoryOptions): Promise<FetchAgentHistoryPayload> {
+    if (options?.filter?.includeBackground) this.requireBackgroundWorkspaces();
     const resolvedRequestId = this.createRequestId(options?.requestId);
     const message = SessionInboundMessageSchema.parse({
       type: "fetch_agent_history_request",
@@ -2466,6 +2489,8 @@ export class DaemonClient {
   ): Promise<
     FetchWorkspacesPayload & { subscription?: OwnedSubscription<FetchWorkspacesPayload> }
   > {
+    if (options?.includeBackground || options?.filter?.includeBackground)
+      this.requireBackgroundWorkspaces();
     if (options?.subscribe) {
       if (options.subscribe.subscriptionId !== undefined)
         throw new Error("Subscription IDs are assigned by the host");
@@ -2475,12 +2500,8 @@ export class DaemonClient {
     const resolvedRequestId = this.createRequestId(options?.requestId);
     const message = SessionInboundMessageSchema.parse({
       type: "fetch_workspaces_request",
+      ...options,
       requestId: resolvedRequestId,
-      ...(options?.filter ? { filter: options.filter } : {}),
-      ...(options?.sort ? { sort: options.sort } : {}),
-      ...(options?.page ? { page: options.page } : {}),
-      ...(options?.subscribe ? { subscribe: options.subscribe } : {}),
-      ...(options?.sync ? { sync: options.sync } : {}),
     });
     return this.sendRequest({
       requestId: resolvedRequestId,
@@ -2853,7 +2874,19 @@ export class DaemonClient {
     legacyWorkspace: (input) => this.createLegacyWorkspace(input, input.requestId),
   });
 
+  // Background workspaces are gated once at the transport boundary.
+  private requireBackgroundWorkspaces(): void {
+    if (this.lastServerInfoMessage?.features?.backgroundWorkspaces !== true) {
+      throw new Error("Update the host to use background workspaces.");
+    }
+  }
+
+  supportsBackgroundWorkspaces(): boolean {
+    return this.lastServerInfoMessage?.features?.backgroundWorkspaces === true;
+  }
+
   async createAgent(options: CreateAgentRequestOptions): Promise<AgentSnapshotPayload> {
+    if (options.background !== undefined) this.requireBackgroundWorkspaces();
     const result = await this.creations.createAgent({
       ...options,
       config: resolveAgentConfig(options),
@@ -2886,6 +2919,7 @@ export class DaemonClient {
       ...(options.git ? { git: options.git } : {}),
       ...(options.worktree ? { worktree: options.worktree } : {}),
       ...(options.autoArchive !== undefined ? { autoArchive: options.autoArchive } : {}),
+      ...(options.background !== undefined ? { background: options.background } : {}),
       ...(options.worktreeName ? { worktreeName: options.worktreeName } : {}),
       ...(options.labels && Object.keys(options.labels).length > 0
         ? { labels: options.labels }
@@ -4560,6 +4594,9 @@ export class DaemonClient {
     requestId?: string,
   ): Promise<WorkspaceCreatePayload> {
     const resolvedRequestId = this.createRequestId(requestId ?? input.requestId);
+    if (input.background !== undefined || input.callerAgentId) this.requireBackgroundWorkspaces();
+    if (input.agent?.background !== undefined)
+      throw new Error("Configure background on the workspace, not its initial agent.");
     const result = await this.creations.createWorkspace({
       ...input,
       requestId: resolvedRequestId,
@@ -4591,6 +4628,8 @@ export class DaemonClient {
           ? { idempotencyKey: input.idempotencyKey }
           : {}),
         ...(input.title !== undefined ? { title: input.title } : {}),
+        ...(input.background !== undefined ? { background: input.background } : {}),
+        ...(input.callerAgentId ? { callerAgentId: input.callerAgentId } : {}),
         ...(input.firstAgentContext !== undefined
           ? { firstAgentContext: input.firstAgentContext }
           : {}),
@@ -5390,6 +5429,105 @@ export class DaemonClient {
         ...(options.draftConfig ? { draftConfig: options.draftConfig } : {}),
       },
       responseType: "list_commands_response",
+    });
+  }
+
+  async listProviderSkills(
+    agentId: string,
+    options?: { forceReload?: boolean },
+  ): Promise<{
+    agentId: string;
+    provider: string;
+    supported: boolean;
+    skills: ProviderSkill[];
+    error: string | null;
+  }> {
+    const requestId = this.createRequestId();
+    return this.sendCorrelatedSessionRequest({
+      requestId,
+      message: {
+        type: "agent.provider.skills.list.request",
+        requestId,
+        agentId,
+        ...(options?.forceReload ? { forceReload: true } : {}),
+      },
+      responseType: "agent.provider.skills.list.response",
+    });
+  }
+
+  async setProviderSkillEnabled(input: {
+    agentId: string;
+    name: string;
+    path?: string | null;
+    enabled: boolean;
+    visibility?: "on" | "name-only" | "user-invocable-only" | "off";
+  }): Promise<{
+    agentId: string;
+    provider: string;
+    skills: ProviderSkill[];
+    error: string | null;
+  }> {
+    const requestId = this.createRequestId();
+    return this.sendCorrelatedSessionRequest({
+      requestId,
+      message: {
+        type: "agent.provider.skills.set_enabled.request",
+        requestId,
+        agentId: input.agentId,
+        name: input.name,
+        path: input.path,
+        enabled: input.enabled,
+        ...(input.visibility ? { visibility: input.visibility } : {}),
+      },
+      responseType: "agent.provider.skills.set_enabled.response",
+    });
+  }
+
+  async listProviderPlugins(
+    agentId: string,
+    options?: { includeAvailable?: boolean; forceReload?: boolean },
+  ): Promise<{
+    agentId: string;
+    provider: string;
+    supported: boolean;
+    plugins: ProviderPlugin[];
+    error: string | null;
+  }> {
+    const requestId = this.createRequestId();
+    return this.sendCorrelatedSessionRequest({
+      requestId,
+      message: {
+        type: "agent.provider.plugins.list.request",
+        requestId,
+        agentId,
+        ...(options?.includeAvailable ? { includeAvailable: true } : {}),
+        ...(options?.forceReload ? { forceReload: true } : {}),
+      },
+      responseType: "agent.provider.plugins.list.response",
+    });
+  }
+
+  async manageProviderPlugin(input: {
+    agentId: string;
+    pluginId: string;
+    action: "install" | "enable" | "disable" | "update" | "uninstall";
+  }): Promise<{
+    agentId: string;
+    provider: string;
+    plugins: ProviderPlugin[];
+    error: string | null;
+  }> {
+    const requestId = this.createRequestId();
+    return this.sendCorrelatedSessionRequest({
+      requestId,
+      message: {
+        type: "agent.provider.plugins.action.request",
+        requestId,
+        agentId: input.agentId,
+        pluginId: input.pluginId,
+        action: input.action,
+      },
+      responseType: "agent.provider.plugins.action.response",
     });
   }
 
@@ -6940,6 +7078,7 @@ function resolveAgentConfig(options: CreateAgentRequestOptions): AgentSessionCon
     attachments: _attachments,
     worktree: _worktree,
     autoArchive: _autoArchive,
+    background: _background,
     env: _env,
     workspaceId: _workspaceId,
     initialPrompt: _initialPrompt,

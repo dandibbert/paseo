@@ -31,6 +31,7 @@ export const ru: TranslationResources = {
     back: "Назад",
     loading: "Загрузка...",
     actions: {
+      save: "Сохранить",
       back: "Назад",
       cancel: "Отмена",
       close: "Закрыть",
@@ -187,6 +188,11 @@ export const ru: TranslationResources = {
     clientCommands: {
       archiveAgent: "Архивировать текущего агента",
       freshDraft: "Архивировать этого агента и создать новый черновик",
+      settings: "Открыть настройки Paseo",
+      skills: "Управлять навыками агентов этого хоста",
+      plugins: "Управлять плагинами Paseo этого хоста",
+      providers: "Управлять провайдерами агентов этого хоста",
+      terminals: "Управлять профилями терминала этого хоста",
     },
     github: {
       searching: "Идет поиск...",
@@ -290,6 +296,7 @@ export const ru: TranslationResources = {
     },
   },
   agentList: {
+    actions: en.agentList.actions,
     fallbackTitle: "Новая сессия",
     dateSections: {
       recent: "Недавние",
@@ -307,6 +314,8 @@ export const ru: TranslationResources = {
       closed: "Закрыт",
     },
     badges: {
+      rootAgent: "Корневой",
+      subagent: "Подагент · родитель {{parent}}",
       archived: "В архиве",
       pending: "На рассмотрении: {{count}}",
       attention: "Внимание",
@@ -1164,6 +1173,7 @@ export const ru: TranslationResources = {
       done: "Готово",
     },
     display: {
+      showBackground: "Показать фоновые пространства",
       trigger: "Настройки отображения",
       heading: "Отображение",
       grouping: {
@@ -2037,6 +2047,17 @@ export const ru: TranslationResources = {
     accessibility: "Использовано {{percentage}}% контекстного окна",
   },
   review: {
+    feedback: {
+      send: "Отправить отзыв ({{count}})",
+      sending: "Отправка отзыва ({{count}})",
+      chooseAgent: "Выберите агента",
+      sent: "Отзыв отправлен: {{recipient}}",
+      "no-agents": "Откройте вкладку агента в этой рабочей области, чтобы отправить отзыв.",
+      disconnected: "Подключитесь к хосту, чтобы отправить отзыв.",
+      "no-context": "Сохранённые комментарии больше не соответствуют этому diff.",
+      failed: "Не удалось отправить отзыв. Повторите попытку.",
+      prompt: "Пожалуйста, учтите эту проверку кода.",
+    },
     comment: {
       add: "Добавить комментарий к ревью",
       edit: "Изменить комментарий к ревью",
@@ -2737,6 +2758,9 @@ export const ru: TranslationResources = {
         many: "{{count}} моделей",
         addModel: "Добавить модель",
         addCustomTitle: "Добавить пользовательскую модель",
+        editCustomTitle: "Изменить ручную модель",
+        editOverrideTitle: "Изменить переопределение модели",
+        hideModel: "Скрыть {{id}}",
         modelId: "ID модели",
         modelIdPlaceholder: "например, openai/gpt-5",
         add: "Добавить",
@@ -2750,7 +2774,7 @@ export const ru: TranslationResources = {
         noSearchMatches: "Ни одна модель не соответствует вашему запросу",
         noneDetected: "Модели не обнаружены",
         discovered: "Обнаруженные модели",
-        custom: "Пользовательские модели",
+        custom: "Ручные модели и переопределения",
         updated: "Обновлено {{time}}",
       },
       diagnostic: {

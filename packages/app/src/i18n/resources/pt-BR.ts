@@ -31,6 +31,7 @@ export const ptBR: TranslationResources = {
     back: "Voltar",
     loading: "Carregando...",
     actions: {
+      save: "Salvar",
       back: "Voltar",
       cancel: "Cancelar",
       close: "Fechar",
@@ -186,6 +187,11 @@ export const ptBR: TranslationResources = {
     clientCommands: {
       archiveAgent: "Arquivar o agente atual",
       freshDraft: "Arquivar este agente e iniciar um novo rascunho",
+      settings: "Abrir as configurações do Paseo",
+      skills: "Gerenciar as habilidades de agente deste host",
+      plugins: "Gerenciar os plugins do Paseo deste host",
+      providers: "Gerenciar os provedores de agentes deste host",
+      terminals: "Gerenciar os perfis de terminal deste host",
     },
     github: {
       searching: "Buscando...",
@@ -290,6 +296,7 @@ export const ptBR: TranslationResources = {
     },
   },
   agentList: {
+    actions: en.agentList.actions,
     fallbackTitle: "Nova sessão",
     dateSections: {
       recent: "Recentes",
@@ -307,6 +314,8 @@ export const ptBR: TranslationResources = {
       closed: "Fechada",
     },
     badges: {
+      rootAgent: "Principal",
+      subagent: "Subagente · pai {{parent}}",
       archived: "Arquivado",
       pending: "{{count}} pendente(s)",
       attention: "Atenção",
@@ -1173,6 +1182,7 @@ export const ptBR: TranslationResources = {
       done: "Concluído",
     },
     display: {
+      showBackground: "Mostrar espaços em segundo plano",
       trigger: "Preferências de exibição",
       heading: "Exibição",
       grouping: {
@@ -2037,6 +2047,17 @@ export const ptBR: TranslationResources = {
     accessibility: "Janela de contexto {{percentage}}% usada",
   },
   review: {
+    feedback: {
+      send: "Enviar comentários ({{count}})",
+      sending: "Enviando comentários ({{count}})",
+      chooseAgent: "Escolher um agente",
+      sent: "Comentários enviados para {{recipient}}",
+      "no-agents": "Abra uma aba de agente neste espaço de trabalho para enviar comentários.",
+      disconnected: "Conecte-se ao host para enviar comentários.",
+      "no-context": "Os comentários salvos não correspondem mais a este diff.",
+      failed: "Falha ao enviar comentários. Tente novamente.",
+      prompt: "Por favor, atenda a esta revisão de código.",
+    },
     comment: {
       add: "Adicionar comentário de revisão",
       edit: "Editar comentário de revisão",
@@ -2728,6 +2749,9 @@ export const ptBR: TranslationResources = {
         many: "{{count}} modelos",
         addModel: "Adicionar modelo",
         addCustomTitle: "Adicionar modelo personalizado",
+        editCustomTitle: "Editar modelo manual",
+        editOverrideTitle: "Editar personalização do modelo",
+        hideModel: "Ocultar {{id}}",
         modelId: "ID do modelo",
         modelIdPlaceholder: "e.g. openai/gpt-5",
         add: "Adicionar",
@@ -2741,7 +2765,7 @@ export const ptBR: TranslationResources = {
         noSearchMatches: "Nenhum modelo corresponde à sua busca",
         noneDetected: "Nenhum modelo detectado",
         discovered: "Descobertos",
-        custom: "Modelos personalizados",
+        custom: "Modelos manuais e personalizações",
         updated: "Atualizado {{time}}",
       },
       diagnostic: {

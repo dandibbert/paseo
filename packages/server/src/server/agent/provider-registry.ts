@@ -374,9 +374,29 @@ function mergeModels(
   profileModels: ProviderProfileModel[],
   additionalModels: ProviderProfileModel[],
   runtimeModels: AgentModelDefinition[],
-  options?: { profileModelsAreAdditive?: boolean },
+  options?: { profileModelsAreAdditive?: boolean; modelsAuthoritative?: boolean },
 ): AgentModelDefinition[] {
   const baseModels = runtimeModels.map((model) => mapModel(provider, model));
+  if (options?.modelsAuthoritative) {
+    // A wrapped client may already include unavailable configured rows. Never
+    // promote those back into the selectable catalog when applying overrides again.
+    const selectableModelIds = new Set(
+      baseModels.filter((model) => model.isSelectable !== false).map((model) => model.id),
+    );
+    const configuredModels = [...profileModels, ...additionalModels].map((model) =>
+      selectableModelIds.has(model.id)
+        ? model
+        : Object.assign({}, model, { isSelectable: false, isDefault: false }),
+    );
+    return mergeModelAdditions(provider, baseModels, configuredModels, {
+      preserveSelectability: true,
+    }).map((model) =>
+      selectableModelIds.has(model.id)
+        ? model
+        : Object.assign({}, model, { isSelectable: false, isDefault: false }),
+    );
+  }
+
   if (profileModels.length > 0 && options?.profileModelsAreAdditive !== true) {
     return mergeModelAdditions(
       provider,
@@ -392,6 +412,7 @@ function mergeModelAdditions(
   provider: AgentProvider,
   baseModels: AgentModelDefinition[],
   modelAdditions: Array<ProviderProfileModel | AgentModelDefinition>,
+  options?: { preserveSelectability?: boolean },
 ): AgentModelDefinition[] {
   if (modelAdditions.length === 0) {
     return baseModels;
@@ -412,7 +433,9 @@ function mergeModelAdditions(
 
     const existingModel = mergedModels[existingIndex];
     const explicitlyEnablesCompatibilityModel =
-      existingModel?.isSelectable === false && additionalModel.isSelectable === undefined;
+      existingModel?.isSelectable === false &&
+      additionalModel.isSelectable === undefined &&
+      options?.preserveSelectability !== true;
     mergedModels[existingIndex] = {
       ...existingModel,
       ...additionalModel,
@@ -471,6 +494,10 @@ export function wrapSessionProvider(provider: AgentProvider, inner: AgentSession
     interrupt: () => inner.interrupt(),
     close: () => inner.close(),
     listCommands: inner.listCommands?.bind(inner),
+    listProviderSkills: inner.listProviderSkills?.bind(inner),
+    setProviderSkillEnabled: inner.setProviderSkillEnabled?.bind(inner),
+    listProviderPlugins: inner.listProviderPlugins?.bind(inner),
+    manageProviderPlugin: inner.manageProviderPlugin?.bind(inner),
     setModel: inner.setModel?.bind(inner),
     setThinkingOption: inner.setThinkingOption?.bind(inner),
     setFeature: inner.setFeature?.bind(inner),
@@ -538,6 +565,7 @@ function wrapClientProvider(
         ...catalog,
         models: mergeModels(provider, profileModels, additionalModels, catalog.models, {
           profileModelsAreAdditive,
+          modelsAuthoritative: catalog.modelsAuthoritative,
         }),
         modes: catalog.modes,
       };
@@ -608,6 +636,7 @@ function wrapClientProvider(
       ? async (handle) => await unarchiveNativeSession({ ...handle, provider: inner.provider })
       : undefined,
     getCatalogCacheKey: inner.getCatalogCacheKey?.bind(inner),
+    shouldDiscoverModels: inner.shouldDiscoverModels?.bind(inner),
     isAvailable: (signal, options) => inner.isAvailable(signal, options),
     getDiagnostic: inner.getDiagnostic?.bind(inner),
   };
@@ -672,7 +701,9 @@ function createRegistryEntry(
       context?: ProviderRefreshContext,
     ) => {
       const catalogClient = client ?? modelClient;
-      if (hasReplacementModels) {
+      const discoverModels =
+        hasReplacementModels && (await catalogClient.shouldDiscoverModels?.(options));
+      if (hasReplacementModels && !discoverModels) {
         // Replacement models skip runtime model discovery, but additionalModels
         // must still be merged on top. If modes are dynamic, probe for modes via
         // the single catalog API; otherwise use static/empty modes with no runtime.
@@ -705,6 +736,7 @@ function createRegistryEntry(
         ...catalog,
         models: mergeModels(provider, profileModels, additionalModels, catalog.models, {
           profileModelsAreAdditive: resolved.profileModelsAreAdditive,
+          modelsAuthoritative: catalog.modelsAuthoritative,
         }),
         modes: decorateModes(catalog.modes),
       };

@@ -68,6 +68,14 @@ describe("resolveClientSlashCommand", () => {
     ).toEqual([
       ["exit", ["quit", "q"], "immediate"],
       ["clear", ["new"], "immediate"],
+      ["skills", ["skill-manager"], "immediate"],
+      ["skills-refresh", ["refresh-skills"], "immediate"],
+      ["paseo-skills", [], "immediate"],
+      ["plugins", ["plugin-manager"], "immediate"],
+      ["paseo-plugins", [], "immediate"],
+      ["providers", ["provider-settings"], "immediate"],
+      ["terminals", ["terminal-settings"], "immediate"],
+      ["settings", [], "immediate"],
     ]);
   });
 
@@ -92,6 +100,38 @@ describe("resolveClientSlashCommand", () => {
     expect(resolveClientSlashCommand({ text: "/new", hasAttachments: false })).toMatchObject({
       name: "clear",
       kind: "replace-agent-with-draft",
+    });
+    expect(resolveClientSlashCommand({ text: "/skills", hasAttachments: false })).toMatchObject({
+      name: "skills",
+      kind: "open-provider-skills",
+    });
+    expect(
+      resolveClientSlashCommand({ text: "/refresh-skills", hasAttachments: false }),
+    ).toMatchObject({
+      name: "skills-refresh",
+      kind: "refresh-provider-skills",
+    });
+    expect(
+      resolveClientSlashCommand({ text: "/paseo-skills", hasAttachments: false }),
+    ).toMatchObject({
+      name: "paseo-skills",
+      kind: "open-agent-settings",
+    });
+    expect(
+      resolveClientSlashCommand({ text: "/plugin-manager", hasAttachments: false }),
+    ).toMatchObject({
+      name: "plugins",
+      kind: "open-provider-plugins",
+    });
+    expect(
+      resolveClientSlashCommand({ text: "/paseo-plugins", hasAttachments: false }),
+    ).toMatchObject({
+      name: "paseo-plugins",
+      kind: "open-plugin-settings",
+    });
+    expect(resolveClientSlashCommand({ text: "/settings", hasAttachments: false })).toMatchObject({
+      name: "settings",
+      kind: "open-settings",
     });
   });
 

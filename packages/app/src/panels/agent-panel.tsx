@@ -96,6 +96,12 @@ import { applyLegacyDaemonWorkspaceOwnership } from "@/workspace/legacy-daemon-w
 import type { WorkspaceFileOpenRequest } from "@/workspace/file-open";
 import { deriveSidebarStateBucket } from "@/utils/sidebar-agent-state";
 import { buildDraftAgentSetup, type ClientSlashCommand } from "@/client-slash-commands";
+import {
+  ProviderResourceSheet,
+  type ProviderResourceKind,
+} from "@/provider-resources/provider-resource-sheet";
+import { router } from "expo-router";
+import { buildSettingsHostSectionRoute, buildSettingsRoute } from "@/utils/host-routes";
 
 interface ChatAgentStateShape {
   serverId: string | null;
@@ -1550,6 +1556,15 @@ function ActiveAgentComposer({
   const closeWorkspaceTab = useWorkspaceLayoutStore((state) => state.closeTab);
   const hideWorkspaceAgent = useWorkspaceLayoutStore((state) => state.hideAgent);
   const unpinWorkspaceAgent = useWorkspaceLayoutStore((state) => state.unpinAgent);
+  const currentProvider = useSessionStore(
+    (state) => resolveChatAgentFromSession(state, serverId, agentId)?.provider,
+  );
+  const [providerResourceKind, setProviderResourceKind] = useState<ProviderResourceKind | null>(
+    null,
+  );
+  const [providerResourceReloadKey, setProviderResourceReloadKey] = useState(0);
+  const handleCloseProviderResources = useCallback(() => setProviderResourceKind(null), []);
+  const handleOpenProviderPlugins = useCallback(() => setProviderResourceKind("plugins"), []);
   const workspaceAttachmentScopeKey = useWorkspaceAttachmentScopeKey({
     serverId,
     cwd,
@@ -1576,6 +1591,40 @@ function ActiveAgentComposer({
 
   const handleClientSlashCommand = useCallback(
     async (command: ClientSlashCommand) => {
+      if (command.kind === "open-settings") {
+        router.push(buildSettingsRoute());
+        return;
+      }
+      if (command.kind === "open-agent-settings") {
+        router.push(buildSettingsHostSectionRoute(serverId, "agents"));
+        return;
+      }
+      if (command.kind === "open-provider-skills") {
+        setProviderResourceKind("skills");
+        return;
+      }
+      if (command.kind === "refresh-provider-skills") {
+        setProviderResourceReloadKey((value) => value + 1);
+        setProviderResourceKind("skills");
+        return;
+      }
+      if (command.kind === "open-provider-plugins") {
+        setProviderResourceKind("plugins");
+        return;
+      }
+      if (command.kind === "open-plugin-settings") {
+        router.push(buildSettingsHostSectionRoute(serverId, "plugins"));
+        return;
+      }
+      if (command.kind === "open-provider-settings") {
+        router.push(buildSettingsHostSectionRoute(serverId, "providers"));
+        return;
+      }
+      if (command.kind === "open-terminal-settings") {
+        router.push(buildSettingsHostSectionRoute(serverId, "terminals"));
+        return;
+      }
+
       const agent = resolveChatAgentFromSession(useSessionStore.getState(), serverId, agentId);
       if (!agent) {
         throw new Error("Agent not found");
@@ -1614,6 +1663,16 @@ function ActiveAgentComposer({
 
   return (
     <View style={animatedStaticStyles.inputAreaWrapper} onLayout={onInputAreaLayout}>
+      <ProviderResourceSheet
+        visible={providerResourceKind !== null}
+        kind={providerResourceKind ?? "skills"}
+        serverId={serverId}
+        agentId={agentId}
+        provider={currentProvider}
+        forceReloadKey={providerResourceReloadKey}
+        onClose={handleCloseProviderResources}
+        onOpenPlugins={handleOpenProviderPlugins}
+      />
       <Composer
         agentId={agentId}
         serverId={serverId}

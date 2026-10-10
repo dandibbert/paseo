@@ -31,6 +31,7 @@ export const fr: TranslationResources = {
     back: "Retour",
     loading: "Chargement…",
     actions: {
+      save: "Enregistrer",
       back: "Retour",
       cancel: "Annuler",
       close: "Fermer",
@@ -188,6 +189,11 @@ export const fr: TranslationResources = {
     clientCommands: {
       archiveAgent: "Archiver l’agent actuel",
       freshDraft: "Archiver cet agent et démarrer un nouveau brouillon",
+      settings: "Ouvrir les réglages de Paseo",
+      skills: "Gérer les skills d’agent de cet hôte",
+      plugins: "Gérer les plugins Paseo de cet hôte",
+      providers: "Gérer les fournisseurs d’agents de cet hôte",
+      terminals: "Gérer les profils de terminal de cet hôte",
     },
     github: {
       searching: "Recherche…",
@@ -291,6 +297,7 @@ export const fr: TranslationResources = {
     },
   },
   agentList: {
+    actions: en.agentList.actions,
     fallbackTitle: "Nouvelle session",
     dateSections: {
       recent: "Récents",
@@ -308,6 +315,8 @@ export const fr: TranslationResources = {
       closed: "Fermé",
     },
     badges: {
+      rootAgent: "Principal",
+      subagent: "Sous-agent · parent {{parent}}",
       archived: "Archivé",
       pending: "{{count}} en attente",
       attention: "Attention",
@@ -1174,6 +1183,7 @@ export const fr: TranslationResources = {
       done: "Terminé",
     },
     display: {
+      showBackground: "Afficher les espaces en arrière-plan",
       trigger: "Préférences d’affichage",
       heading: "Affichage",
       grouping: {
@@ -2049,6 +2059,18 @@ export const fr: TranslationResources = {
     accessibility: "Fenêtre de contexte : {{percentage}} % utilisés",
   },
   review: {
+    feedback: {
+      send: "Envoyer les commentaires ({{count}})",
+      sending: "Envoi des commentaires ({{count}})",
+      chooseAgent: "Choisir un agent",
+      sent: "Commentaires envoyés à {{recipient}}",
+      "no-agents":
+        "Ouvrez un onglet d’agent dans cet espace de travail pour envoyer les commentaires.",
+      disconnected: "Connectez-vous à l’hôte pour envoyer les commentaires.",
+      "no-context": "Les commentaires enregistrés ne correspondent plus à ce diff.",
+      failed: "Échec de l’envoi des commentaires. Réessayez.",
+      prompt: "Veuillez traiter cette revue de code.",
+    },
     comment: {
       add: "Ajouter un commentaire de revue",
       edit: "Modifier le commentaire de revue",
@@ -2750,6 +2772,9 @@ export const fr: TranslationResources = {
         many: "{{count}} modèles",
         addModel: "Ajouter un modèle",
         addCustomTitle: "Ajouter un modèle personnalisé",
+        editCustomTitle: "Modifier le modèle manuel",
+        editOverrideTitle: "Modifier la personnalisation du modèle",
+        hideModel: "Masquer {{id}}",
         modelId: "ID du modèle",
         modelIdPlaceholder: "ex. openai/gpt-5",
         add: "Ajouter",
@@ -2763,7 +2788,7 @@ export const fr: TranslationResources = {
         noSearchMatches: "Aucun modèle ne correspond à votre recherche",
         noneDetected: "Aucun modèle détecté",
         discovered: "Détectés",
-        custom: "Modèles personnalisés",
+        custom: "Modèles manuels et personnalisations",
         updated: "Mis à jour {{time}}",
       },
       diagnostic: {

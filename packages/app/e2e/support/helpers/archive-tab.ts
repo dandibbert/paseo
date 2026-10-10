@@ -292,24 +292,15 @@ export async function archiveAgentFromSessions(
 ): Promise<void> {
   const row = getSessionRowByTitle(page, input.title);
   await expect(row).toBeVisible({ timeout: 30_000 });
-  const box = await row.boundingBox();
-  if (!box) {
-    throw new Error(`Could not read bounding box for session row ${input.agentId}.`);
-  }
-
-  // Long-press the row. Idle agents are archived immediately (no modal).
-  // Running/initializing agents show a confirmation modal instead.
-  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
-  await page.mouse.down();
-  await page.waitForTimeout(900);
-  await page.mouse.up();
-
-  // If a confirmation modal appears (running agent), click the archive button.
-  const archiveButton = page.getByTestId("agent-action-archive").first();
-  const modalVisible = await archiveButton.isVisible().catch(() => false);
-  if (modalVisible) {
-    await archiveButton.click();
-  }
-
+  await row.click({ button: "right" });
+  const confirmation = page.waitForEvent("dialog");
+  const archive = page
+    .getByTestId(`agent-history-archive-${getServerId()}-${input.agentId}`)
+    .click();
+  const dialog = await confirmation;
+  expect(dialog.type()).toBe("confirm");
+  expect(dialog.message()).toContain("Archive");
+  await dialog.accept();
+  await archive;
   await expectSessionRowArchived(page, input.title);
 }

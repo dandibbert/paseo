@@ -5,6 +5,11 @@ import type {
   FetchAgentHistoryOptions,
 } from "@getpaseo/client/internal/daemon-client";
 import type { AgentHistoryClient, AgentHistoryHost } from "./use-agent-history";
+import {
+  isHistoryMutationApplicable,
+  mergeAgentHistoryChildren,
+  runAgentHistoryMutation,
+} from "@/components/agent-history-actions-model";
 import { allAgentHistoryQueryKey } from "./agent-history-query-key";
 
 (
@@ -644,4 +649,151 @@ describe("fetchAgentHistoryPage", () => {
       }),
     ).rejects.toThrow("No connected hosts could load agent history");
   });
+});
+
+describe("History lifecycle actions", () => {
+  function actionClient(
+    input: { archivedAt?: string | null; running?: boolean; parent?: string } = {},
+  ) {
+    const agent = historyEntry({
+      id: "history-agent",
+      cwd: "/repo",
+      updatedAt: "2026-04-02T10:00:00.000Z",
+      archivedAt: input.archivedAt,
+    }).agent;
+    if (input.running) agent.status = "running";
+    if (input.parent) agent.labels = { "paseo.parent-agent-id": input.parent };
+    const calls: string[] = [];
+    const client: Parameters<typeof runAgentHistoryMutation>[0]["client"] = {
+      fetchAgent: async () => ({ agent, project: null }),
+      cancelAgent: async (id) => {
+        calls.push(`stop:${id}`);
+      },
+      archiveAgent: async (id) => {
+        calls.push(`archive:${id}`);
+        return { archivedAt: "2026-04-02T11:00:00.000Z" };
+      },
+      refreshAgent: async (id) => {
+        calls.push(`unarchive:${id}`);
+        return { status: "agent_refreshed", agentId: id, requestId: "refresh" };
+      },
+      updateAgent: async (id, updates) => {
+        calls.push(`rename:${id}:${updates.name}`);
+      },
+      detachAgent: async (id) => {
+        calls.push(`detach:${id}`);
+      },
+    };
+    return { agent, calls, client };
+  }
+
+  it("does not reload a now-active agent from a stale archived row", async () => {
+    const { client, calls } = actionClient({ running: true });
+    expect(
+      await runAgentHistoryMutation({ client, agentId: "history-agent", action: "unarchive" }),
+    ).toEqual({});
+    expect(calls).toEqual([]);
+  });
+
+  it("only restores the selected archived agent", async () => {
+    const { client, calls } = actionClient({ archivedAt: "2026-04-02T10:30:00.000Z" });
+    await runAgentHistoryMutation({ client, agentId: "history-agent", action: "unarchive" });
+    expect(calls).toEqual(["unarchive:history-agent"]);
+  });
+
+  it("keeps completed turns untouched when Stop is confirmed after completion", async () => {
+    const { client, calls } = actionClient();
+    await runAgentHistoryMutation({ client, agentId: "history-agent", action: "stop" });
+    expect(calls).toEqual([]);
+  });
+
+  it("stops only the selected live agent", async () => {
+    const { client, calls } = actionClient({ running: true });
+    await runAgentHistoryMutation({ client, agentId: "history-agent", action: "stop" });
+    expect(calls).toEqual(["stop:history-agent"]);
+  });
+
+  it("returns acknowledged archive data for the existing cache update path", async () => {
+    const { client, calls } = actionClient({ running: true });
+    expect(
+      await runAgentHistoryMutation({ client, agentId: "history-agent", action: "archive" }),
+    ).toEqual({ archivedAt: "2026-04-02T11:00:00.000Z" });
+    expect(calls).toEqual(["archive:history-agent"]);
+  });
+
+  it("reports archive failure without treating the agent as archived", async () => {
+    const { client, agent } = actionClient({ running: true });
+    client.archiveAgent = async () => {
+      throw new Error("Archive rejected: runtime is still active");
+    };
+    await expect(
+      runAgentHistoryMutation({ client, agentId: "history-agent", action: "archive" }),
+    ).rejects.toThrow("Archive rejected: runtime is still active");
+    expect(agent.archivedAt).toBe(null);
+    expect(agent.status).toBe("running");
+  });
+
+  it("does not run a lifecycle action if the latest read fails", async () => {
+    const { client, calls } = actionClient({ running: true });
+    client.fetchAgent = async () => {
+      throw new Error("Host disconnected");
+    };
+    await expect(
+      runAgentHistoryMutation({ client, agentId: "history-agent", action: "stop" }),
+    ).rejects.toThrow("Host disconnected");
+    expect(calls).toEqual([]);
+  });
+
+  it("trims renames and propagates errors without dropping the retry value", async () => {
+    const { client, calls } = actionClient();
+    await runAgentHistoryMutation({
+      client,
+      agentId: "history-agent",
+      action: "rename",
+      name: "  Renamed agent  ",
+    });
+    expect(calls).toEqual(["rename:history-agent:Renamed agent"]);
+    client.updateAgent = async () => {
+      throw new Error("Rename failed");
+    };
+    await expect(
+      runAgentHistoryMutation({
+        client,
+        agentId: "history-agent",
+        action: "rename",
+        name: "Retry name",
+      }),
+    ).rejects.toThrow("Rename failed");
+  });
+
+  it("detaches a live child without stop, archive, or runtime refresh", async () => {
+    const { client, calls, agent } = actionClient({ parent: "parent-agent", running: true });
+    await runAgentHistoryMutation({ client, agentId: "history-agent", action: "detach" });
+    expect(calls).toEqual(["detach:history-agent"]);
+    expect(
+      isHistoryMutationApplicable("detach", { ...agent, archivedAt: "2026-04-02T11:00:00.000Z" }),
+    ).toBe(false);
+    expect(isHistoryMutationApplicable("detach", { ...agent, labels: {} })).toBe(false);
+  });
+});
+
+it("merges archived History children with live relationships without reviving detached children", () => {
+  const makeChild = (id: string, parent = "parent") => ({
+    id,
+    title: `History ${id}`,
+    workspaceId: "old-workspace",
+    labels: { "paseo.parent-agent-id": parent },
+  });
+  const archived = makeChild("archived");
+  const renamed = makeChild("renamed");
+  const detached = makeChild("detached");
+  const liveRenamed = { ...renamed, title: "Latest title", workspaceId: "new-workspace" };
+  const liveChild = makeChild("new-child");
+  expect(
+    mergeAgentHistoryChildren(
+      "parent",
+      [archived, renamed, detached],
+      [liveRenamed, { ...detached, labels: {} }, liveChild, makeChild("unrelated", "other-parent")],
+    ),
+  ).toEqual([archived, liveRenamed, liveChild]);
 });
