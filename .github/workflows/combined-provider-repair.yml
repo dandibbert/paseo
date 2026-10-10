@@ -2,7 +2,12 @@ name: Combined provider editor validation and macOS builds
 
 on:
   push:
-    branches: [combined/repair-provider-editor, cursor/sync-upstream-0-11-2-ca17]
+    branches:
+      [
+        combined/repair-provider-editor,
+        cursor/sync-upstream-0-11-2-ca17,
+        cursor/split-macos-artifacts-ca17,
+      ]
   workflow_dispatch:
     inputs:
       verify_build_run_id:
@@ -194,6 +199,7 @@ jobs:
           for arch in arm64 x64; do
             installer="installers/Paseo-combined-macos-$arch"
             evidence="verification/Paseo-combined-install-verification-$arch/install-evidence"
+            cp installers/Paseo-combined-macos-zip-$arch/Paseo-*.zip "$installer/"
             test "$(cat "$installer/SOURCE_REVISION.txt")" = "$SOURCE_REVISION"
             test "$(cat "$evidence/SOURCE_REVISION.txt")" = "$SOURCE_REVISION"
             (cd "$installer" && sha256sum -c SHA256SUMS.txt)
@@ -313,11 +319,18 @@ jobs:
           name: Paseo-combined-macos-${{ matrix.arch }}
           path: |
             packages/desktop/release/Paseo-*.dmg
-            packages/desktop/release/Paseo-*.zip
             packages/desktop/release/SOURCE_REVISION.txt
             packages/desktop/release/SHA256SUMS.txt
             packages/desktop/release/SIGNATURE_REPORT.json
             packages/desktop/release/BUILD_NOTES.txt
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
+      # The ZIP is the auto-update payload; keeping it out of the installer artifact halves the manual download.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Paseo-combined-macos-zip-${{ matrix.arch }}
+          path: packages/desktop/release/Paseo-*.zip
           if-no-files-found: error
           compression-level: 0
           retention-days: 14
@@ -367,6 +380,12 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: Paseo-combined-macos-${{ matrix.arch }}
+          path: install-artifacts
+          github-token: ${{ github.token }}
+          run-id: ${{ needs.source.outputs.artifact_run_id }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: Paseo-combined-macos-zip-${{ matrix.arch }}
           path: install-artifacts
           github-token: ${{ github.token }}
           run-id: ${{ needs.source.outputs.artifact_run_id }}
