@@ -1,7 +1,3 @@
-import * as fs from "node:fs/promises";
-import * as path from "node:path";
-import type { Logger } from "pino";
-
 import type { AgentModelDefinition } from "../../agent-sdk-types.js";
 import {
   getClaudeCustomModelThinkingOptions,
@@ -48,14 +44,13 @@ export function findClaudeModel(
   return getClaudeModels().find((model) => model.id === normalizedModelId);
 }
 
-export async function getClaudeModelsWithSettings(
-  logger: Logger,
-  configDir: string,
+export function getClaudeModelsWithSettings(
+  settings: Record<string, unknown>,
   claudeCodeVersion?: string,
   discoveredModelIds: ReadonlySet<string> = new Set(),
-): Promise<AgentModelDefinition[]> {
+): AgentModelDefinition[] {
   const hardcodedModels = getClaudeManifestModels(claudeCodeVersion, discoveredModelIds);
-  const settingsModels = await readClaudeSettingsModels(logger, configDir);
+  const settingsModels = readClaudeSettingsModels(settings);
   if (settingsModels.length === 0) {
     return hardcodedModels;
   }
@@ -80,26 +75,7 @@ export async function getClaudeModelsWithSettings(
   return models;
 }
 
-async function readClaudeSettingsModels(
-  logger: Logger,
-  configDir: string,
-): Promise<AgentModelDefinition[]> {
-  const settingsPath = path.join(configDir, "settings.json");
-
-  let parsed: unknown;
-  try {
-    const rawSettings = await fs.readFile(settingsPath, "utf8");
-    parsed = JSON.parse(rawSettings);
-  } catch (error) {
-    logger.debug({ err: error, settingsPath }, "Failed to read Claude settings models");
-    return [];
-  }
-
-  if (!isRecord(parsed)) {
-    logger.debug({ settingsPath }, "Claude settings.json is not an object");
-    return [];
-  }
-
+function readClaudeSettingsModels(parsed: Record<string, unknown>): AgentModelDefinition[] {
   const models: AgentModelDefinition[] = [];
   addSettingsModel(models, parsed.model, "model");
 
@@ -108,7 +84,6 @@ async function readClaudeSettingsModels(
     return models;
   }
   if (!isRecord(env)) {
-    logger.debug({ settingsPath }, "Claude settings.json env is not an object");
     return models;
   }
 

@@ -289,6 +289,33 @@ export const en = {
     },
   },
   agentList: {
+    actions: {
+      menu: "Agent actions",
+      menuFor: "Actions for {{title}}",
+      open: "Open",
+      rename: "Rename",
+      stop: "Stop",
+      archive: "Archive",
+      unarchive: "Unarchive",
+      copyId: "Copy agent ID",
+      copied: "Agent ID copied",
+      openParent: "Open parent",
+      subagents: "Subagents",
+      detach: "Detach from parent",
+      pending: "Another action is in progress",
+      offline: "Connect to this host to manage the agent",
+      detachUnavailable: "Update the host to detach subagents",
+      notFound: "This agent is no longer available. Refresh History and try again.",
+      stopTitle: "Stop agent?",
+      stopMessage:
+        "Stop the current turn for {{title}}? The agent and its history will be kept. Its subagents may continue running.",
+      archiveTitle: "Archive agent?",
+      archiveMessage:
+        "Archive {{title}} on all devices? This closes its runtime and stops any work still running. Managed subagents also archive, except children in another workspace or open in a tab, which detach and keep running. History is kept and can be unarchived later.",
+      detachTitle: "Detach subagent?",
+      detachMessage:
+        "{{title}} will become a standalone agent. It keeps running in its current workspace and will no longer archive with its parent. Closing its own tab will archive it.",
+    },
     fallbackTitle: "New session",
     dateSections: {
       recent: "Recent",
@@ -306,6 +333,8 @@ export const en = {
       closed: "Closed",
     },
     badges: {
+      rootAgent: "Root",
+      subagent: "Sub · parent {{parent}}",
       archived: "Archived",
       pending: "{{count}} pending",
       attention: "Attention",
@@ -2832,6 +2861,9 @@ export const en = {
         many: "{{count}} models",
         addModel: "Add model",
         addCustomTitle: "Add custom model",
+        editCustomTitle: "Edit manual model",
+        editOverrideTitle: "Edit model override",
+        hideModel: "Hide {{id}}",
         modelId: "Model ID",
         modelIdPlaceholder: "e.g. openai/gpt-5",
         add: "Add",
@@ -2845,7 +2877,7 @@ export const en = {
         noSearchMatches: "No models match your search",
         noneDetected: "No models detected",
         discovered: "Discovered",
-        custom: "Custom models",
+        custom: "Manual models and overrides",
         updated: "Updated {{time}}",
       },
       diagnostic: {

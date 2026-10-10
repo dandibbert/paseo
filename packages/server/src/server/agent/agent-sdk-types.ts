@@ -748,6 +748,8 @@ export interface ProviderRefreshContext {
 
 export interface ProviderCatalog {
   models: AgentModelDefinition[];
+  /** Only discovered models may remain selectable after configured overrides are merged. */
+  modelsAuthoritative?: boolean;
   modes: AgentMode[];
   defaultModeId?: string | null;
 }
@@ -776,6 +778,8 @@ export interface AgentClient {
    * Include the execution environment and effective configuration; omit to use target identity.
    * force must not affect identity. Resolve before every cache lookup. */
   getCatalogCacheKey?(options: FetchCatalogOptions): Promise<string | undefined>;
+  /** Discover the configured model source even when explicit models would replace the catalog. */
+  shouldDiscoverModels?(options?: FetchCatalogOptions): Promise<boolean>;
   /**
    * Discover models and modes together. Implementations may use one upstream
    * process, separate upstream calls, static modes, or private helpers; callers

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { useTranslation } from "react-i18next";
 import { Text, View } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
@@ -15,6 +15,8 @@ import {
   type ProviderProfileModel,
 } from "@getpaseo/protocol/provider-config";
 
+import type { ProviderModelMutation } from "./provider-model-settings";
+
 type EditableModel = ProviderProfileModel | AgentModelDefinition;
 type OptionalBoolean = boolean | undefined;
 
@@ -24,6 +26,7 @@ interface ProviderModelEditorSheetProps {
   visible: boolean;
   model?: EditableModel | null;
   originalModelId?: string | null;
+  mutation: ProviderModelMutation;
   onClose: () => void;
   refresh: (providers?: AgentProvider[]) => Promise<void>;
 }
@@ -39,6 +42,22 @@ interface ModelDraft {
   defaultThinkingOptionId: string;
   thinkingOptionsJson: string;
   metadataJson: string;
+}
+
+function createModelDraft(model: EditableModel | null | undefined): ModelDraft {
+  return {
+    id: model?.id ?? "",
+    label: model?.label ?? "",
+    description: model?.description ?? "",
+    contextWindow:
+      model?.contextWindowMaxTokens != null ? String(model.contextWindowMaxTokens) : "",
+    aliases: model?.aliases?.join(", ") ?? "",
+    isDefault: model?.isDefault,
+    isSelectable: model?.isSelectable,
+    defaultThinkingOptionId: model?.defaultThinkingOptionId ?? "",
+    thinkingOptionsJson: formatJson(model?.thinkingOptions),
+    metadataJson: formatJson(model?.metadata),
+  };
 }
 
 function parseAliases(value: string): string[] | undefined {
@@ -238,62 +257,64 @@ function JsonFields({
   );
 }
 
-export function ProviderModelEditorSheet({
+export function ProviderModelEditorSheet(props: ProviderModelEditorSheetProps) {
+  if (!props.visible) return null;
+  return (
+    <OpenProviderModelEditorSheet
+      key={`${props.serverId}:${props.provider}:${props.originalModelId ?? "new"}`}
+      {...props}
+    />
+  );
+}
+
+function OpenProviderModelEditorSheet({
   provider,
   serverId,
   visible,
   model,
   originalModelId,
+  mutation: modelMutation,
   onClose,
   refresh,
 }: ProviderModelEditorSheetProps) {
   const { t } = useTranslation();
   const { config, patchConfig } = useDaemonConfig(serverId);
 
-  const [modelId, setModelId] = useState("");
-  const [label, setLabel] = useState("");
-  const [description, setDescription] = useState("");
-  const [contextWindow, setContextWindow] = useState("");
-  const [aliases, setAliases] = useState("");
-  const [isDefault, setIsDefault] = useState<OptionalBoolean>(undefined);
-  const [isSelectable, setIsSelectable] = useState<OptionalBoolean>(undefined);
-  const [defaultThinkingOptionId, setDefaultThinkingOptionId] = useState("");
-  const [thinkingOptionsJson, setThinkingOptionsJson] = useState("");
-  const [metadataJson, setMetadataJson] = useState("");
+  const [initialDraft] = useState(() => createModelDraft(model));
+  const [modelId, setModelId] = useState(initialDraft.id);
+  const [label, setLabel] = useState(initialDraft.label);
+  const [description, setDescription] = useState(initialDraft.description);
+  const [contextWindow, setContextWindow] = useState(initialDraft.contextWindow);
+  const [aliases, setAliases] = useState(initialDraft.aliases);
+  const [isDefault, setIsDefault] = useState<OptionalBoolean>(initialDraft.isDefault);
+  const [isSelectable, setIsSelectable] = useState<OptionalBoolean>(initialDraft.isSelectable);
+  const [defaultThinkingOptionId, setDefaultThinkingOptionId] = useState(
+    initialDraft.defaultThinkingOptionId,
+  );
+  const [thinkingOptionsJson, setThinkingOptionsJson] = useState(initialDraft.thinkingOptionsJson);
+  const [metadataJson, setMetadataJson] = useState(initialDraft.metadataJson);
   const [error, setError] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
+  const mutationState = useSyncExternalStore(modelMutation.subscribe, modelMutation.getState);
+  const saving = mutationState.status === "saving";
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
 
   const additionalModels = useMemo(
     () => config?.providers?.[provider]?.additionalModels ?? [],
     [config?.providers, provider],
   );
 
-  useEffect(() => {
-    if (!visible) {
-      setError(null);
-      setSaving(false);
-      return;
-    }
-    setModelId(model?.id ?? "");
-    setLabel(model?.label ?? "");
-    setDescription(model?.description ?? "");
-    setContextWindow(
-      model?.contextWindowMaxTokens != null ? String(model.contextWindowMaxTokens) : "",
-    );
-    setAliases(model?.aliases?.join(", ") ?? "");
-    setIsDefault(model?.isDefault);
-    setIsSelectable(model?.isSelectable);
-    setDefaultThinkingOptionId(model?.defaultThinkingOptionId ?? "");
-    setThinkingOptionsJson(formatJson(model?.thinkingOptions));
-    setMetadataJson(formatJson(model?.metadata));
-    setError(null);
-  }, [model, visible]);
-
   const resetKey = `${visible ? "open" : "closed"}:${originalModelId ?? "new"}:${model?.id ?? ""}`;
   const editingExisting = Boolean(model);
+  const editingDiscovered = Boolean(model && "provider" in model);
 
   const handleSave = useCallback(() => {
-    if (saving) return;
+    if (saving || !config) return;
     setError(null);
 
     let nextModel: ProviderProfileModel;
@@ -323,29 +344,24 @@ export function ProviderModelEditorSheet({
       return;
     }
 
-    const hasOriginalOverride =
-      Boolean(originalModelId) && additionalModels.some((entry) => entry.id === originalModelId);
-    const nextAdditionalModels = hasOriginalOverride
-      ? additionalModels.map((entry) => (entry.id === originalModelId ? nextModel : entry))
-      : [...additionalModels, nextModel];
-
-    setSaving(true);
-    void patchConfig({
-      providers: {
-        [provider]: {
-          additionalModels: nextAdditionalModels,
-        },
-      },
-    })
-      .then(() => refresh([provider]))
-      .then(() => onClose())
-      .catch((err) => {
-        setError(err instanceof Error ? err.message : t("settings.providers.models.failedToSave"));
+    void modelMutation
+      .run({
+        provider,
+        additionalModels,
+        change: { type: "save", model: nextModel, originalModelId: originalModelId ?? null },
+        patchConfig,
+        refresh,
+        fallbackError: t("settings.providers.models.failedToSave"),
+        disconnectedError: t("workspace.terminal.hostDisconnected"),
       })
-      .finally(() => setSaving(false));
+      .then((saved) => {
+        if (saved && mounted.current) onClose();
+        return saved;
+      });
   }, [
     additionalModels,
     aliases,
+    config,
     contextWindow,
     defaultThinkingOptionId,
     description,
@@ -354,6 +370,7 @@ export function ProviderModelEditorSheet({
     label,
     metadataJson,
     modelId,
+    modelMutation,
     onClose,
     originalModelId,
     patchConfig,
@@ -364,12 +381,11 @@ export function ProviderModelEditorSheet({
     thinkingOptionsJson,
   ]);
 
-  const header = useMemo<SheetHeader>(
-    () => ({
-      title: editingExisting ? "Edit model override" : "Add / override model",
-    }),
-    [editingExisting],
-  );
+  const header = useMemo<SheetHeader>(() => {
+    if (editingDiscovered) return { title: t("settings.providers.models.editOverrideTitle") };
+    if (editingExisting) return { title: t("settings.providers.models.editCustomTitle") };
+    return { title: t("settings.providers.models.addCustomTitle") };
+  }, [editingDiscovered, editingExisting, t]);
 
   return (
     <AdaptiveModalSheet
@@ -387,11 +403,11 @@ export function ProviderModelEditorSheet({
             initialValue={modelId}
             resetKey={`${resetKey}:id`}
             onChangeText={setModelId}
-            editable={!editingExisting}
+            editable={!editingDiscovered}
             placeholder={t("settings.providers.models.modelIdPlaceholder")}
             autoCapitalize="none"
             autoCorrect={false}
-            style={[editorStyles.input, editingExisting && editorStyles.readOnly]}
+            style={[editorStyles.input, editingDiscovered && editorStyles.readOnly]}
           />
           <Text style={editorStyles.hint}>
             Use an existing discovered ID to override its metadata, or enter a new model ID.
@@ -471,13 +487,17 @@ export function ProviderModelEditorSheet({
           setMetadataJson={setMetadataJson}
         />
 
-        {error ? <Text style={editorStyles.error}>{error}</Text> : null}
+        {error || mutationState.status === "error" ? (
+          <Text style={editorStyles.error} accessibilityRole="alert">
+            {error ?? (mutationState.status === "error" ? mutationState.message : null)}
+          </Text>
+        ) : null}
 
         <View style={editorStyles.actions}>
           <Button variant="secondary" size="sm" onPress={onClose} disabled={saving}>
             {t("common.actions.cancel")}
           </Button>
-          <Button variant="default" size="sm" onPress={handleSave} disabled={saving}>
+          <Button variant="default" size="sm" onPress={handleSave} disabled={saving || !config}>
             {saving ? "Saving..." : "Save"}
           </Button>
         </View>

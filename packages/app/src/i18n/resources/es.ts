@@ -297,6 +297,7 @@ export const es: TranslationResources = {
     },
   },
   agentList: {
+    actions: en.agentList.actions,
     fallbackTitle: "Nueva sesión",
     dateSections: {
       recent: "Reciente",
@@ -314,6 +315,8 @@ export const es: TranslationResources = {
       closed: "Cerrado",
     },
     badges: {
+      rootAgent: "Principal",
+      subagent: "Subagente · padre {{parent}}",
       archived: "Archivado",
       pending: "{{count}}pendiente",
       attention: "Atención",
@@ -2763,6 +2766,9 @@ export const es: TranslationResources = {
         many: "{{count}} modelos",
         addModel: "Agregar modelo",
         addCustomTitle: "Agregar modelo personalizado",
+        editCustomTitle: "Editar modelo manual",
+        editOverrideTitle: "Editar personalización del modelo",
+        hideModel: "Ocultar {{id}}",
         modelId: "ModeloID",
         modelIdPlaceholder: "p.ej. openai/gpt-5",
         add: "Agregar",
@@ -2776,7 +2782,7 @@ export const es: TranslationResources = {
         noSearchMatches: "Ningún modelo coincide con tu búsqueda",
         noneDetected: "No se detectaron modelos",
         discovered: "descubierto",
-        custom: "Modelos personalizados",
+        custom: "Modelos manuales y personalizaciones",
         updated: "{{time}}actualizado",
       },
       diagnostic: {

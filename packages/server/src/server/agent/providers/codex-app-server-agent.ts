@@ -289,10 +289,6 @@ interface CodexAppServerAgentDeps {
   configuredModels?: ProviderProfileModel[];
   // The CODEX_HOME the session's app-server runs with; prompts and skills are read from it.
   codexHome?: string;
-<<<<<<< HEAD
-  configuredModels?: ProviderProfileModel[];
-=======
->>>>>>> origin/personal/chat-slash-bridge
   _createCodexClient?: (
     child: ChildProcessWithoutNullStreams,
     logger: Logger,

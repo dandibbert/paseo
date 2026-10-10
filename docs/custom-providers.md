@@ -105,6 +105,30 @@ Required fields for custom providers:
 
 See [Codex with a custom OpenAI-compatible endpoint](#codex-with-a-custom-openai-compatible-endpoint) below for the dedicated Codex example.
 
+### Claude API model discovery
+
+When Claude has an `ANTHROPIC_BASE_URL`, `ANTHROPIC_API_KEY`, or `ANTHROPIC_AUTH_TOKEN`,
+Refresh Models reads that API's `/v1/models` catalog. A base URL ending in `/v1` is
+also supported, and any gateway path prefix is preserved. Discovery uses the host's
+Claude config directory and user `settings.json` environment over the provider's
+launch environment, matching Claude Code's user-settings precedence. It does not
+load project-local or managed settings, execute credential helpers, or inspect
+Claude login credentials. Bedrock, Vertex, Foundry, and login-only configurations
+keep their existing catalog behavior.
+
+A complete successful response replaces the discovered list, including an empty
+list. Configured `models` and `additionalModels` entries absent from the API are
+unavailable for selection. Manual entries in `additionalModels` remain editable
+in model settings. Hide creates a model override; Delete removes the saved override
+or manual entry. Deleting an override for a model still returned by the API lets
+the discovered row reappear.
+
+An endpoint that accepts messages may not implement model listing. Discovery
+errors, including unsupported listing endpoints, keep the last successful catalog
+for the same configuration and display an error. They never substitute built-in
+Claude models. Changing the endpoint or credentials starts a separate catalog.
+Requests do not follow redirects or include API response bodies in diagnostics.
+
 ---
 
 ## Z.AI (Zhipu) coding plan

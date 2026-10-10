@@ -292,6 +292,33 @@ export const zhCN: TranslationResources = {
     },
   },
   agentList: {
+    actions: {
+      menu: "Agent 操作",
+      menuFor: "{{title}} 的操作",
+      open: "打开",
+      rename: "重命名",
+      stop: "停止",
+      archive: "归档",
+      unarchive: "取消归档",
+      copyId: "复制 Agent ID",
+      copied: "已复制 Agent ID",
+      openParent: "打开父 Agent",
+      subagents: "子 Agent",
+      detach: "与父 Agent 分离",
+      pending: "另一项操作正在进行中",
+      offline: "连接此主机后才能管理 Agent",
+      detachUnavailable: "更新主机后才能分离子 Agent",
+      notFound: "此 Agent 已不可用，请刷新历史记录后重试。",
+      stopTitle: "停止 Agent？",
+      stopMessage:
+        "停止 {{title}} 的当前回合？Agent 及其历史记录将被保留。它的子 Agent 可能会继续运行。",
+      archiveTitle: "归档 Agent？",
+      archiveMessage:
+        "在所有设备上归档 {{title}}？这会关闭其运行进程并停止仍在进行的工作。托管的子 Agent 也会被归档，但位于其他工作区或已在标签页中打开的子 Agent 会分离并继续运行。历史记录将被保留，之后可取消归档。",
+      detachTitle: "分离子 Agent？",
+      detachMessage:
+        "{{title}} 将成为独立 Agent，在当前工作区继续运行，不再随父 Agent 一起归档。关闭它自己的标签页将归档该 Agent。",
+    },
     fallbackTitle: "新会话",
     dateSections: {
       recent: "最近",
@@ -309,6 +336,8 @@ export const zhCN: TranslationResources = {
       closed: "已关闭",
     },
     badges: {
+      rootAgent: "主代理",
+      subagent: "子代理 · 上级 {{parent}}",
       archived: "已归档",
       pending: "{{count}} 个待处理",
       attention: "需要注意",
@@ -2671,6 +2700,9 @@ export const zhCN: TranslationResources = {
         many: "{{count}} 个 Model",
         addModel: "添加 Model",
         addCustomTitle: "添加自定义 Model",
+        editCustomTitle: "编辑手动模型",
+        editOverrideTitle: "编辑模型覆盖设置",
+        hideModel: "隐藏 {{id}}",
         modelId: "Model ID",
         modelIdPlaceholder: "例如 openai/gpt-5",
         add: "添加",
@@ -2684,7 +2716,7 @@ export const zhCN: TranslationResources = {
         noSearchMatches: "没有匹配搜索的 Model",
         noneDetected: "未检测到 Model",
         discovered: "已发现",
-        custom: "自定义 Models",
+        custom: "手动模型和覆盖设置",
         updated: "已更新 {{time}}",
       },
       diagnostic: {

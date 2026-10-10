@@ -1733,16 +1733,18 @@ describe("ProviderSnapshotManager applyMutableProviderConfig", () => {
     try {
       const before = manager.getAgentManagerProviderState().clients;
       for (const provider of ["codex", "claude", "codex-2"]) {
-        expect(
-          await before[provider]!.getCatalogCacheKey?.({ scope: "global", force: false }),
-        ).toBe("host");
+        const globalKey = await before[provider]!.getCatalogCacheKey?.({
+          scope: "global",
+          force: false,
+        });
+        expect(globalKey).toEqual(expect.any(String));
         expect(
           await before[provider]!.getCatalogCacheKey?.({
             scope: "workspace",
             cwd: resolveSnapshotCwd("/project"),
             force: true,
           }),
-        ).toBe("host");
+        ).toBe(globalKey);
       }
       const unchanged = manager.applyMutableProviderConfig(config, { replace: true }).clients;
       expect(unchanged.codex).toBe(before.codex);
@@ -2556,9 +2558,14 @@ describe("provider-owned catalogue identity", () => {
       for (const cwd of [resolveSnapshotCwd("/a"), resolveSnapshotCwd("/b")])
         await manager.getProvider({ provider: "codex", cwd, wait: true });
       broken = true;
-      expect(
-        await manager.getProvider({ provider: "codex", cwd: resolveSnapshotCwd("/a"), wait: true }),
-      ).toMatchObject({ status: "error", error: "configuration unreadable" });
+      const failed = await manager.getProvider({
+        provider: "codex",
+        cwd: resolveSnapshotCwd("/a"),
+        wait: true,
+      });
+      expect(failed).toMatchObject({ status: "error", error: "configuration unreadable" });
+      expect(failed).not.toHaveProperty("models");
+      expect(failed).not.toHaveProperty("fetchedAt");
       const published: string[] = [];
       manager.on("change", ({ current }) => published.push(current.cwd));
       await manager.refreshSnapshotForCwd({ cwd: resolveSnapshotCwd("/b"), providers: ["codex"] });
@@ -2569,6 +2576,76 @@ describe("provider-owned catalogue identity", () => {
       manager.destroy();
     }
   });
+
+  test.each(["initial discovery", "changed catalogue key", "changed provider configuration"])(
+    "%s failure cannot use a previous catalogue for model selection or session creation",
+    async (change) => {
+      let key = "original";
+      let failing = false;
+      const manager = new ProviderSnapshotManager({
+        logger: createTestLogger(),
+        providerOverrides: { ...disabledProviders, codex: { enabled: true } },
+        extraClients: {
+          codex: createExtraClient("codex", {
+            getCatalogCacheKey: async () => key,
+            isAvailable: async () => true,
+            async fetchCatalog() {
+              if (failing) throw new Error("New configuration discovery failed");
+              return {
+                models: [{ provider: "codex", id: "astra", label: "Astra" }],
+                modes: [],
+              };
+            },
+          }),
+        },
+      });
+      const read = () => manager.getProvider({ provider: "codex", cwd: "/project", wait: true });
+      try {
+        if (change !== "initial discovery") {
+          expect(await read()).toMatchObject({ status: "ready", models: [{ id: "astra" }] });
+        }
+        failing = true;
+        if (change === "changed catalogue key") {
+          key = "changed";
+        } else if (change === "changed provider configuration") {
+          manager.applyMutableProviderConfig(
+            {
+              ...disabledProviders,
+              codex: { enabled: true, env: { CODEX_HOME: "/tmp/new-codex-config" } },
+            },
+            { replace: true },
+          );
+        }
+        const failed = await read();
+        expect(failed).toMatchObject({
+          status: "error",
+          error: "New configuration discovery failed",
+        });
+        expect(failed).not.toHaveProperty("models");
+        expect(failed).not.toHaveProperty("fetchedAt");
+        await expect(manager.listModels({ provider: "codex", wait: true })).rejects.toThrow(
+          "New configuration discovery failed",
+        );
+        await expect(manager.listModes({ provider: "codex", wait: true })).rejects.toThrow(
+          "New configuration discovery failed",
+        );
+        await expect(
+          manager.resolveCreateConfig({
+            provider: "codex",
+            requestedMode: undefined,
+            featureValues: undefined,
+            parent: null,
+            unattended: false,
+          }),
+        ).rejects.toThrow("New configuration discovery failed");
+        await expect(
+          manager.validateAgentConfiguration({ provider: "codex", model: "astra" }),
+        ).resolves.toEqual([{ path: ["provider"], message: "New configuration discovery failed" }]);
+      } finally {
+        manager.destroy();
+      }
+    },
+  );
 });
 
 test("late key resolution cannot restore an old identity and concurrent readers wait for discovery", async () => {
@@ -3013,6 +3090,144 @@ test("a concurrent cached read cannot swallow a force refresh while its key is r
   } finally {
     release();
     await manager.shutdown();
+    manager.destroy();
+  }
+});
+
+test.each(["workspace", "settings"])(
+  "%s refresh preserves the last successful catalogue on errors and accepts an empty replacement",
+  async (scope) => {
+    let failure: string | undefined;
+    let models: AgentModelDefinition[] = [{ provider: "codex", id: "astra", label: "Astra" }];
+    const manager = new ProviderSnapshotManager({
+      logger: createTestLogger(),
+      providerOverrides: PUBLICATION_PROVIDERS,
+      extraClients: {
+        codex: createExtraClient("codex", {
+          isAvailable: async () => true,
+          async fetchCatalog() {
+            if (failure) throw new Error(failure);
+            return {
+              models,
+              modes: [{ id: "plan", label: "Plan" }],
+              defaultModeId: "plan",
+            };
+          },
+        }),
+      },
+    });
+    const read = () => manager.getProvider({ provider: "codex", cwd: "/project", wait: true });
+    const refresh = () =>
+      scope === "workspace"
+        ? manager.refreshSnapshotForCwd({ cwd: "/project", providers: ["codex"] })
+        : manager.refreshSettingsSnapshot({ providers: ["codex"] });
+    try {
+      const successful = await read();
+      failure = "Model discovery failed";
+      await refresh();
+      expect(await read()).toEqual({
+        ...successful,
+        status: "error",
+        error: `${failure}. Using the last successful model catalog.`,
+      });
+
+      failure = "Model discovery still failing";
+      await refresh();
+      expect(await read()).toEqual({
+        ...successful,
+        status: "error",
+        error: `${failure}. Using the last successful model catalog.`,
+      });
+
+      failure = undefined;
+      models = [];
+      await refresh();
+      const empty = await read();
+      expect(empty).toEqual({ ...successful, models: [], fetchedAt: expect.any(String) });
+
+      failure = "Model discovery failed after empty response";
+      await refresh();
+      expect(await read()).toEqual({
+        ...empty,
+        status: "error",
+        error: `${failure}. Using the last successful model catalog.`,
+      });
+    } finally {
+      manager.destroy();
+    }
+  },
+);
+
+test("a retained catalogue remains usable while its refresh error stays visible", async () => {
+  let failing = false;
+  const models: AgentModelDefinition[] = [
+    {
+      provider: "codex",
+      id: "astra",
+      label: "Astra",
+      thinkingOptions: [{ id: "high", label: "High" }],
+    },
+  ];
+  const modes: AgentMode[] = [{ id: "plan", label: "Plan" }];
+  const manager = new ProviderSnapshotManager({
+    logger: createTestLogger(),
+    providerOverrides: PUBLICATION_PROVIDERS,
+    extraClients: {
+      codex: createExtraClient("codex", {
+        isAvailable: async () => true,
+        async fetchCatalog() {
+          if (failing) throw new Error("Model discovery failed");
+          return { models, modes };
+        },
+        resolveCreateConfig(input) {
+          return {
+            modeId: input.availableModes.find((mode) => mode.id === input.requestedMode)?.id,
+            featureValues: input.featureValues,
+          };
+        },
+      }),
+    },
+  });
+  try {
+    const successful = await manager.getProvider({ provider: "codex", wait: true });
+    failing = true;
+    await manager.refreshSettingsSnapshot({ providers: ["codex"] });
+    await expect(manager.listModels({ provider: "codex", wait: true })).resolves.toEqual(models);
+    await expect(manager.listModes({ provider: "codex", wait: true })).resolves.toEqual(modes);
+    await expect(manager.resolveDefaultModel({ provider: "codex" })).resolves.toBe("astra");
+    await expect(
+      manager.resolveCreateConfig({
+        provider: "codex",
+        requestedMode: "plan",
+        featureValues: undefined,
+        parent: null,
+        unattended: false,
+      }),
+    ).resolves.toEqual({ modeId: "plan", featureValues: undefined });
+    await expect(
+      manager.validateAgentConfiguration({
+        provider: "codex",
+        model: "astra",
+        modeId: "plan",
+        thinkingOptionId: "high",
+      }),
+    ).resolves.toEqual([]);
+    await expect(
+      manager.validateAgentConfiguration({ provider: "codex", model: "missing" }),
+    ).resolves.toEqual([
+      { path: ["model"], message: "Model 'missing' is not available for provider 'codex'" },
+    ]);
+    expect(await manager.getProvider({ provider: "codex", wait: true })).toEqual({
+      ...successful,
+      status: "error",
+      error: "Model discovery failed. Using the last successful model catalog.",
+    });
+    const { diagnostic } = await manager.getProviderDiagnostic("codex");
+    expect(diagnostic).toContain("Models: 1");
+    expect(diagnostic).toContain(
+      "Status: Error: Model discovery failed. Using the last successful model catalog.",
+    );
+  } finally {
     manager.destroy();
   }
 });
