@@ -9,6 +9,7 @@ import {
   type ProviderProfileModel,
   type ProviderRuntimeSettings,
 } from "../../provider-launch-config.js";
+import { findCodexCatalogModel } from "./catalog-model-match.js";
 
 const CODEX_MODEL_CATALOG_MAX_BUFFER_BYTES = 32 * 1024 * 1024;
 const CODEX_MODEL_CATALOG_CACHE_DIR = path.join(os.tmpdir(), "paseo-codex-model-catalog");
@@ -48,8 +49,9 @@ function buildConfiguredFallbackModel(params: {
   template: Record<string, unknown>;
   model: ProviderProfileModel & { contextWindowMaxTokens: number };
   slug: string;
+  native: Record<string, unknown> | undefined;
 }): Record<string, unknown> {
-  const { template, model, slug } = params;
+  const { template, model, slug, native } = params;
   const contextWindow = model.contextWindowMaxTokens;
   return {
     ...template,
@@ -63,9 +65,12 @@ function buildConfiguredFallbackModel(params: {
     visibility: "none",
     supported_in_api: true,
     priority: 99,
-    additional_speed_tiers: [],
-    service_tiers: [],
-    default_service_tier: null,
+    // Without this entry Codex would resolve a slug like `source/gpt-5.5` to
+    // the native `gpt-5.5` and keep its tiers; an exact entry with no tiers
+    // would make Codex drop Fast for that model.
+    additional_speed_tiers: native?.additional_speed_tiers ?? [],
+    service_tiers: native?.service_tiers ?? [],
+    default_service_tier: native?.default_service_tier ?? null,
     availability_nux: null,
     upgrade: null,
     include_skills_usage_instructions: false,
@@ -136,7 +141,8 @@ export function augmentCodexModelCatalog(
     throw new Error("Codex bundled model catalog contained no usable model definitions");
   }
 
-  const models = (rawCatalog.models as Record<string, unknown>[]).slice();
+  const nativeModels = rawCatalog.models as Record<string, unknown>[];
+  const models = nativeModels.slice();
   const template =
     models.find(
       (model) => model.shell_type === "unified_exec" && model.supported_in_api !== false,
@@ -160,6 +166,9 @@ export function augmentCodexModelCatalog(
           template,
           model: configuredModel,
           slug,
+          native: findCodexCatalogModel(slug, nativeModels, (candidate) =>
+            typeof candidate.slug === "string" ? candidate.slug : "",
+          ),
         }),
       );
     }

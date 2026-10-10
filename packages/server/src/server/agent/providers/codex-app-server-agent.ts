@@ -85,6 +85,7 @@ import {
   readCodexServiceTier,
   type CodexServiceTier,
 } from "./codex-feature-definitions.js";
+import { findCodexCatalogModel } from "./codex/catalog-model-match.js";
 import {
   CodexAppServerClient,
   CodexAppServerRpcError,
@@ -4004,10 +4005,16 @@ export class CodexAppServerAgentSession implements AgentSession {
   }
 
   private currentServiceTiers(): CodexServiceTier[] {
-    const selectedModel = this.config.model
-      ? this.speedModels.find(
-          (model) => model.id === this.config.model || model.model === this.config.model,
-        )
+    const configuredModel = this.config.model;
+    const selectedModel = configuredModel
+      ? (this.speedModels.find(
+          (model) => model.id === configuredModel || model.model === configuredModel,
+        ) ??
+        findCodexCatalogModel(
+          configuredModel,
+          this.speedModels,
+          (model) => model.model ?? model.id,
+        ))
       : (this.speedModels.find((model) => model.isDefault) ?? this.speedModels[0]);
     return selectedModel?.serviceTiers ?? [];
   }
