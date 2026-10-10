@@ -187,6 +187,11 @@ export const ptBR: TranslationResources = {
     clientCommands: {
       archiveAgent: "Arquivar o agente atual",
       freshDraft: "Arquivar este agente e iniciar um novo rascunho",
+      settings: "Abrir as configurações do Paseo",
+      skills: "Gerenciar as habilidades de agente deste host",
+      plugins: "Gerenciar os plugins do Paseo deste host",
+      providers: "Gerenciar os provedores de agentes deste host",
+      terminals: "Gerenciar os perfis de terminal deste host",
     },
     github: {
       searching: "Buscando...",

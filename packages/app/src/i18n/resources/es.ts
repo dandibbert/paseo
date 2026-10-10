@@ -188,6 +188,11 @@ export const es: TranslationResources = {
     clientCommands: {
       archiveAgent: "Archivar el agente actual",
       freshDraft: "Archive este agente y comience un nuevo borrador",
+      settings: "Abrir la configuración de Paseo",
+      skills: "Administrar las habilidades de agente de este host",
+      plugins: "Administrar los plugins de Paseo de este host",
+      providers: "Administrar los proveedores de agentes de este host",
+      terminals: "Administrar los perfiles de terminal de este host",
     },
     github: {
       searching: "Búsqueda...",

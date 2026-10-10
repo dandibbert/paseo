@@ -186,6 +186,11 @@ export const ar: TranslationResources = {
     clientCommands: {
       archiveAgent: "أرشفة الوكيل الحالي",
       freshDraft: "أرشفة هذا الوكيل وابدأ مسودة جديدة",
+      settings: "فتح إعدادات Paseo",
+      skills: "إدارة مهارات الوكلاء لهذا المضيف",
+      plugins: "إدارة إضافات Paseo لهذا المضيف",
+      providers: "إدارة موفري الوكلاء لهذا المضيف",
+      terminals: "إدارة ملفات تعريف الطرفية لهذا المضيف",
     },
     github: {
       searching: "جارٍ البحث...",

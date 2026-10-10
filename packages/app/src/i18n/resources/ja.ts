@@ -188,6 +188,11 @@ export const ja: TranslationResources = {
     clientCommands: {
       archiveAgent: "現在のエージェントをアーカイブ",
       freshDraft: "このエージェントをアーカイブして新しい下書きを開始",
+      settings: "Paseo の設定を開く",
+      skills: "このホストのエージェントスキルを管理",
+      plugins: "このホストの Paseo プラグインを管理",
+      providers: "このホストのエージェントプロバイダーを管理",
+      terminals: "このホストのターミナルプロファイルを管理",
     },
     github: {
       searching: "検索中...",

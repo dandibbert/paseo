@@ -1616,6 +1616,83 @@ export const AgentSkillsImportLegacySelectionRequestSchema = z
   })
   .strict();
 
+// Provider-native skills/plugins. These are deliberately separate from
+// `agent.skills.*`, which manages Paseo's own orchestration-skill bundle.
+export const ProviderSkillVisibilitySchema = z.enum([
+  "on",
+  "name-only",
+  "user-invocable-only",
+  "off",
+]);
+export type ProviderSkillVisibility = z.infer<typeof ProviderSkillVisibilitySchema>;
+
+export const ProviderSkillSchema = z.object({
+  name: z.string(),
+  description: z.string().default(""),
+  enabled: z.boolean(),
+  visibility: ProviderSkillVisibilitySchema.optional(),
+  path: z.string().nullable().optional(),
+  scope: z.string().nullable().optional(),
+  source: z.string().nullable().optional(),
+  pluginId: z.string().nullable().optional(),
+  toggleSupported: z.boolean().default(false),
+  visibilityCycleSupported: z.boolean().default(false),
+});
+export type ProviderSkill = z.infer<typeof ProviderSkillSchema>;
+
+export const ProviderPluginSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  description: z.string().default(""),
+  installed: z.boolean(),
+  enabled: z.boolean(),
+  version: z.string().nullable().optional(),
+  scope: z.string().nullable().optional(),
+  source: z.string().nullable().optional(),
+  installPath: z.string().nullable().optional(),
+  marketplace: z.string().nullable().optional(),
+  marketplacePath: z.string().nullable().optional(),
+  canInstall: z.boolean().default(false),
+  canEnable: z.boolean().default(false),
+  canDisable: z.boolean().default(false),
+  canUpdate: z.boolean().default(false),
+  canUninstall: z.boolean().default(false),
+});
+export type ProviderPlugin = z.infer<typeof ProviderPluginSchema>;
+
+export const ProviderSkillsListRequestSchema = z.object({
+  type: z.literal("agent.provider.skills.list.request"),
+  requestId: z.string(),
+  agentId: z.string(),
+  forceReload: z.boolean().optional(),
+});
+
+export const ProviderSkillSetEnabledRequestSchema = z.object({
+  type: z.literal("agent.provider.skills.set_enabled.request"),
+  requestId: z.string(),
+  agentId: z.string(),
+  name: z.string().min(1),
+  path: z.string().nullable().optional(),
+  enabled: z.boolean(),
+  visibility: ProviderSkillVisibilitySchema.optional(),
+});
+
+export const ProviderPluginsListRequestSchema = z.object({
+  type: z.literal("agent.provider.plugins.list.request"),
+  requestId: z.string(),
+  agentId: z.string(),
+  includeAvailable: z.boolean().optional(),
+  forceReload: z.boolean().optional(),
+});
+
+export const ProviderPluginActionRequestSchema = z.object({
+  type: z.literal("agent.provider.plugins.action.request"),
+  requestId: z.string(),
+  agentId: z.string(),
+  pluginId: z.string().min(1),
+  action: z.enum(["install", "enable", "disable", "update", "uninstall"]),
+});
+
 export const GetDaemonConfigRequestMessageSchema = z.object({
   type: z.literal("get_daemon_config_request"),
   requestId: z.string(),
@@ -3365,6 +3442,10 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   ClientHeartbeatMessageSchema,
   PingMessageSchema,
   ListCommandsRequestSchema,
+  ProviderSkillsListRequestSchema,
+  ProviderSkillSetEnabledRequestSchema,
+  ProviderPluginsListRequestSchema,
+  ProviderPluginActionRequestSchema,
   RegisterPushTokenMessageSchema,
   PushUnregisterRequestSchema,
   ListTerminalsRequestSchema,
@@ -6842,6 +6923,52 @@ export const AgentSkillsImportLegacySelectionResponseSchema = z.object({
   }),
 });
 
+export const ProviderSkillsListResponseSchema = z.object({
+  type: z.literal("agent.provider.skills.list.response"),
+  payload: z.object({
+    requestId: z.string(),
+    agentId: z.string(),
+    provider: z.string(),
+    supported: z.boolean(),
+    skills: z.array(ProviderSkillSchema),
+    error: z.string().nullable(),
+  }),
+});
+
+export const ProviderSkillSetEnabledResponseSchema = z.object({
+  type: z.literal("agent.provider.skills.set_enabled.response"),
+  payload: z.object({
+    requestId: z.string(),
+    agentId: z.string(),
+    provider: z.string(),
+    skills: z.array(ProviderSkillSchema),
+    error: z.string().nullable(),
+  }),
+});
+
+export const ProviderPluginsListResponseSchema = z.object({
+  type: z.literal("agent.provider.plugins.list.response"),
+  payload: z.object({
+    requestId: z.string(),
+    agentId: z.string(),
+    provider: z.string(),
+    supported: z.boolean(),
+    plugins: z.array(ProviderPluginSchema),
+    error: z.string().nullable(),
+  }),
+});
+
+export const ProviderPluginActionResponseSchema = z.object({
+  type: z.literal("agent.provider.plugins.action.response"),
+  payload: z.object({
+    requestId: z.string(),
+    agentId: z.string(),
+    provider: z.string(),
+    plugins: z.array(ProviderPluginSchema),
+    error: z.string().nullable(),
+  }),
+});
+
 export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   BrowserHostRegisterResponseSchema,
   SubscriptionReleaseResponseSchema,
@@ -6873,6 +7000,10 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   AgentSkillsUninstallResponseSchema,
   AgentSkillsSaveSelectionResponseSchema,
   AgentSkillsImportLegacySelectionResponseSchema,
+  ProviderSkillsListResponseSchema,
+  ProviderSkillSetEnabledResponseSchema,
+  ProviderPluginsListResponseSchema,
+  ProviderPluginActionResponseSchema,
   ActivityLogMessageSchema,
   AssistantChunkMessageSchema,
   AudioOutputMessageSchema,

@@ -186,6 +186,11 @@ export const ko: TranslationResources = {
     clientCommands: {
       archiveAgent: "현재 에이전트 보관",
       freshDraft: "이 에이전트를 보관하고 새 초안을 시작합니다",
+      settings: "Paseo 설정 열기",
+      skills: "이 호스트의 에이전트 스킬 관리",
+      plugins: "이 호스트의 Paseo 플러그인 관리",
+      providers: "이 호스트의 에이전트 공급자 관리",
+      terminals: "이 호스트의 터미널 프로필 관리",
     },
     github: {
       searching: "검색 중...",

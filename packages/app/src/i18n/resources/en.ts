@@ -182,6 +182,11 @@ export const en = {
     clientCommands: {
       archiveAgent: "Archive the current agent",
       freshDraft: "Archive this agent and start a fresh draft",
+      settings: "Open Paseo settings",
+      skills: "Manage agent skills for this host",
+      plugins: "Manage Paseo plugins for this host",
+      providers: "Manage agent providers for this host",
+      terminals: "Manage terminal profiles for this host",
     },
     github: {
       searching: "Searching...",
