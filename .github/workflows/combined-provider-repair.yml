@@ -2,7 +2,7 @@ name: Combined provider editor validation and macOS builds
 
 on:
   push:
-    branches: [combined/repair-provider-editor]
+    branches: [combined/repair-provider-editor, cursor/sync-upstream-0-11-2-ca17]
   workflow_dispatch:
     inputs:
       verify_build_run_id:
