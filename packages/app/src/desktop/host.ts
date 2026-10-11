@@ -177,6 +177,7 @@ export interface DesktopHostBridge {
   windowChromeMode?: string;
   invoke?: DesktopInvokeBridge["invoke"];
   getPendingOpenProject?: () => Promise<string | null>;
+  getInitialOpenDirectoryMode?: () => Promise<"workspace" | "terminal">;
   agentNavigation?: DesktopAgentNavigationBridge;
   events?: DesktopEventsBridge;
   window?: DesktopWindowModuleBridge;
