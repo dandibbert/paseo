@@ -11,15 +11,15 @@ runtime. Every archive contains **headless-build.json** with its exact source co
 
 ## CI and release policy
 
--  Pushes to main and PRs build and **boot-test** the Linux AMD64 package. The successful Actions
+- Pushes to main and PRs build and **boot-test** the Linux AMD64 package. The successful Actions
   run contains an artifact named paseo-headless-linux-amd64-<full GitHub SHA>, kept for 30 days.
--  Nothing is deployed automatically; no running Agents are interrupted.
--  For an easy-to-download, commit-pinned GitHub Release, open **Actions → Linux Headless Release →
+- Nothing is deployed automatically; no running Agents are interrupted.
+- For an easy-to-download, commit-pinned GitHub Release, open **Actions → Linux Headless Release →
   Run workflow**, select **main**, and set **publish_release=true**. This reruns the build and
   health test before publishing the two files below in a prerelease tagged **headless-<12 hex
   SHA>**:
-  -  paseo-headless-linux-amd64.tar.gz
-  -  paseo-headless-linux-amd64.tar.gz.sha256
+  - paseo-headless-linux-amd64.tar.gz
+  - paseo-headless-linux-amd64.tar.gz.sha256
 
 Alternatively, in a machine with the GitHub CLI authenticated:
 
@@ -133,11 +133,11 @@ before risky version upgrades.
 
 ## Design constraints
 
--  Do not run coding Agents as root or add the dev user to the docker group just to make a build
+- Do not run coding Agents as root or add the dev user to the docker group just to make a build
   succeed; the Docker daemon is effectively root.
--  Do not expose the unauthenticated Daemon port to the public Internet.
--  The packaged Node binary targets Linux amd64 with Debian 12 or newer system libraries. The BERO
+- Do not expose the unauthenticated Daemon port to the public Internet.
+- The packaged Node binary targets Linux amd64 with Debian 12 or newer system libraries. The BERO
   VPS itself does not need to build native npm modules.
--  Keep production API containers, existing cloudflared and root MCP untouched.
--  The bundle does not include Codex, Claude Code, Pi, Go, Rust or other developer toolchains.
+- Keep production API containers, existing cloudflared and root MCP untouched.
+- The bundle does not include Codex, Claude Code, Pi, Go, Rust or other developer toolchains.
   Install them separately in dev's PATH and verify they work from systemd's service environment.
