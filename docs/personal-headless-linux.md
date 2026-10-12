@@ -27,6 +27,18 @@ Alternatively, in a machine with the GitHub CLI authenticated:
 gh workflow run headless-linux.yml --repo dandibbert/paseo --ref main -f publish_release=true
 ```
 
+Alternatively, to publish **without `workflow_dispatch`**, push an already verified
+`main` commit to the dedicated `headless-publish` branch. The branch push will
+rebuild and boot-test that exact commit and publish only after success:
+
+```bash
+git fetch origin main
+git push origin origin/main:refs/heads/headless-publish
+```
+
+This is an explicit opt-in release trigger, not an automatic release on
+ordinary `main` pushes. Do not force-push it or point it to unreviewed code.
+
 Releases are immutable: an existing tag will **not** be silently overwritten. This is intentionally
 separate from normal macOS desktop releases and from Paseo's upstream Docker image.
 

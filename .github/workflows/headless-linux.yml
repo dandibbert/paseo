@@ -2,13 +2,13 @@ name: Linux Headless Release
 
 on:
   push:
-    branches: [main]
+    branches: [main, headless-publish]
   pull_request:
     branches: [main]
   workflow_dispatch:
     inputs:
       publish_release:
-        description: "Publish immutable headless-<commit> GitHub Release (main only)"
+        description: "Publish immutable headless-<commit> Release (main or promotion branch)"
         type: boolean
         required: true
         default: false
@@ -50,17 +50,17 @@ jobs:
   publish:
     name: Publish pinned GitHub Release
     needs: build
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.publish_release == true }}
+    if: ${{ (github.event_name == 'workflow_dispatch' && inputs.publish_release == true) || (github.event_name == 'push' && github.ref == 'refs/heads/headless-publish') }}
     runs-on: ubuntu-22.04
     permissions:
       contents: write
     steps:
-      - name: Require main before publishing
+      - name: Require main or dedicated promotion branch
         env:
           BRANCH: ${{ github.ref }}
         run: |
-          if [[ "$BRANCH" != refs/heads/main ]]; then
-            echo "::error::Release publishing is restricted to main."
+          if [[ "$BRANCH" != refs/heads/main && "$BRANCH" != refs/heads/headless-publish ]]; then
+            echo "::error::Release publishing requires main or headless-publish."
             exit 1
           fi
 
