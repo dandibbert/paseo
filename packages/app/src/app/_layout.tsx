@@ -45,7 +45,7 @@ import { ProviderSettingsHost } from "@/components/provider-settings-host";
 import { WorkspaceSetupDialog } from "@/components/workspace-setup-dialog";
 import { WorkspaceShortcutTargetsSubscriber } from "@/components/workspace-shortcut-targets-subscriber";
 import { FloatingPanelPortalHost } from "@/components/ui/floating-panel-portal";
-import { HostChooserModal, useHostChooser } from "@/hosts/host-chooser";
+import { HostChooserModal } from "@/hosts/host-chooser";
 import { HostConfirmationSheet } from "@/hosts/host-confirmation-sheet";
 import {
   getIsElectronRuntime,
@@ -62,7 +62,8 @@ import { isNative, isWeb } from "@/constants/platform";
 import { HorizontalScrollProvider } from "@/contexts/horizontal-scroll-context";
 import { SessionProvider } from "@/contexts/session-context";
 import { SidebarCalloutProvider } from "@/contexts/sidebar-callout-context";
-import { ToastProvider } from "@/contexts/toast-context";
+import { ToastProvider, useToast } from "@/contexts/toast-context";
+import { useLocalDaemonServerId } from "@/hooks/use-is-local-daemon";
 import { VoiceProvider } from "@/contexts/voice-context";
 import {
   resolveStartupBlocker,
@@ -92,7 +93,6 @@ import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts";
 import { resolveExplorerSidebarPresentation } from "@/workspace-tabs/explorer-sidebar";
 import { KeyboardShiftProvider } from "@/keyboard/shift";
 import { useCompactWebViewportZoomLock } from "@/hooks/use-compact-web-viewport-zoom-lock";
-import { useOpenProject } from "@/hooks/use-open-project";
 import { useAppSettings } from "@/hooks/use-settings";
 import { useStableEvent } from "@/hooks/use-stable-event";
 import { useOpenAgentListGesture } from "@/mobile-panels/gestures";
@@ -126,6 +126,8 @@ import {
 } from "@/utils/desktop-window";
 import {
   buildOpenProjectRoute,
+  buildHostWorkspaceRoute,
+  buildHostWorkspaceOpenRoute,
   parseHostWorkspaceRouteFromPathname,
   parseServerIdFromPathname,
 } from "@/utils/host-routes";
@@ -735,89 +737,120 @@ function OfferLinkListener() {
 
 interface OpenProjectEventPayload {
   path?: unknown;
+  mode?: "workspace" | "terminal";
 }
 
 interface PendingOpenProjectRequest {
   id: number;
   serverId: string;
   path: string;
+  mode: "workspace" | "terminal";
 }
 
 let nextOpenProjectRequestId = 1;
 
 function OpenProjectListener() {
-  const chooseHost = useHostChooser();
+  const router = useRouter();
+  const toast = useToast();
+  const localServerId = useLocalDaemonServerId();
   const hostRegistryLoaded = useHostRegistryLoaded();
   const [request, setRequest] = useState<PendingOpenProjectRequest | null>(null);
-  const [pendingPath, setPendingPath] = useState<string | null>(null);
-  const openProject = useOpenProject(request?.serverId ?? null);
+  const [pendingPath, setPendingPath] = useState<{
+    path: string;
+    mode: "workspace" | "terminal";
+  } | null>(null);
+  const client = useHostRuntimeClient(request?.serverId ?? "");
+  const isConnected = useHostRuntimeIsConnected(request?.serverId ?? "");
 
   const openPathOnChosenHost = useCallback(
-    (path: string) => {
+    (path: string, mode: "workspace" | "terminal" = "workspace") => {
       const nextPath = path.trim();
       if (!nextPath) {
         return;
       }
 
-      if (!hostRegistryLoaded) {
-        setPendingPath(nextPath);
+      if (!hostRegistryLoaded || !localServerId) {
+        setPendingPath({ path: nextPath, mode });
         return;
       }
-
-      chooseHost({
-        title: "Choose host",
-        onChooseHost: (serverId) => {
-          setRequest({
-            id: nextOpenProjectRequestId++,
-            serverId,
-            path: nextPath,
-          });
-        },
+      setRequest({
+        id: nextOpenProjectRequestId++,
+        serverId: localServerId,
+        path: nextPath,
+        mode,
       });
     },
-    [chooseHost, hostRegistryLoaded],
+    [hostRegistryLoaded, localServerId],
   );
 
   useEffect(() => {
-    if (!hostRegistryLoaded || !pendingPath) {
+    if (!hostRegistryLoaded || !localServerId || !pendingPath) {
       return;
     }
     const nextPath = pendingPath;
     setPendingPath(null);
-    openPathOnChosenHost(nextPath);
-  }, [hostRegistryLoaded, openPathOnChosenHost, pendingPath]);
+    openPathOnChosenHost(nextPath.path, nextPath.mode);
+  }, [hostRegistryLoaded, localServerId, openPathOnChosenHost, pendingPath]);
 
   useEffect(() => {
     if (!request) {
       return;
     }
+    if (!client || !isConnected) return;
     let cancelled = false;
-    void openProject(request.path).then((result) => {
-      if (cancelled) {
-        return null;
+    void (async () => {
+      try {
+        const knownWorkspaces = useSessionStore.getState().sessions[request.serverId]?.workspaces;
+        const existing = Array.from(knownWorkspaces?.values() ?? []).find(
+          (workspace) => workspace.workspaceDirectory === request.path && !workspace.archivingAt,
+        );
+        let workspaceId = existing?.id;
+        if (!workspaceId) {
+          // Creating a directory workspace also registers its project on the daemon.
+          const created = await client.createWorkspace({
+            source: { kind: "directory", path: request.path },
+          });
+          if (!created.workspace) throw new Error(created.error ?? "Unable to create workspace");
+          workspaceId = created.workspace.id;
+        }
+        if (cancelled) return;
+        if (request.mode === "terminal") {
+          const terminal = await client.createTerminal(request.path, undefined, undefined, {
+            workspaceId,
+          });
+          if (!terminal.terminal) throw new Error(terminal.error ?? "Unable to open terminal");
+          if (!cancelled)
+            router.navigate(
+              buildHostWorkspaceOpenRoute(
+                request.serverId,
+                workspaceId,
+                `terminal:${terminal.terminal.id}`,
+              ),
+            );
+        } else {
+          router.navigate(buildHostWorkspaceRoute(request.serverId, workspaceId));
+        }
+      } catch (error) {
+        if (!cancelled) toast.error(error instanceof Error ? error.message : String(error));
+      } finally {
+        if (!cancelled) setRequest((current) => (current?.id === request.id ? null : current));
       }
-
-      if (!result.ok) {
-        setRequest((current) => (current?.id === request.id ? null : current));
-        return null;
-      }
-
-      setRequest((current) => (current?.id === request.id ? null : current));
-      return null;
-    });
+    })();
     return () => {
       cancelled = true;
     };
-  }, [openProject, request]);
+  }, [client, isConnected, request, router, toast]);
 
   useEffect(() => {
     let disposed = false;
     let unlisten: (() => void) | null = null;
-    void getDesktopHost()
-      ?.getPendingOpenProject?.()
-      ?.then((pending) => {
+    void Promise.all([
+      getDesktopHost()?.getPendingOpenProject?.(),
+      getDesktopHost()?.getInitialOpenDirectoryMode?.(),
+    ])
+      .then(([pending, mode]) => {
         if (!disposed && pending) {
-          openPathOnChosenHost(pending);
+          openPathOnChosenHost(pending, mode ?? "workspace");
         }
         return;
       })
@@ -829,7 +862,7 @@ function OpenProjectListener() {
         return;
       }
       const nextPath = typeof payload?.path === "string" ? payload.path.trim() : "";
-      openPathOnChosenHost(nextPath);
+      openPathOnChosenHost(nextPath, payload.mode ?? "workspace");
     })
       .then((dispose) => {
         if (disposed) {

@@ -36,6 +36,10 @@ contextBridge.exposeInMainWorld("paseoDesktop", {
     ipcRenderer.invoke("paseo:invoke", command, args),
   getPendingOpenProject: () =>
     ipcRenderer.invoke("paseo:get-pending-open-project") as Promise<string | null>,
+  getInitialOpenDirectoryMode: () =>
+    ipcRenderer.invoke("paseo:get-initial-open-directory-mode") as Promise<
+      "workspace" | "terminal"
+    >,
   agentNavigation: {
     ready: () =>
       ipcRenderer.invoke("paseo:agent-navigation:ready") as Promise<{

@@ -79,7 +79,10 @@ import {
   listPaseoBrowserProfileGuests,
   readLegacyPaseoBrowserIds,
 } from "./features/browser-profile.js";
-import { parseOpenProjectPathFromArgv } from "./open-project-routing.js";
+import {
+  parseOpenProjectPathFromArgv,
+  parseOpenDirectoryModeFromArgv,
+} from "./open-project-routing.js";
 import {
   createDesktopWindowOwner,
   type DesktopWindowOwner,
@@ -356,6 +359,7 @@ let pendingOpenProjectPath = parseOpenProjectPathFromArgv({
   argv: process.argv,
   isDefaultApp: process.defaultApp,
 });
+const initialOpenDirectoryMode = parseOpenDirectoryModeFromArgv(process.argv);
 let pendingAgentNavigation = parseAgentDeepLinkFromArgv(process.argv);
 
 // Each window pulls its own pending open-project path on mount, keyed by
@@ -381,6 +385,7 @@ ipcMain.handle("paseo:get-pending-open-project", (event) => {
   });
   return result;
 });
+ipcMain.handle("paseo:get-initial-open-directory-mode", () => initialOpenDirectoryMode);
 
 ipcMain.handle("paseo:agent-navigation:ready", (event) => {
   return agentNavigationInbox.windowReady(event.sender.id);
@@ -887,6 +892,26 @@ function setupSingleInstanceLock(): boolean {
       isDefaultApp: false,
     });
     log.info("[open-project] second-instance openProjectPath:", openProjectPath);
+    if (openProjectPath) {
+      void bootstrapComplete
+        .then(async () => {
+          const win = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0];
+          if (!win || win.isDestroyed()) {
+            await desktopWindowOwner.openPrimary({ pendingProjectPath: openProjectPath });
+            return undefined;
+          }
+          if (win.isMinimized()) win.restore();
+          win.show();
+          win.focus();
+          win.webContents.send("paseo:event:open-project", {
+            path: openProjectPath,
+            mode: parseOpenDirectoryModeFromArgv(commandLine),
+          });
+          return undefined;
+        })
+        .catch((error) => log.error("[open-project] unable to route directory", error));
+      return;
+    }
     // Relaunching the app (CLI `paseo [path]`, double-click, etc.) opens a new
     // window rather than focusing the existing one. Wait for bootstrap (not just
     // app.whenReady) so the protocol + IPC handlers exist before the window loads.

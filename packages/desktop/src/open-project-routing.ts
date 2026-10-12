@@ -2,6 +2,7 @@ import { existsSync, statSync } from "node:fs";
 import path from "node:path";
 
 const OPEN_PROJECT_FLAG = "--open-project";
+const OPEN_TERMINAL_FLAG = "--open-terminal";
 const OPEN_PROJECT_IGNORED_ARG_PREFIXES = ["-psn_", "--no-sandbox"];
 
 function isExistingDirectoryAbsolutePath(candidate: string): boolean {
@@ -31,7 +32,10 @@ export function parseOpenProjectPathFromArgv(input: {
     return positionalProjectPath;
   }
 
-  const openProjectIndex = effectiveArgs.indexOf(OPEN_PROJECT_FLAG);
+  const openProjectIndex = Math.max(
+    effectiveArgs.indexOf(OPEN_PROJECT_FLAG),
+    effectiveArgs.indexOf(OPEN_TERMINAL_FLAG),
+  );
   if (openProjectIndex === -1) {
     return null;
   }
@@ -40,4 +44,8 @@ export function parseOpenProjectPathFromArgv(input: {
   return flaggedProjectPath && isExistingDirectoryAbsolutePath(flaggedProjectPath)
     ? flaggedProjectPath
     : null;
+}
+
+export function parseOpenDirectoryModeFromArgv(argv: string[]): "workspace" | "terminal" {
+  return argv.includes(OPEN_TERMINAL_FLAG) ? "terminal" : "workspace";
 }

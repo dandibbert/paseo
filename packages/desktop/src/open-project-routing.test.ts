@@ -2,9 +2,21 @@ import { mkdtempSync, mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { parseOpenProjectPathFromArgv } from "./open-project-routing";
+import {
+  parseOpenProjectPathFromArgv,
+  parseOpenDirectoryModeFromArgv,
+} from "./open-project-routing";
 
 describe("open-project-routing", () => {
+  it("parses the terminal intent while preserving the selected directory", () => {
+    const projectPath = mkdtempSync(path.join(tmpdir(), "paseo-open-terminal-"));
+    const argv = ["/Applications/Paseo.app/Contents/MacOS/Paseo", "--open-terminal", projectPath];
+    expect(parseOpenProjectPathFromArgv({ argv, isDefaultApp: false })).toBe(projectPath);
+    expect(parseOpenDirectoryModeFromArgv(argv)).toBe("terminal");
+    expect(parseOpenDirectoryModeFromArgv([argv[0], "--open-project", projectPath])).toBe(
+      "workspace",
+    );
+  });
   it("returns a bare absolute path argument", () => {
     const projectPath = mkdtempSync(path.join(tmpdir(), "paseo-open-project-"));
 
