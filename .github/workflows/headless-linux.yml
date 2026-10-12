@@ -17,8 +17,8 @@ permissions:
   contents: read
 
 concurrency:
-  group: headless-linux-${{ github.workflow }-${{ github.ref }
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }
+  group: headless-linux-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   build:
@@ -37,24 +37,24 @@ jobs:
       - name: Upload portable Linux bundle
         uses: actions/upload-artifact@v4
         with:
-          name: paseo-headless-linux-amd64-${{ github.sha }
+          name: paseo-headless-linux-amd64-${{ github.sha }}
           path: |
-            ${{ runner.temp }/headless/paseo-headless-linux-amd64.tar.gz
-            ${{ runner.temp }/headless/paseo-headless-linux-amd64.tar.gz.sha256
+            ${{ runner.temp }}/headless/paseo-headless-linux-amd64.tar.gz
+            ${{ runner.temp }}/headless/paseo-headless-linux-amd64.tar.gz.sha256
           if-no-files-found: error
           retention-days: 30
 
   publish:
     name: Publish pinned GitHub Release
     needs: build
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.publish_release == true }
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.publish_release == true }}
     runs-on: ubuntu-22.04
     permissions:
       contents: write
     steps:
       - name: Require main before publishing
         env:
-          BRANCH: ${{ github.ref }
+          BRANCH: ${{ github.ref }}
         run: |
           if [[ "$BRANCH" != refs/heads/main ]]; then
             echo "::error::Release publishing is restricted to main."
@@ -63,12 +63,12 @@ jobs:
 
       - uses: actions/download-artifact@v4
         with:
-          name: paseo-headless-linux-amd64-${{ github.sha }
+          name: paseo-headless-linux-amd64-${{ github.sha }}
           path: release
 
       - name: Verify artifact and publish commit-pinned prerelease
         env:
-          GH_TOKEN: ${{ github.token }
+          GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
