@@ -28,6 +28,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Validate update and rollback helper
+        run: bash scripts/test-headless-update.sh
+
       - name: Package source-built Daemon and CLI with Node 22
         run: bash scripts/package-headless-linux.sh "$RUNNER_TEMP/headless"
 
