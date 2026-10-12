@@ -1,0 +1,23 @@
+# Install as /etc/systemd/system/paseo-personal.service and edit paths/user if needed.
+# Keep runtime data and agent credentials in /home/dev/.paseo across updates.
+[Unit]
+Description=Paseo Personal Linux Headless Daemon
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=dev
+Group=dev
+WorkingDirectory=/home/dev
+Environment=HOME=/home/dev
+Environment=PASEO_HOME=/home/dev/.paseo
+Environment=PATH=/home/dev/apps/paseo/current/bin:/home/dev/.local/bin:/usr/local/bin:/usr/bin:/bin
+Environment=PASEO_LISTEN=127.0.0.1:6767
+ExecStart=/home/dev/apps/paseo/current/bin/paseo daemon run --home /home/dev/.paseo
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=45
+
+[Install]
+WantedBy=multi-user.target
