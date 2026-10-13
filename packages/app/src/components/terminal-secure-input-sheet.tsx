@@ -22,10 +22,7 @@ export function TerminalSecureInputSheet({
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const header = useMemo(() => ({ title: t("workspace.terminal.secureInput.title") }), [t]);
-  const newlineAccessibilityState = useMemo(
-    () => ({ checked: submitNewline }),
-    [submitNewline],
-  );
+  const newlineAccessibilityState = useMemo(() => ({ checked: submitNewline }), [submitNewline]);
   const toggleNewline = useCallback(() => setSubmitNewline((value) => !value), []);
 
   const close = useCallback(() => {
