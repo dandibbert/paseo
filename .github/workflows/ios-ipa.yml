@@ -11,6 +11,15 @@ on:
       - "packages/**"
       - "patches/**"
       - "scripts/**"
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/ios-ipa.yml"
+      - "package*.json"
+      - "packages/**"
+      - "patches/**"
+      - "scripts/**"
 
 permissions:
   contents: read
