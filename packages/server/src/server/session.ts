@@ -775,7 +775,7 @@ export class Session {
   >();
   private readonly workspaceUpdateTails = new Map<string, Promise<void>>();
   private readonly terminalManager: TerminalManager | null;
-  private readonly secureTerminalPromptBroker: SecureTerminalPromptBroker | null;
+  private readonly secureTerminalPromptBroker: SecureTerminalPromptBroker | undefined;
   private readonly providerSnapshotManager: ProviderSnapshotManager;
   private readonly serviceProxy: ServiceProxySubsystem | null;
   private readonly scriptRuntimeStore: WorkspaceScriptRuntimeStore | null;
@@ -899,7 +899,7 @@ export class Session {
       logger: this.sessionLogger,
     });
     this.agentManager = agentManager;
-    this.secureTerminalPromptBroker = options.secureTerminalPromptBroker ?? null;
+    this.secureTerminalPromptBroker = options.secureTerminalPromptBroker;
     this.agentStorage = agentStorage;
     this.projectRegistry = projectRegistry;
     this.workspaceRegistry = workspaceRegistry;
@@ -3070,7 +3070,10 @@ export class Session {
       case "terminal.secure_prompt.list.request":
         this.emit({
           type: "terminal.secure_prompt.list.response",
-          payload: { requestId: msg.requestId, prompts: this.secureTerminalPromptBroker?.list() ?? [] },
+          payload: {
+            requestId: msg.requestId,
+            prompts: this.secureTerminalPromptBroker?.list() ?? [],
+          },
         });
         return undefined;
       case "terminal.secure_prompt.respond.request": {

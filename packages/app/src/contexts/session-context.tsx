@@ -230,6 +230,7 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
       .listSecureTerminalPrompts()
       .then(({ prompts }) => {
         if (active) setPendingSecurePrompts(prompts);
+        return undefined;
       })
       .catch(() => {
         // The event stream still updates live requests; reconnect retries listing.
@@ -270,6 +271,17 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
     if (!response.success) throw new Error(response.error ?? "Could not deny secure input request");
     dismissSecurePrompt();
   }, [activeSecurePrompt, client, dismissSecurePrompt]);
+
+  const updateSecurePrompt = useCallback(
+    (change: SecureTerminalPrompt & { state: "pending" | "resolved" }) => {
+      const { state, ...prompt } = change;
+      setPendingSecurePrompts((current) => {
+        const other = current.filter((item) => item.id !== prompt.id);
+        return state === "pending" ? [...other, prompt] : other;
+      });
+    },
+    [],
+  );
 
   // Zustand store actions
   const setIsPlayingAudio = useSessionStore((state) => state.setIsPlayingAudio);
@@ -745,11 +757,7 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
       }
       const change = message.payload.securePrompt;
       if (change) {
-        const { state, ...prompt } = change;
-        setPendingSecurePrompts((current) => {
-          const other = current.filter((item) => item.id !== prompt.id);
-          return state === "pending" ? [...other, prompt] : other;
-        });
+        updateSecurePrompt(change);
       }
       if (!message.payload.shouldNotify) {
         return;
@@ -802,6 +810,7 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
     toast,
     voiceRuntime,
     voiceAudioEngine,
+    updateSecurePrompt,
   ]);
 
   const _cancelAgentRun = useCallback(
@@ -924,12 +933,7 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
         <TerminalSecureInputSheet
           key={activeSecurePrompt.id}
           supported
-          agentRequest={{
-            agentId: activeSecurePrompt.agentId,
-            terminalName: activeSecurePrompt.terminalName,
-            cwd: activeSecurePrompt.cwd,
-            reason: activeSecurePrompt.reason,
-          }}
+          agentRequest={activeSecurePrompt}
           onSubmit={submitAgentSecurePrompt}
           onCancel={denyAgentSecurePrompt}
           onClose={dismissSecurePrompt}

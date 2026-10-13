@@ -95,9 +95,7 @@ export function TerminalSecureInputSheet({
             </Text>
             <Text style={styles.hint}>{agentRequest.reason}</Text>
             <Text style={styles.warning}>{agentRequest.cwd}</Text>
-            <Text style={styles.warning}>
-              {t("workspace.terminal.secureInput.agentWarning")}
-            </Text>
+            <Text style={styles.warning}>{t("workspace.terminal.secureInput.agentWarning")}</Text>
           </View>
         ) : null}
         <Text style={styles.hint}>{t("workspace.terminal.secureInput.hint")}</Text>

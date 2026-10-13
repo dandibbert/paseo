@@ -1,10 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { TerminalManager } from "../../terminal/terminal-manager.js";
 import type { TerminalSession } from "../../terminal/terminal.js";
-import type {
-  SecureTerminalPrompt,
-  TerminalAttentionRequired,
-} from "@getpaseo/protocol/messages";
+import type { SecureTerminalPrompt, TerminalAttentionRequired } from "@getpaseo/protocol/messages";
 
 export type SecureTerminalPromptOutcome = "submitted" | "denied" | "expired" | "canceled";
 
@@ -143,7 +140,7 @@ export class SecureTerminalPromptBroker {
   }
 
   dispose(): void {
-    for (const id of [...this.pending.keys()]) this.finish(id, "canceled");
+    for (const id of this.pending.keys()) this.finish(id, "canceled");
   }
 
   private finish(id: string, outcome: SecureTerminalPromptOutcome): void {
@@ -157,10 +154,7 @@ export class SecureTerminalPromptBroker {
     this.publishChange(item.descriptor, "resolved");
   }
 
-  private publishChange(
-    prompt: SecureTerminalPrompt,
-    state: "pending" | "resolved",
-  ): void {
+  private publishChange(prompt: SecureTerminalPrompt, state: "pending" | "resolved"): void {
     this.publish({
       type: "terminal_attention_required",
       payload: {

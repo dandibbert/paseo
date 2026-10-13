@@ -2549,9 +2549,14 @@ export function createPaseoToolCatalog(options: PaseoToolHostDependencies): Pase
           "NEVER ask for the password in chat or through a file. This cannot write to your provider-native shell's stdin.",
         inputSchema: {
           terminalId: z.string().min(1),
-          reason: z.string().trim().min(1).max(300).describe(
-            "Explain why the interactive terminal requires a credential. Do not include the credential.",
-          ),
+          reason: z
+            .string()
+            .trim()
+            .min(1)
+            .max(300)
+            .describe(
+              "Explain why the interactive terminal requires a credential. Do not include the credential.",
+            ),
         },
         outputSchema: {
           status: z.enum(["submitted", "denied", "expired", "canceled"]),

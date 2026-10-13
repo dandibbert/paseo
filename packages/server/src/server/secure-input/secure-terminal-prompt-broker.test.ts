@@ -1,7 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { TerminalManager } from "../../../terminal/terminal-manager.js";
 import type { TerminalSession } from "../../../terminal/terminal.js";
-import { SessionInboundMessageSchema, SessionOutboundMessageSchema } from "@getpaseo/protocol/messages";
+import {
+  SessionInboundMessageSchema,
+  SessionOutboundMessageSchema,
+} from "@getpaseo/protocol/messages";
 import { SecureTerminalPromptBroker } from "./secure-terminal-prompt-broker.js";
 
 afterEach(() => {
@@ -79,7 +82,8 @@ describe("agent-initiated secure terminal input", () => {
       secret: "secret-example-value",
       submitNewline: true,
     });
-    if (wire.type !== "terminal.secure_prompt.respond.request") throw new Error("Invalid test input");
+    if (wire.type !== "terminal.secure_prompt.respond.request")
+      throw new Error("Invalid test input");
     expect(broker.respond(wire)).toEqual({ success: true, error: null });
     expect(await outcome).toBe("submitted");
     expect(send).toHaveBeenCalledExactlyOnceWith({
@@ -130,9 +134,9 @@ describe("agent-initiated secure terminal input", () => {
     const { broker, replaceTerminal, stopTerminal, send } = fixture();
     const result = broker.request(request);
     replaceTerminal();
-    expect(broker.respond({ promptId: "prompt-1", action: "submit", secret: "value" }).success).toBe(
-      false,
-    );
+    expect(
+      broker.respond({ promptId: "prompt-1", action: "submit", secret: "value" }).success,
+    ).toBe(false);
     expect(await result).toBe("canceled");
     expect(send).not.toHaveBeenCalled();
 
