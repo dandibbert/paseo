@@ -5,6 +5,7 @@ import {
   mkdirSync,
   mkdtempSync,
   openSync,
+  readFileSync,
   readSync,
   rmSync,
   writeFileSync,
@@ -158,26 +159,41 @@ function parseEntryCapture(notification: string): unknown {
   return JSON.parse(notification.slice(prefix.length));
 }
 
-async function loadPaseoExtensionListeners(
+interface PaseoExtensionCommand {
+  handler: (args: string, context: unknown) => Promise<void>;
+}
+
+async function loadPaseoExtension(
   extensionPath: string,
   registerMcpServer: (name: string, config: unknown) => void = () => undefined,
-): Promise<Map<string, PaseoExtensionListener>> {
+): Promise<{
+  listeners: Map<string, PaseoExtensionListener>;
+  commands: Map<string, PaseoExtensionCommand>;
+}> {
   const listeners = new Map<string, PaseoExtensionListener>();
+  const commands = new Map<string, PaseoExtensionCommand>();
   const extension = (await import(pathToFileURL(extensionPath).href)) as {
     default: (piApi: {
       on: (event: string, listener: PaseoExtensionListener) => void;
       events: { on: () => void };
-      registerCommand: () => void;
+      registerCommand: (name: string, command: PaseoExtensionCommand) => void;
       registerMcpServer: (name: string, config: unknown) => void;
     }) => void;
   };
   extension.default({
     on: (event, listener) => listeners.set(event, listener),
     events: { on: () => undefined },
-    registerCommand: () => undefined,
+    registerCommand: (name, command) => commands.set(name, command),
     registerMcpServer,
   });
-  return listeners;
+  return { listeners, commands };
+}
+
+async function loadPaseoExtensionListeners(
+  extensionPath: string,
+  registerMcpServer: (name: string, config: unknown) => void = () => undefined,
+): Promise<Map<string, PaseoExtensionListener>> {
+  return (await loadPaseoExtension(extensionPath, registerMcpServer)).listeners;
 }
 
 async function readRegisteredMcpServers(extensionPath: string): Promise<Record<string, unknown>> {
@@ -3443,6 +3459,95 @@ describe("transformPiModels", () => {
         label: "GPT-5.5",
         description: "openrouter/OpenAI: GPT-5.5",
       },
+    ]);
+  });
+});
+
+describe("Pi provider skills", () => {
+  function createSkillWorkspace(): { agentDir: string; cwd: string; skillPath: string } {
+    const root = mkdtempSync(path.join(tmpdir(), "paseo-pi-skill-session-"));
+    onTestFinished(() => rmSync(root, { recursive: true, force: true }));
+    const agentDir = path.join(root, "agent");
+    const cwd = path.join(root, "project");
+    mkdirSync(path.join(cwd, ".git"), { recursive: true });
+    const skillDir = path.join(agentDir, "skills", "pdf-tools");
+    mkdirSync(skillDir, { recursive: true });
+    const skillPath = path.join(skillDir, "SKILL.md");
+    writeFileSync(skillPath, "---\nname: pdf-tools\ndescription: Work with PDFs\n---\n");
+    return { agentDir, cwd, skillPath };
+  }
+
+  async function createSkillSession(workspace: { agentDir: string; cwd: string }) {
+    const pi = new FakePi();
+    const session = (await createClient(pi).createSession(createConfig({ cwd: workspace.cwd }), {
+      env: { PI_CODING_AGENT_DIR: workspace.agentDir },
+    })) as PiRpcAgentSession;
+    onTestFinished(() => session.close());
+    return { pi, session };
+  }
+
+  test("toggling a skill writes Pi settings and reloads the running Pi session", async () => {
+    const workspace = createSkillWorkspace();
+    const { pi, session } = await createSkillSession(workspace);
+    const fakeSession = pi.latestSession();
+    fakeSession.commands = [
+      { name: "skill:pdf-tools", source: "skill", sourceInfo: { path: workspace.skillPath } },
+    ];
+    fakeSession.commandsAfterReload = [];
+
+    const skills = await session.setProviderSkillEnabled({
+      name: "skill:pdf-tools",
+      path: workspace.skillPath,
+      enabled: false,
+    });
+
+    expect(fakeSession.reloadRequestCount).toBe(1);
+    expect(
+      JSON.parse(readFileSync(path.join(workspace.agentDir, "settings.json"), "utf8")),
+    ).toEqual({ skills: ["-skills/pdf-tools/SKILL.md"] });
+    expect(skills).toMatchObject([
+      { name: "skill:pdf-tools", enabled: false, scope: "user", toggleSupported: true },
+    ]);
+  });
+
+  test("refuses to toggle a skill while a Pi turn is running", async () => {
+    const workspace = createSkillWorkspace();
+    const { pi, session } = await createSkillSession(workspace);
+    await session.startTurn("work");
+
+    await expect(
+      session.setProviderSkillEnabled({
+        name: "skill:pdf-tools",
+        path: workspace.skillPath,
+        enabled: false,
+      }),
+    ).rejects.toThrow("Wait for the current Pi turn to finish");
+    expect(pi.latestSession().reloadRequestCount).toBe(0);
+    expect(existsSync(path.join(workspace.agentDir, "settings.json"))).toBe(false);
+  });
+
+  test("the Paseo extension reports a reload from the reloaded extension instance", async () => {
+    const pi = new FakePi();
+    const session = await createClient(pi).createSession(createConfig());
+    onTestFinished(() => session.close());
+    const extensionPath = pi.recordedLaunches[0]!.extensionPaths[0]!;
+    const original = await loadPaseoExtension(extensionPath);
+    const notifications: string[] = [];
+    const context = {
+      // Published Pi 1.2.0 has no buildContextEntries, so entry capture throws on session_start.
+      sessionManager: { getEntries: () => [] },
+      ui: { notify: (message: string) => notifications.push(message) },
+      reload: async () => {
+        const reloaded = await loadPaseoExtension(extensionPath);
+        await reloaded.listeners.get("session_start")?.({ reason: "reload" }, context);
+      },
+    };
+    const payload = Buffer.from(JSON.stringify({ requestId: "reload-1" })).toString("base64url");
+
+    await original.commands.get("paseo_reload")?.handler(payload, context);
+
+    expect(notifications.filter((message) => message.startsWith("PASEO_COMMAND_RESULT"))).toEqual([
+      'PASEO_COMMAND_RESULT {"requestId":"reload-1","ok":true}',
     ]);
   });
 });

@@ -41,6 +41,7 @@ import {
   type ProviderCatalog,
   type ProviderRefreshContext,
 } from "../../agent-sdk-types.js";
+import type { ProviderSkill } from "@getpaseo/protocol/messages";
 import { importSessionFromPersistence } from "../../provider-session-import.js";
 import { runProviderRefreshActivity } from "../../provider-refresh-deadline.js";
 import { runProviderTurn } from "../provider-runner.js";
@@ -84,6 +85,7 @@ import type {
   PiSessionState,
   PiThinkingLevel,
 } from "./rpc-types.js";
+import { listPiProviderSkills, setPiProviderSkillEnabled } from "./provider-skills.js";
 import { PiUsagePoller, type PiUsagePollScheduler } from "./usage-poller.js";
 import {
   mapToolDetail,
@@ -98,6 +100,7 @@ const DEFAULT_PI_THINKING_LEVEL: PiThinkingLevel = "medium";
 const PI_BINARY_COMMAND = process.env.PI_COMMAND ?? process.env.PI_ACP_PI_COMMAND ?? "pi";
 const PASEO_PI_TREE_EXTENSION_COMMAND = "paseo_tree";
 const PASEO_PI_CAPTURE_EXTENSION_COMMAND = "paseo_capture_entries";
+const PASEO_PI_RELOAD_EXTENSION_COMMAND = "paseo_reload";
 const PASEO_PI_REWIND_ENTRY_TYPE = "paseo_rewind";
 const PASEO_PI_ENTRY_CAPTURE_MARKER = "PASEO_ENTRY_CAPTURE";
 const PASEO_PI_SUBMITTED_USER_ENTRY_MARKER = "PASEO_SUBMITTED_USER_ENTRY";
@@ -622,6 +625,8 @@ function createPiPaseoExtensionFile({
   writeFileSync(
     filePath,
     `
+	const PASEO_RELOAD_REQUEST_KEY = Symbol.for("paseo.pi.reloadRequestId");
+
 	function decodePayload(encoded) {
 	  return JSON.parse(Buffer.from(encoded, "base64url").toString("utf8"));
 	}
@@ -712,7 +717,13 @@ function createPiPaseoExtensionFile({
         : ""
     }
 
-	  pi.on("session_start", async (_event, ctx) => {
+	  pi.on("session_start", async (event, ctx) => {
+	    // Reload invalidates the ctx that requested it, so the reloaded instance reports completion.
+	    const reloadRequestId = globalThis[PASEO_RELOAD_REQUEST_KEY];
+	    if (event?.reason === "reload" && reloadRequestId) {
+	      delete globalThis[PASEO_RELOAD_REQUEST_KEY];
+	      emitCommandResult(ctx, reloadRequestId, { ok: true });
+	    }
 	    emitEntryCapture(ctx, "session_start");
 	  });
 
@@ -755,6 +766,35 @@ function createPiPaseoExtensionFile({
 	        const message = error instanceof Error ? error.message : String(error);
 	        emitCommandResult(ctx, payload.requestId, { ok: false, error: message });
 	        throw error;
+	      }
+	    },
+	  });
+
+	  pi.registerCommand("${PASEO_PI_RELOAD_EXTENSION_COMMAND}", {
+	    description: "Internal Paseo resource reload bridge",
+	    handler: async (args, ctx) => {
+	      const payload = decodePayload(args.trim());
+	      if (typeof ctx.reload !== "function") {
+	        emitCommandResult(ctx, payload.requestId, {
+	          ok: false,
+	          error: "This Pi version cannot reload resources in RPC mode",
+	        });
+	        return;
+	      }
+	      const ui = ctx.ui;
+	      globalThis[PASEO_RELOAD_REQUEST_KEY] = payload.requestId;
+	      try {
+	        await ctx.reload();
+	      } catch (error) {
+	        if (globalThis[PASEO_RELOAD_REQUEST_KEY] === payload.requestId) {
+	          delete globalThis[PASEO_RELOAD_REQUEST_KEY];
+	          const message = error instanceof Error ? error.message : String(error);
+	          ui.notify(
+	            "${PASEO_PI_COMMAND_RESULT_MARKER} " +
+	              JSON.stringify({ requestId: payload.requestId, ok: false, error: message }),
+	            "error",
+	          );
+	        }
 	      }
 	    },
 	  });
@@ -1603,6 +1643,46 @@ export class PiRpcAgentSession implements AgentSession {
     const commands = await this.runtimeSession.getCommands();
     const mappedCommands = mapPiSlashCommands(commands);
     return mappedCommands;
+  }
+
+  async listProviderSkills(options?: { forceReload?: boolean }): Promise<ProviderSkill[]> {
+    if (options?.forceReload && !this.activeTurnId) {
+      await this.reloadPiResources();
+    }
+    return listPiProviderSkills({
+      cwd: this.config.cwd,
+      agentDir: resolvePiAgentDir(this.runtimeSession.environment),
+      loadedCommands: await this.runtimeSession.getCommands(),
+    });
+  }
+
+  async setProviderSkillEnabled(input: {
+    name: string;
+    path?: string | null;
+    enabled: boolean;
+  }): Promise<ProviderSkill[]> {
+    if (!input.path) {
+      throw new Error(`Pi skill ${input.name} has no path and is managed by its source`);
+    }
+    if (this.activeTurnId) {
+      throw new Error("Wait for the current Pi turn to finish before changing skills");
+    }
+    await setPiProviderSkillEnabled({
+      cwd: this.config.cwd,
+      agentDir: resolvePiAgentDir(this.runtimeSession.environment),
+      path: input.path,
+      enabled: input.enabled,
+    });
+    return this.listProviderSkills({ forceReload: true });
+  }
+
+  private async reloadPiResources(): Promise<void> {
+    const requestId = randomUUID();
+    const resultPromise = this.waitForExtensionResult(requestId);
+    const payload = Buffer.from(JSON.stringify({ requestId })).toString("base64url");
+    await this.runtimeSession.prompt(`/${PASEO_PI_RELOAD_EXTENSION_COMMAND} ${payload}`);
+    await resultPromise;
+    this.commandCache = null;
   }
 
   tryHandleOutOfBand(
