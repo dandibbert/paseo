@@ -4,6 +4,7 @@ import type { StyleProp, ViewStyle } from "react-native";
 import type { StreamItem } from "@/types/stream";
 import { continuesResponse } from "./turn-membership";
 import type { StreamHistoryBoundary, StreamRenderSegments } from "./model";
+import type { StreamSegmentCursor } from "./layout";
 import type {
   BottomAnchorLocalRequest,
   BottomAnchorRouteRequest,
@@ -113,7 +114,11 @@ export interface StreamStrategy {
     index: number,
     relation: NeighborRelation,
   ) => StreamItem | undefined;
-  collectAssistantResponseContent: (items: StreamItem[], startIndex: number) => string;
+  collectAssistantResponseContent: (
+    items: StreamItem[],
+    startIndex: number,
+    continuation?: StreamSegmentCursor | null,
+  ) => string;
   isNearBottom: (input: StreamNearBottomInput) => boolean;
   getBottomOffset: (metrics: StreamViewportMetrics) => number;
   getEdgeSlotProps: (
@@ -178,22 +183,27 @@ export function createStreamStrategy(config: StreamStrategyConfig): StreamStrate
       }
       return items[neighborIndex];
     },
-    collectAssistantResponseContent: (items, startIndex) => {
+    collectAssistantResponseContent: (items, startIndex, continuation) => {
       const messages: string[] = [];
       let laterItem: StreamItem | null = null;
-      for (
-        let index = startIndex;
-        index >= 0 && index < items.length;
-        index += config.assistantTurnTraversalStep
-      ) {
-        const currentItem = items[index];
-        if (!currentItem || (laterItem && !continuesResponse(currentItem, laterItem))) {
-          break;
+      const segments = continuation
+        ? [{ items, startIndex }, continuation]
+        : [{ items, startIndex }];
+      for (const segment of segments) {
+        for (
+          let index = segment.startIndex;
+          index >= 0 && index < segment.items.length;
+          index += config.assistantTurnTraversalStep
+        ) {
+          const currentItem = segment.items[index];
+          if (!currentItem || (laterItem && !continuesResponse(currentItem, laterItem))) {
+            return messages.toReversed().join("\n\n");
+          }
+          if (currentItem.kind === "assistant_message") {
+            messages.push(currentItem.text);
+          }
+          laterItem = currentItem;
         }
-        if (currentItem.kind === "assistant_message") {
-          messages.push(currentItem.text);
-        }
-        laterItem = currentItem;
       }
       return messages.toReversed().join("\n\n");
     },
@@ -294,8 +304,13 @@ export function collectAssistantResponseContentForStreamRenderStrategy(params: {
   strategy: StreamStrategy;
   items: StreamItem[];
   startIndex: number;
+  continuation?: StreamSegmentCursor | null;
 }): string {
-  return params.strategy.collectAssistantResponseContent(params.items, params.startIndex);
+  return params.strategy.collectAssistantResponseContent(
+    params.items,
+    params.startIndex,
+    params.continuation,
+  );
 }
 
 export function isNearBottomForStreamRenderStrategy(

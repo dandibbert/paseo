@@ -6,11 +6,21 @@ import { continuesResponse, continuesTurn, isResponseBoundary } from "./turn-mem
 
 export type StreamToolSequence = "single" | "first" | "middle" | "last" | "none";
 
+export interface StreamSegmentCursor {
+  items: StreamItem[];
+  startIndex: number;
+}
+
 export interface TurnFooterHost {
   itemId: string;
   items: StreamItem[];
   timing?: TurnTiming;
   startIndex: number;
+  /**
+   * The history segment a liveHead response continues into. Copy has to walk it too, or a
+   * response split across the liveHead/history boundary copies only its newest part.
+   */
+  continuation: StreamSegmentCursor | null;
 }
 
 export interface StreamLayoutItem {
@@ -61,19 +71,19 @@ interface AssistantFooterSource {
   item: Extract<StreamItem, { kind: "assistant_message" }>;
   items: StreamItem[];
   index: number;
+  continuation: StreamSegmentCursor | null;
 }
 
 function createTurnFooterHost(input: {
-  item: StreamItem;
-  items: StreamItem[];
-  index: number;
+  assistant: AssistantFooterSource;
   timingByAssistantId: Map<string, TurnTiming>;
 }): TurnFooterHost {
   return {
-    itemId: input.item.id,
-    items: input.items,
-    timing: input.timingByAssistantId.get(input.item.id),
-    startIndex: input.index,
+    itemId: input.assistant.item.id,
+    items: input.assistant.items,
+    timing: input.timingByAssistantId.get(input.assistant.item.id),
+    startIndex: input.assistant.index,
+    continuation: input.assistant.continuation,
   };
 }
 
@@ -100,7 +110,14 @@ function findLatestAssistantInResponse(input: {
         return null;
       }
       if (item.kind === "assistant_message") {
-        return { item, items, index };
+        const continuation =
+          canCrossBoundary &&
+          input.boundaryAboveItems &&
+          input.boundaryAboveIndex !== null &&
+          input.boundaryAboveIndex !== undefined
+            ? { items: input.boundaryAboveItems, startIndex: input.boundaryAboveIndex }
+            : null;
+        return { item, items, index, continuation };
       }
       laterItem = item;
     }
@@ -125,7 +142,8 @@ function resolveAuxiliaryTurnFooter(input: StreamLayoutInput): TurnFooterHost | 
     return null;
   }
 
-  const footerItems = input.liveHead.length > 0 ? input.liveHead : input.history;
+  const usesLiveHead = input.liveHead.length > 0;
+  const footerItems = usesLiveHead ? input.liveHead : input.history;
   const latestIndex = input.strategy.getLatestItemIndex(footerItems);
   if (latestIndex === null) {
     return null;
@@ -140,10 +158,17 @@ function resolveAuxiliaryTurnFooter(input: StreamLayoutInput): TurnFooterHost | 
     return null;
   }
 
+  const historyBoundaryIndex = usesLiveHead
+    ? input.strategy.getHistoryLiveBoundaryIndex(input.history)
+    : null;
   return createTurnFooterHost({
-    item: assistant.item,
-    items: assistant.items,
-    index: assistant.index,
+    assistant: {
+      ...assistant,
+      continuation:
+        historyBoundaryIndex === null
+          ? null
+          : { items: input.history, startIndex: historyBoundaryIndex },
+    },
     timingByAssistantId: input.timingByAssistantId,
   });
 }
@@ -173,12 +198,7 @@ function resolveCompletedFooter(input: {
   if (!assistant || input.auxiliaryTurnFooter?.itemId === assistant.item.id) {
     return null;
   }
-  return createTurnFooterHost({
-    item: assistant.item,
-    items: assistant.items,
-    index: assistant.index,
-    timingByAssistantId: input.timingByAssistantId,
-  });
+  return createTurnFooterHost({ assistant, timingByAssistantId: input.timingByAssistantId });
 }
 
 function isToolSequenceItem(
@@ -245,7 +265,9 @@ function areTurnFooterHostsEqual(
     left.itemId === right.itemId &&
     left.timing === right.timing &&
     left.startIndex === right.startIndex &&
-    left.items === right.items
+    left.items === right.items &&
+    left.continuation?.items === right.continuation?.items &&
+    left.continuation?.startIndex === right.continuation?.startIndex
   );
 }
 

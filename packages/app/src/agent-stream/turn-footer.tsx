@@ -15,7 +15,7 @@ import {
   STREAM_METADATA_FONT_SIZE,
   type AssistantForkTarget,
 } from "@/components/message";
-import type { TurnFooterHost } from "./layout";
+import type { StreamSegmentCursor, TurnFooterHost } from "./layout";
 import { AssistantForkMenu } from "@/components/assistant-fork-menu";
 import { SyncedLoader } from "@/components/synced-loader";
 import { useRetainedPanelActive } from "@/components/retained-panel";
@@ -77,6 +77,7 @@ export const TurnFooter = memo(function TurnFooter({
       items={host.items}
       timing={host.timing}
       startIndex={host.startIndex}
+      continuation={host.continuation}
       supportsTimelineCursor={supportsTimelineCursor}
       onForkAssistantTurn={onForkAssistantTurn}
     />
@@ -88,6 +89,7 @@ export const CompletedTurnFooterRow = memo(function CompletedTurnFooterRow({
   items,
   timing,
   startIndex,
+  continuation,
   supportsTimelineCursor,
   onForkAssistantTurn,
 }: {
@@ -95,6 +97,7 @@ export const CompletedTurnFooterRow = memo(function CompletedTurnFooterRow({
   items: StreamItem[];
   timing?: TurnTiming;
   startIndex: number;
+  continuation: StreamSegmentCursor | null;
   supportsTimelineCursor: boolean;
   onForkAssistantTurn?: AssistantTurnForkHandler;
 }) {
@@ -105,6 +108,7 @@ export const CompletedTurnFooterRow = memo(function CompletedTurnFooterRow({
         items={items}
         timing={timing}
         startIndex={startIndex}
+        continuation={continuation}
         supportsTimelineCursor={supportsTimelineCursor}
         onForkAssistantTurn={onForkAssistantTurn}
       />
@@ -161,6 +165,7 @@ function CompletedTurnFooter({
   items,
   timing,
   startIndex,
+  continuation,
   supportsTimelineCursor,
   onForkAssistantTurn,
 }: {
@@ -168,6 +173,7 @@ function CompletedTurnFooter({
   items: StreamItem[];
   timing?: TurnTiming;
   startIndex: number;
+  continuation: StreamSegmentCursor | null;
   supportsTimelineCursor: boolean;
   onForkAssistantTurn?: AssistantTurnForkHandler;
 }) {
@@ -177,8 +183,9 @@ function CompletedTurnFooter({
         strategy,
         items,
         startIndex,
+        continuation,
       }),
-    [strategy, items, startIndex],
+    [strategy, items, startIndex, continuation],
   );
   const boundary = resolveAssistantTurnForkBoundary({
     items,
