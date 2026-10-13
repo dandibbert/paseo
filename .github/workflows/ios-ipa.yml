@@ -66,7 +66,14 @@ jobs:
             echo "Xcode workspace not generated" >&2
             exit 1
           fi
-          scheme="$(xcodebuild -list -json -workspace "$workspace" | jq -r '.workspace.schemes[0] // empty')"
+          # Workspace scheme[0] may be a CocoaPods target; resolve the app's
+          # scheme from the generated application project instead.
+          project="$(find packages/app/ios -maxdepth 1 -name '*.xcodeproj' -print -quit)"
+          if [ -z "$project" ]; then
+            echo "Application Xcode project not found" >&2
+            exit 1
+          fi
+          scheme="$(xcodebuild -list -json -project "$project" | jq -r '.project.schemes[0] // empty')"
           if [ -z "$scheme" ]; then
             echo "No app scheme found in $workspace" >&2
             exit 1

@@ -773,11 +773,16 @@ export class TerminalSessionController {
   private handleSecureTerminalInput(msg: TerminalSecureInputRequest): void {
     const terminal = this.terminalManager?.getTerminal(msg.terminalId);
     // Newlines could inject multiple shell commands rather than one secret.
-    const error = !terminal
-      ? "Terminal not found"
-      : /[\r\n\0]/.test(msg.secret)
-        ? "Secure input cannot contain newline or NUL characters"
-        : null;
+    let error: string | null = null;
+    if (!terminal) {
+      error = "Terminal not found";
+    } else if (
+      msg.secret.includes("\r") ||
+      msg.secret.includes("\n") ||
+      msg.secret.includes("\0")
+    ) {
+      error = "Secure input cannot contain newline or NUL characters";
+    }
     if (!error && terminal) {
       // Never log, persist, or return the secret. The receiving program is
       // responsible for disabling PTY echo before prompting for a password.

@@ -1029,6 +1029,9 @@ export function TerminalPane({
     [client, isConnected, terminalId, t],
   );
 
+  const openSecureInput = useCallback(() => setSecureInputOpen(true), []);
+  const closeSecureInput = useCallback(() => setSecureInputOpen(false), []);
+
   const renderVirtualKeyboardControl = (control: TerminalVirtualKeyboardControl) => {
     const controlId = getTerminalVirtualKeyboardControlId(control);
     switch (control.type) {
@@ -1092,7 +1095,7 @@ export function TerminalPane({
         {isTerminalPresented && isPaneFocused ? (
           <Pressable
             style={styles.secureInputTrigger}
-            onPress={() => setSecureInputOpen(true)}
+            onPress={openSecureInput}
             accessibilityRole="button"
             accessibilityLabel={t("workspace.terminal.secureInput.open")}
             testID="terminal-secure-input-open"
@@ -1189,7 +1192,7 @@ export function TerminalPane({
           key={terminalId}
           supported={supportsSecureInput}
           onSubmit={submitSecureInput}
-          onClose={() => setSecureInputOpen(false)}
+          onClose={closeSecureInput}
         />
       ) : null}
     </Animated.View>

@@ -646,7 +646,8 @@ export const en = {
         open: "Secure input",
         label: "Secret",
         hint: "Send a password to this terminal without putting it in chat or command history.",
-        warning: "Only use when the receiving program is waiting for a password with echo disabled. It may otherwise appear in terminal output or recordings. Use an encrypted connection when remote.",
+        warning:
+          "Only use when the receiving program is waiting for a password with echo disabled. It may otherwise appear in terminal output or recordings. Use an encrypted connection when remote.",
         upgrade: "Update the host to use secure input.",
         submitNewline: "Press Enter after sending",
         send: "Send to terminal",

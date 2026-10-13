@@ -1,8 +1,8 @@
 import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Text, TextInput, View } from "react-native";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
-import { AdaptiveModalSheet } from "@/components/adaptive-modal-sheet";
+import { Text, View } from "react-native";
+import { StyleSheet } from "react-native-unistyles";
+import { AdaptiveModalSheet, AdaptiveTextInput } from "@/components/adaptive-modal-sheet";
 import { Button } from "@/components/ui/button";
 
 interface TerminalSecureInputSheetProps {
@@ -17,12 +17,16 @@ export function TerminalSecureInputSheet({
   supported,
 }: TerminalSecureInputSheetProps) {
   const { t } = useTranslation();
-  const { theme } = useUnistyles();
   const [secret, setSecret] = useState("");
   const [submitNewline, setSubmitNewline] = useState(true);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const header = useMemo(() => ({ title: t("workspace.terminal.secureInput.title") }), [t]);
+  const newlineAccessibilityState = useMemo(
+    () => ({ checked: submitNewline }),
+    [submitNewline],
+  );
+  const toggleNewline = useCallback(() => setSubmitNewline((value) => !value), []);
 
   const close = useCallback(() => {
     if (sending) return;
@@ -44,6 +48,9 @@ export function TerminalSecureInputSheet({
       setSending(false);
     }
   }, [onClose, onSubmit, secret, sending, submitNewline, supported]);
+  const handleSendPress = useCallback(() => {
+    void send();
+  }, [send]);
 
   return (
     <AdaptiveModalSheet
@@ -61,10 +68,9 @@ export function TerminalSecureInputSheet({
         ) : (
           <>
             <Text style={styles.label}>{t("workspace.terminal.secureInput.label")}</Text>
-            <TextInput
+            <AdaptiveTextInput
               testID="terminal-secure-input-field"
               accessibilityLabel={t("workspace.terminal.secureInput.label")}
-              value={secret}
               onChangeText={setSecret}
               secureTextEntry
               contextMenuHidden
@@ -76,15 +82,14 @@ export function TerminalSecureInputSheet({
               editable={!sending}
               maxLength={8192}
               placeholder="••••••••"
-              placeholderTextColor={theme.colors.foregroundMuted}
               style={styles.input}
             />
             <Button
               variant="ghost"
               size="sm"
-              onPress={() => setSubmitNewline((value) => !value)}
+              onPress={toggleNewline}
               accessibilityRole="checkbox"
-              accessibilityState={{ checked: submitNewline }}
+              accessibilityState={newlineAccessibilityState}
             >
               {submitNewline ? "☑ " : "☐ "}
               {t("workspace.terminal.secureInput.submitNewline")}
@@ -106,7 +111,7 @@ export function TerminalSecureInputSheet({
               testID="terminal-secure-input-submit"
               disabled={secret.length === 0 || sending}
               loading={sending}
-              onPress={() => void send()}
+              onPress={handleSendPress}
             >
               {t("workspace.terminal.secureInput.send")}
             </Button>
@@ -119,7 +124,7 @@ export function TerminalSecureInputSheet({
 
 const styles = StyleSheet.create((theme) => ({
   body: {
-    padding: theme.spacing[5],
+    padding: theme.spacing[4],
     gap: theme.spacing[3],
   },
   hint: {
