@@ -15,7 +15,7 @@ import {
   STREAM_METADATA_FONT_SIZE,
   type AssistantForkTarget,
 } from "@/components/message";
-import type { StreamSegmentCursor, TurnFooterHost } from "./layout";
+import type { TurnFooterHost } from "./layout";
 import { AssistantForkMenu } from "@/components/assistant-fork-menu";
 import { SyncedLoader } from "@/components/synced-loader";
 import { useRetainedPanelActive } from "@/components/retained-panel";
@@ -77,7 +77,8 @@ export const TurnFooter = memo(function TurnFooter({
       items={host.items}
       timing={host.timing}
       startIndex={host.startIndex}
-      continuation={host.continuation}
+      continuationItems={host.continuation?.items ?? null}
+      continuationStartIndex={host.continuation?.startIndex ?? null}
       supportsTimelineCursor={supportsTimelineCursor}
       onForkAssistantTurn={onForkAssistantTurn}
     />
@@ -89,7 +90,8 @@ export const CompletedTurnFooterRow = memo(function CompletedTurnFooterRow({
   items,
   timing,
   startIndex,
-  continuation,
+  continuationItems,
+  continuationStartIndex,
   supportsTimelineCursor,
   onForkAssistantTurn,
 }: {
@@ -97,7 +99,9 @@ export const CompletedTurnFooterRow = memo(function CompletedTurnFooterRow({
   items: StreamItem[];
   timing?: TurnTiming;
   startIndex: number;
-  continuation: StreamSegmentCursor | null;
+  /** Passed as primitives so a freshly built host doesn't defeat the row's memo. */
+  continuationItems: StreamItem[] | null;
+  continuationStartIndex: number | null;
   supportsTimelineCursor: boolean;
   onForkAssistantTurn?: AssistantTurnForkHandler;
 }) {
@@ -108,7 +112,8 @@ export const CompletedTurnFooterRow = memo(function CompletedTurnFooterRow({
         items={items}
         timing={timing}
         startIndex={startIndex}
-        continuation={continuation}
+        continuationItems={continuationItems}
+        continuationStartIndex={continuationStartIndex}
         supportsTimelineCursor={supportsTimelineCursor}
         onForkAssistantTurn={onForkAssistantTurn}
       />
@@ -165,7 +170,8 @@ function CompletedTurnFooter({
   items,
   timing,
   startIndex,
-  continuation,
+  continuationItems,
+  continuationStartIndex,
   supportsTimelineCursor,
   onForkAssistantTurn,
 }: {
@@ -173,7 +179,8 @@ function CompletedTurnFooter({
   items: StreamItem[];
   timing?: TurnTiming;
   startIndex: number;
-  continuation: StreamSegmentCursor | null;
+  continuationItems: StreamItem[] | null;
+  continuationStartIndex: number | null;
   supportsTimelineCursor: boolean;
   onForkAssistantTurn?: AssistantTurnForkHandler;
 }) {
@@ -183,9 +190,12 @@ function CompletedTurnFooter({
         strategy,
         items,
         startIndex,
-        continuation,
+        continuation:
+          continuationItems && continuationStartIndex !== null
+            ? { items: continuationItems, startIndex: continuationStartIndex }
+            : null,
       }),
-    [strategy, items, startIndex, continuation],
+    [strategy, items, startIndex, continuationItems, continuationStartIndex],
   );
   const boundary = resolveAssistantTurnForkBoundary({
     items,

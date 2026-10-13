@@ -169,7 +169,8 @@ function renderStreamItemWithTurnFooter(input: {
       items={footerHost.items}
       timing={footerHost.timing}
       startIndex={footerHost.startIndex}
-      continuation={footerHost.continuation}
+      continuationItems={footerHost.continuation?.items ?? null}
+      continuationStartIndex={footerHost.continuation?.startIndex ?? null}
       supportsTimelineCursor={input.supportsTimelineCursor}
       onForkAssistantTurn={input.onForkAssistantTurn}
     />
