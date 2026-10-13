@@ -77,6 +77,8 @@ export const TurnFooter = memo(function TurnFooter({
       items={host.items}
       timing={host.timing}
       startIndex={host.startIndex}
+      continuationItems={host.continuation?.items ?? null}
+      continuationStartIndex={host.continuation?.startIndex ?? null}
       supportsTimelineCursor={supportsTimelineCursor}
       onForkAssistantTurn={onForkAssistantTurn}
     />
@@ -88,6 +90,8 @@ export const CompletedTurnFooterRow = memo(function CompletedTurnFooterRow({
   items,
   timing,
   startIndex,
+  continuationItems,
+  continuationStartIndex,
   supportsTimelineCursor,
   onForkAssistantTurn,
 }: {
@@ -95,6 +99,9 @@ export const CompletedTurnFooterRow = memo(function CompletedTurnFooterRow({
   items: StreamItem[];
   timing?: TurnTiming;
   startIndex: number;
+  /** Passed as primitives so a freshly built host doesn't defeat the row's memo. */
+  continuationItems: StreamItem[] | null;
+  continuationStartIndex: number | null;
   supportsTimelineCursor: boolean;
   onForkAssistantTurn?: AssistantTurnForkHandler;
 }) {
@@ -105,6 +112,8 @@ export const CompletedTurnFooterRow = memo(function CompletedTurnFooterRow({
         items={items}
         timing={timing}
         startIndex={startIndex}
+        continuationItems={continuationItems}
+        continuationStartIndex={continuationStartIndex}
         supportsTimelineCursor={supportsTimelineCursor}
         onForkAssistantTurn={onForkAssistantTurn}
       />
@@ -161,6 +170,8 @@ function CompletedTurnFooter({
   items,
   timing,
   startIndex,
+  continuationItems,
+  continuationStartIndex,
   supportsTimelineCursor,
   onForkAssistantTurn,
 }: {
@@ -168,6 +179,8 @@ function CompletedTurnFooter({
   items: StreamItem[];
   timing?: TurnTiming;
   startIndex: number;
+  continuationItems: StreamItem[] | null;
+  continuationStartIndex: number | null;
   supportsTimelineCursor: boolean;
   onForkAssistantTurn?: AssistantTurnForkHandler;
 }) {
@@ -177,8 +190,12 @@ function CompletedTurnFooter({
         strategy,
         items,
         startIndex,
+        continuation:
+          continuationItems && continuationStartIndex !== null
+            ? { items: continuationItems, startIndex: continuationStartIndex }
+            : null,
       }),
-    [strategy, items, startIndex],
+    [strategy, items, startIndex, continuationItems, continuationStartIndex],
   );
   const boundary = resolveAssistantTurnForkBoundary({
     items,

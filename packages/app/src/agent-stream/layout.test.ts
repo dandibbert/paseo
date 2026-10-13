@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { TurnTiming } from "@/timeline/turn-time";
 import type { StreamItem } from "@/types/stream";
 import {
+  collectAssistantResponseContentForStreamRenderStrategy,
   orderHeadForStreamRenderStrategy,
   orderTailForStreamRenderStrategy,
   type StreamStrategy,
@@ -544,6 +545,58 @@ describe("layoutStream", () => {
       expect(layout.auxiliaryTurnFooter).toBeNull();
       expect(findLayoutItem(layout, assistant.id).completedFooter).toBeNull();
       expect(footerOwners(layout)).toEqual([]);
+    },
+  );
+
+  it.each(["web", "android"] as const)(
+    "copies a completed response split across history and liveHead on %s",
+    (platform) => {
+      const earlier = assistantMessage("earlier", 2);
+      const tool = toolCall("tool-1", 3);
+      const latest = assistantMessage("latest", 4);
+      const layout = layoutFor({
+        platform,
+        tail: [userMessage("u1", 1), earlier, tool],
+        head: [latest],
+        timingIds: [latest.id],
+      });
+
+      const footer = layout.auxiliaryTurnFooter;
+      expect(footer?.itemId).toBe(latest.id);
+      expect(
+        footer &&
+          collectAssistantResponseContentForStreamRenderStrategy({
+            strategy: strategyFor(platform),
+            items: footer.items,
+            startIndex: footer.startIndex,
+            continuation: footer.continuation,
+          }),
+      ).toBe("earlier\n\nlatest");
+    },
+  );
+
+  it.each(["web", "android"] as const)(
+    "stops copying at the user message across the liveHead boundary on %s",
+    (platform) => {
+      const previous = assistantMessage("previous", 2);
+      const latest = assistantMessage("latest", 4);
+      const layout = layoutFor({
+        platform,
+        tail: [userMessage("u1", 1), previous, userMessage("u2", 3)],
+        head: [latest],
+        timingIds: [latest.id],
+      });
+
+      const footer = layout.auxiliaryTurnFooter;
+      expect(
+        footer &&
+          collectAssistantResponseContentForStreamRenderStrategy({
+            strategy: strategyFor(platform),
+            items: footer.items,
+            startIndex: footer.startIndex,
+            continuation: footer.continuation,
+          }),
+      ).toBe("latest");
     },
   );
 });
