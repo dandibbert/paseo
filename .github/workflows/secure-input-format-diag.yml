@@ -2,6 +2,9 @@ name: Secure input formatting diagnostics
 on:
   push:
     branches: [personal/secure-input-ios-build]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:
