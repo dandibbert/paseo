@@ -644,6 +644,17 @@ export const zhCN: TranslationResources = {
       hostDisconnected: "Host 未连接",
       updateHost: "请更新主机以使用原生终端渲染器。",
       unableToSubscribe: "无法订阅 Terminal",
+      secureInput: {
+        title: "安全输入",
+        open: "安全输入",
+        label: "密码或令牌",
+        hint: "直接交给当前终端，不写入聊天消息或命令历史。",
+        warning: "仅在终端程序正在等待输入、且已关闭回显时使用；否则仍可能出现在终端输出或录屏中。远程操作时请使用加密连接。",
+        upgrade: "请先升级 Paseo 主机端以使用安全输入。",
+        submitNewline: "发送后按回车",
+        send: "发送至终端",
+        cancel: "取消",
+      },
     },
     tabs: {
       loading: "正在加载...",

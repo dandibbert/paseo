@@ -623,6 +623,7 @@ export const ptBR: TranslationResources = {
       hostDisconnected: "Host não está conectado",
       updateHost: "Atualize o host para usar o renderizador de terminal nativo.",
       unableToSubscribe: "Não foi possível assinar o terminal",
+      secureInput: en.workspace.terminal.secureInput,
     },
     tabs: {
       loading: "Carregando...",

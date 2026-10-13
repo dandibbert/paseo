@@ -3131,6 +3131,15 @@ export const TerminalInputSchema = z.object({
   message: TerminalClientMessageSchema,
 });
 
+// Secret text is intentionally not part of ordinary terminal key replay.
+export const TerminalSecureInputRequestSchema = z.object({
+  type: z.literal("terminal.secure_input.request"),
+  terminalId: z.string(),
+  secret: z.string().min(1).max(8192),
+  submit: z.boolean(),
+  requestId: z.string(),
+});
+
 export const KillTerminalRequestSchema = z.object({
   type: z.literal("kill_terminal_request"),
   terminalId: z.string(),
@@ -3460,6 +3469,7 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   SubscribeTerminalRequestSchema,
   UnsubscribeTerminalRequestSchema,
   TerminalInputSchema,
+  TerminalSecureInputRequestSchema,
   KillTerminalRequestSchema,
   CaptureTerminalRequestSchema,
   ChatCreateRequestSchema,
@@ -3677,6 +3687,8 @@ export const ServerInfoStatusPayloadSchema = z
         workspaceSetupRun: z.boolean().optional(),
         // COMPAT(workspaceTerminals): added in v0.8.0, remove gate after 2027-09-05.
         workspaceTerminals: z.boolean().optional(),
+        // COMPAT(terminalSecureInput): added in v0.9.2-personal, remove after 2027-04-13.
+        terminalSecureInput: z.boolean().optional(),
         // COMPAT(checkoutForgeSetAutoMerge): added in v0.2.0-beta.1. Remove the
         // feature gate and checkoutGithubSetAutoMerge fallback after 2027-01-17
         // once the supported daemon floor is >= v0.2.0.
@@ -6560,6 +6572,16 @@ export const KillTerminalResponseSchema = z.object({
   }),
 });
 
+export const TerminalSecureInputResponseSchema = z.object({
+  type: z.literal("terminal.secure_input.response"),
+  payload: z.object({
+    requestId: z.string(),
+    terminalId: z.string(),
+    success: z.boolean(),
+    error: z.string().nullable(),
+  }),
+});
+
 export const CaptureTerminalResponseSchema = z.object({
   type: z.literal("capture_terminal_response"),
   payload: z.object({
@@ -7171,6 +7193,7 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   CreateTerminalResponseSchema,
   RenameTerminalResponseSchema,
   SubscribeTerminalResponseSchema,
+  TerminalSecureInputResponseSchema,
   KillTerminalResponseSchema,
   CaptureTerminalResponseSchema,
   TerminalStreamExitSchema,
@@ -7638,6 +7661,8 @@ export type SubscribeTerminalRequest = z.infer<typeof SubscribeTerminalRequestSc
 export type SubscribeTerminalResponse = z.infer<typeof SubscribeTerminalResponseSchema>;
 export type UnsubscribeTerminalRequest = z.infer<typeof UnsubscribeTerminalRequestSchema>;
 export type TerminalInput = z.infer<typeof TerminalInputSchema>;
+export type TerminalSecureInputRequest = z.infer<typeof TerminalSecureInputRequestSchema>;
+export type TerminalSecureInputResponse = z.infer<typeof TerminalSecureInputResponseSchema>;
 export type TerminalCell = z.infer<typeof TerminalCellSchema>;
 export type TerminalCursorStyle = z.infer<typeof TerminalCursorStyleSchema>;
 export type TerminalCursor = z.infer<typeof TerminalCursorSchema>;

@@ -1,0 +1,96 @@
+name: iOS Unsigned IPA
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - personal/secure-input-ios-build
+    paths:
+      - ".github/workflows/ios-ipa.yml"
+      - "package*.json"
+      - "packages/**"
+      - "patches/**"
+      - "scripts/**"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-unsigned-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-unsigned-ipa:
+    name: Unsigned iPhoneOS IPA
+    runs-on: macos-15
+    timeout-minutes: 90
+    env:
+      APP_VARIANT: production
+      CI: "1"
+      ONNXRUNTIME_NODE_INSTALL: skip
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: node scripts/npm-retry.mjs ci
+
+      - name: Build app workspace dependencies
+        run: npm run build:app-deps
+
+      - name: Prepare native terminal renderer
+        run: npm --workspace=@getpaseo/app run build:terminal-webview
+
+      - name: Generate iOS project
+        working-directory: packages/app
+        run: npx expo prebuild --platform ios --clean --non-interactive
+
+      - name: Compile unsigned Release app
+        shell: bash
+        run: |
+          set -euo pipefail
+          workspace="$(find packages/app/ios -maxdepth 1 -name '*.xcworkspace' -print -quit)"
+          if [ -z "$workspace" ]; then
+            echo "Xcode workspace not generated" >&2
+            exit 1
+          fi
+          scheme="$(xcodebuild -list -json -workspace "$workspace" | jq -r '.workspace.schemes[0] // empty')"
+          if [ -z "$scheme" ]; then
+            echo "No app scheme found in $workspace" >&2
+            exit 1
+          fi
+          xcodebuild build \
+            -workspace "$workspace" \
+            -scheme "$scheme" \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath "$RUNNER_TEMP/PaseoBuild" \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Package app into IPA
+        shell: bash
+        run: |
+          set -euo pipefail
+          app="$(find "$RUNNER_TEMP/PaseoBuild/Build/Products/Release-iphoneos" -maxdepth 1 -name '*.app' -print -quit)"
+          if [ -z "$app" ]; then
+            echo "Compiled .app not found" >&2
+            exit 1
+          fi
+          mkdir -p "$RUNNER_TEMP/paseo-ipa/Payload" artifacts
+          cp -R "$app" "$RUNNER_TEMP/paseo-ipa/Payload/"
+          (cd "$RUNNER_TEMP/paseo-ipa" && zip -qry "$GITHUB_WORKSPACE/artifacts/Paseo-unsigned.ipa" Payload)
+          shasum -a 256 artifacts/Paseo-unsigned.ipa > artifacts/SHA256SUMS.txt
+
+      - name: Upload unsigned IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: paseo-ios-unsigned-ipa
+          path: |
+            artifacts/Paseo-unsigned.ipa
+            artifacts/SHA256SUMS.txt
+          if-no-files-found: error
+          retention-days: 14

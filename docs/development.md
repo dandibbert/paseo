@@ -5,6 +5,39 @@
 - Node.js (see `.tool-versions` for exact version)
 - npm workspaces (comes with Node)
 
+## iOS test builds
+
+The [iOS Unsigned IPA workflow](../.github/workflows/ios-ipa.yml) runs on a
+GitHub-hosted macOS runner. You can start it from **Actions → iOS Unsigned IPA →
+Run workflow** on any branch; the personal secure-input branch also builds on
+push. It uploads `Paseo-unsigned.ipa` and `SHA256SUMS.txt` as run artifacts.
+This is a **device-targeted Release build**, not a simulator archive.
+
+An unsigned IPA **cannot be installed directly on an ordinary iPhone**. Sign it
+with a valid development/ad hoc provisioning profile for the bundle identifier,
+or use EAS with Apple Developer credentials for a provisioned build:
+
+```bash
+cd packages/app
+npx eas build --platform ios --profile ios-internal
+```
+
+The `ios-internal` EAS profile uses the development bundle ID
+(`sh.paseo.debug`) to coexist with the store app. EAS signing requires
+configured Apple credentials, registered test devices, and the matching Expo
+project. No Apple signing keys or provisioning profiles are committed to Git.
+
+### Secure input in terminal panes
+
+The lock icon in a focused terminal opens an ephemeral secret field. An updated
+daemon accepts the input as a correlated terminal request; it is not sent as an
+agent prompt or saved as a file. The terminal program **must** already be
+waiting for secret input with PTY echo disabled, otherwise the secret can leak
+into terminal output and its scrollback. The request doesn't make an agent
+provider's independently launched shell process accept input, and it does not
+create a credential vault or agent-initiated credential approval workflow.
+Remote terminal access should use encrypted transport (Relay or TLS).
+
 ## Running the dev server
 
 ```bash

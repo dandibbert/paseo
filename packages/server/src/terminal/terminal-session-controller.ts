@@ -14,6 +14,7 @@ import type {
   SubscribeTerminalRequest,
   SubscribeTerminalsRequest,
   TerminalInput,
+  TerminalSecureInputRequest,
   UnsubscribeTerminalRequest,
   UnsubscribeTerminalsRequest,
 } from "../server/messages.js";
@@ -119,6 +120,7 @@ type TerminalDispatchableMessage =
   | SubscribeTerminalRequest
   | UnsubscribeTerminalRequest
   | TerminalInput
+  | TerminalSecureInputRequest
   | KillTerminalRequest
   | CaptureTerminalRequest
   | RenameTerminalRequest;
@@ -131,6 +133,7 @@ const TERMINAL_MESSAGE_TYPES: ReadonlySet<TerminalDispatchableMessage["type"]> =
   "subscribe_terminal_request",
   "unsubscribe_terminal_request",
   "terminal_input",
+  "terminal.secure_input.request",
   "kill_terminal_request",
   "capture_terminal_request",
   "terminal.rename.request",
@@ -222,6 +225,9 @@ export class TerminalSessionController {
       case "terminal_input":
         if (!ownership.currentSource) throw new Error("Terminal input requires a source");
         this.handleTerminalInput(msg, ownership.currentSource);
+        return undefined;
+      case "terminal.secure_input.request":
+        this.handleSecureTerminalInput(msg);
         return undefined;
       case "kill_terminal_request":
         return this.handleKillTerminalRequest(msg);
@@ -762,6 +768,30 @@ export class TerminalSessionController {
     }
 
     session.send(msg.message);
+  }
+
+  private handleSecureTerminalInput(msg: TerminalSecureInputRequest): void {
+    const terminal = this.terminalManager?.getTerminal(msg.terminalId);
+    // Newlines could inject multiple shell commands rather than one secret.
+    const error = !terminal
+      ? "Terminal not found"
+      : /[\r\n\0]/.test(msg.secret)
+        ? "Secure input cannot contain newline or NUL characters"
+        : null;
+    if (!error && terminal) {
+      // Never log, persist, or return the secret. The receiving program is
+      // responsible for disabling PTY echo before prompting for a password.
+      terminal.send({ type: "input", data: msg.secret + (msg.submit ? "\r" : "") });
+    }
+    this.emit({
+      type: "terminal.secure_input.response",
+      payload: {
+        requestId: msg.requestId,
+        terminalId: msg.terminalId,
+        success: error === null,
+        error,
+      },
+    });
   }
 
   private killTracked(terminalId: string, options?: { emitExit: boolean }): void {

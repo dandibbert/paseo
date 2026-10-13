@@ -618,6 +618,7 @@ export const ar: TranslationResources = {
       hostDisconnected: "Host غير متصل",
       updateHost: "حدّث المضيف لاستخدام عارض الطرفية الأصلي.",
       unableToSubscribe: "غير قادر على الاشتراك في المحطة",
+      secureInput: en.workspace.terminal.secureInput,
     },
     tabs: {
       loading: "تحميل...",

@@ -13,7 +13,11 @@ import {
 } from "react-native";
 import Animated, { runOnJS, useAnimatedReaction } from "react-native-reanimated";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
-import { Keyboard as KeyboardIcon, KeyboardOff as KeyboardOffIcon } from "lucide-react-native";
+import {
+  Keyboard as KeyboardIcon,
+  KeyboardOff as KeyboardOffIcon,
+  LockKeyhole,
+} from "lucide-react-native";
 import type { TerminalKeyInput } from "@getpaseo/protocol/terminal-key-input";
 import type { TerminalState } from "@getpaseo/protocol/messages";
 import {
@@ -62,6 +66,7 @@ import { useBlockMobilePanelOpenGestures } from "@/mobile-panels/provider";
 import { useSessionStore } from "@/stores/session-store";
 import { toXtermTheme } from "@/utils/to-xterm-theme";
 import TerminalEmulator, { type TerminalEmulatorHandle } from "./terminal-emulator";
+import { TerminalSecureInputSheet } from "./terminal-secure-input-sheet";
 import { TerminalFloatingCopyAction, TerminalPasteAction } from "./terminal-copy-paste-actions";
 import {
   createTerminalResizeDebouncer,
@@ -273,6 +278,9 @@ export function TerminalPane({
   const supportsTerminalSizeOwnership = useSessionStore(
     (state) => state.sessions[serverId]?.serverInfo?.features?.["terminal-size-ownership"] === true,
   );
+  const supportsSecureInput = useSessionStore(
+    (state) => state.sessions[serverId]?.serverInfo?.features?.terminalSecureInput === true,
+  );
   const setFocusedTerminalId = useSessionStore((state) => state.setFocusedTerminalId);
 
   const scopeKey = useMemo(() => terminalScopeKey({ serverId, cwd }), [serverId, cwd]);
@@ -293,6 +301,7 @@ export function TerminalPane({
   const [hasSelection, setHasSelection] = useState(false);
   const [hasClipboardText, setHasClipboardText] = useState(false);
   const [isKeyboardToggleVisible, setIsKeyboardToggleVisible] = useState(false);
+  const [secureInputOpen, setSecureInputOpen] = useState(false);
   const [focusRequestToken, setFocusRequestToken] = useState(0);
   const [resizeRequestToken, setResizeRequestToken] = useState(0);
   useBlockMobilePanelOpenGestures(isMobile && isWorkspaceFocused && isPaneFocused && hasSelection);
@@ -317,6 +326,7 @@ export function TerminalPane({
     terminalIdRef.current = terminalId;
     inputModeRef.current = DEFAULT_TERMINAL_INPUT_MODE_STATE;
     setHasSelection(false);
+    setSecureInputOpen(false);
   }, [terminalId]);
 
   const refreshClipboardAvailability = useCallback(async () => {
@@ -1006,6 +1016,19 @@ export function TerminalPane({
   });
   const keyboardToggleIconColor = theme.colors.foregroundMuted;
 
+  const submitSecureInput = useCallback(
+    async (secret: string, submitNewline: boolean) => {
+      if (!client || !isConnected || !terminalId) {
+        throw new Error(t("workspace.terminal.hostDisconnected"));
+      }
+      const response = await client.sendSecureTerminalInput(terminalId, secret, submitNewline);
+      if (!response.success) {
+        throw new Error(response.error ?? "Secure input failed");
+      }
+    },
+    [client, isConnected, terminalId, t],
+  );
+
   const renderVirtualKeyboardControl = (control: TerminalVirtualKeyboardControl) => {
     const controlId = getTerminalVirtualKeyboardControlId(control);
     switch (control.type) {
@@ -1066,6 +1089,17 @@ export function TerminalPane({
   return (
     <Animated.View style={containerStyle}>
       <View style={styles.outputContainer}>
+        {isTerminalPresented && isPaneFocused ? (
+          <Pressable
+            style={styles.secureInputTrigger}
+            onPress={() => setSecureInputOpen(true)}
+            accessibilityRole="button"
+            accessibilityLabel={t("workspace.terminal.secureInput.open")}
+            testID="terminal-secure-input-open"
+          >
+            <LockKeyhole size={17} color={theme.colors.foregroundMuted} />
+          </Pressable>
+        ) : null}
         <View style={styles.terminalGestureContainer}>
           <TerminalEmulator
             ref={emulatorRef}
@@ -1150,6 +1184,14 @@ export function TerminalPane({
           </View>
         </View>
       ) : null}
+      {secureInputOpen ? (
+        <TerminalSecureInputSheet
+          key={terminalId}
+          supported={supportsSecureInput}
+          onSubmit={submitSecureInput}
+          onClose={() => setSecureInputOpen(false)}
+        />
+      ) : null}
     </Animated.View>
   );
 }
@@ -1181,6 +1223,20 @@ const styles = StyleSheet.create((theme) => ({
     right: theme.spacing[3],
     bottom: theme.spacing[12],
     zIndex: 2,
+  },
+  secureInputTrigger: {
+    position: "absolute",
+    top: 10,
+    right: 10,
+    zIndex: 4,
+    width: 34,
+    height: 34,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: theme.colors.surface1,
+    borderRadius: theme.borderRadius.md,
+    borderColor: theme.colors.border,
+    borderWidth: 1,
   },
   errorRow: {
     paddingHorizontal: theme.spacing[3],

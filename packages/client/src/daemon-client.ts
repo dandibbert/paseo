@@ -6121,6 +6121,30 @@ export class DaemonClient {
     this.sendSessionMessage({ type: "terminal_input", terminalId, message });
   }
 
+  async sendSecureTerminalInput(
+    terminalId: string,
+    secret: string,
+    submit = true,
+  ): Promise<CorrelatedResponsePayload<"terminal.secure_input.response">> {
+    // COMPAT(terminalSecureInput): added in v0.9.2-personal, remove after 2027-04-13.
+    if (this.getLastServerInfoMessage()?.features?.terminalSecureInput !== true) {
+      throw new Error("Update the host to use secure terminal input.");
+    }
+    const requestId = this.createRequestId();
+    return this.sendCorrelatedRequest({
+      requestId,
+      message: SessionInboundMessageSchema.parse({
+        type: "terminal.secure_input.request",
+        requestId,
+        terminalId,
+        secret,
+        submit,
+      }),
+      responseType: "terminal.secure_input.response",
+      options: { skipQueue: true },
+    });
+  }
+
   async killTerminal(terminalId: string, requestId?: string): Promise<KillTerminalPayload> {
     const resolvedRequestId = this.createRequestId(requestId);
     const message = SessionInboundMessageSchema.parse({
