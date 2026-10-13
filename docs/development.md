@@ -5,6 +5,58 @@
 - Node.js (see `.tool-versions` for exact version)
 - npm workspaces (comes with Node)
 
+## iOS test builds
+
+The [iOS Unsigned IPA workflow](../.github/workflows/ios-ipa.yml) runs on a
+GitHub-hosted macOS runner. You can start it from **Actions → iOS Unsigned IPA →
+Run workflow** on any branch; the personal secure-input branch also builds on
+push. It uploads `Paseo-unsigned.ipa` and `SHA256SUMS.txt` as run artifacts.
+This is a **device-targeted Release build**, not a simulator archive.
+
+An unsigned IPA **cannot be installed directly on an ordinary iPhone**. Sign it
+with a valid development/ad hoc provisioning profile for the bundle identifier,
+or use EAS with Apple Developer credentials for a provisioned build:
+
+```bash
+cd packages/app
+npx eas build --platform ios --profile ios-internal
+```
+
+The `ios-internal` EAS profile uses the development bundle ID
+(`sh.paseo.debug`) to coexist with the store app. EAS signing requires
+configured Apple credentials, registered test devices, and the matching Expo
+project. No Apple signing keys or provisioning profiles are committed to Git.
+
+### Agent-initiated secure terminal input
+
+When Paseo's agent tools are enabled, an agent in a workspace can:
+
+1. Create a Paseo terminal with `create_terminal` and run an interactive command
+   using `send_terminal_keys`.
+2. After the command starts waiting for a password, call
+   `request_secure_terminal_input({ terminalId, reason })`.
+3. The connected desktop or mobile app displays an approval sheet, including the
+   agent, terminal, working directory and stated reason. You enter a secret or
+   deny the request. The daemon writes approved input directly to that terminal,
+   and the tool returns only `submitted`, `denied`, `expired`, or `canceled`.
+
+The daemon holds only prompt metadata in memory, not secrets. The app can list
+pending requests after reconnecting, and a request expires after ten minutes or
+is canceled when the terminal exits or the agent's tool call is aborted. One
+terminal can have at most one pending secret request.
+
+The lock icon in a terminal still supports manually sending a one-time secret.
+Neither flow saves a password in the conversation or a temporary file. Neither
+flow guarantees confidentiality against a terminal program or an agent that
+intentionally echoes, captures, or forwards the input: **only approve commands
+you trust and make sure terminal echo is disabled**. The broker can only inject
+into Paseo-managed terminals, not stdin belonging to a provider's separate
+Claude Code/Codex/Pi shell tool. Use encrypted remote transport (Relay or TLS).
+
+This is not a stored credential vault or automatic authentication. A newly
+connected mobile client must open Paseo to see any pending request; background
+push delivery depends on the platform's existing notification capability.
+
 ## Running the dev server
 
 ```bash

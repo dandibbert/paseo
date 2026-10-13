@@ -44,6 +44,7 @@ import type {
   TerminalWorkspaceContributionChangedEvent,
 } from "../terminal/terminal-manager.js";
 import { TerminalSessionController } from "../terminal/terminal-session-controller.js";
+import type { SecureTerminalPromptBroker } from "./secure-input/secure-terminal-prompt-broker.js";
 import type { TerminalActivity } from "@getpaseo/protocol/terminal-activity";
 import type { BinaryFrame } from "@getpaseo/protocol/binary-frames/index";
 import { CursorError } from "./pagination/cursor.js";
@@ -526,6 +527,7 @@ export interface SessionOptions {
   sttLanguage?: string;
   tts: Resolvable<TextToSpeechProvider | null>;
   terminalManager: TerminalManager | null;
+  secureTerminalPromptBroker?: SecureTerminalPromptBroker;
   providerSnapshotManager: ProviderSnapshotManager;
   hubExecutionAgents?: HubExecutionAgents;
   hubRelationships?: HubRelationshipManagement;
@@ -773,6 +775,7 @@ export class Session {
   >();
   private readonly workspaceUpdateTails = new Map<string, Promise<void>>();
   private readonly terminalManager: TerminalManager | null;
+  private readonly secureTerminalPromptBroker: SecureTerminalPromptBroker | undefined;
   private readonly providerSnapshotManager: ProviderSnapshotManager;
   private readonly serviceProxy: ServiceProxySubsystem | null;
   private readonly scriptRuntimeStore: WorkspaceScriptRuntimeStore | null;
@@ -896,6 +899,7 @@ export class Session {
       logger: this.sessionLogger,
     });
     this.agentManager = agentManager;
+    this.secureTerminalPromptBroker = options.secureTerminalPromptBroker;
     this.agentStorage = agentStorage;
     this.projectRegistry = projectRegistry;
     this.workspaceRegistry = workspaceRegistry;
@@ -3063,6 +3067,28 @@ export class Session {
 
   private dispatchTerminalMessage(msg: SessionInboundMessage): Promise<void> | undefined {
     switch (msg.type) {
+      case "terminal.secure_prompt.list.request":
+        this.emit({
+          type: "terminal.secure_prompt.list.response",
+          payload: {
+            requestId: msg.requestId,
+            prompts: this.secureTerminalPromptBroker?.list() ?? [],
+          },
+        });
+        return undefined;
+      case "terminal.secure_prompt.respond.request": {
+        const result = this.secureTerminalPromptBroker?.respond({
+          promptId: msg.promptId,
+          action: msg.action,
+          secret: msg.secret,
+          submitNewline: msg.submitNewline,
+        }) ?? { success: false, error: "Secure input is unavailable on this host" };
+        this.emit({
+          type: "terminal.secure_prompt.respond.response",
+          payload: { requestId: msg.requestId, ...result },
+        });
+        return undefined;
+      }
       case "start_workspace_script_request":
         return this.handleStartWorkspaceScriptRequest(msg);
       case "workspace.script.list.request":

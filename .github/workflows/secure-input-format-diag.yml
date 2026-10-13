@@ -1,0 +1,37 @@
+name: Secure input formatting diagnostics
+on:
+  push:
+    branches: [personal/secure-input-ios-build]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  format-diff:
+    runs-on: ubuntu-latest
+    env:
+      ONNXRUNTIME_NODE_INSTALL: skip
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+      - name: Install dependencies
+        run: node scripts/npm-retry.mjs ci
+      - name: Print formatter changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run format:files -- \
+            packages/app/src/components/terminal-secure-input-sheet.tsx \
+            packages/app/src/contexts/session-context.tsx \
+            packages/server/src/server/agent/tools/paseo-tools.ts \
+            packages/server/src/server/secure-input/secure-terminal-prompt-broker.ts \
+            packages/server/src/server/secure-input/secure-terminal-prompt-broker.test.ts \
+            packages/server/src/server/session.ts \
+            packages/server/src/server/websocket-server.ts
+          echo '=== BEGIN OXFMT DIFF ==='
+          git diff -- packages
+          echo '=== END OXFMT DIFF ==='

@@ -135,6 +135,7 @@ import { AgentManager } from "./agent/agent-manager.js";
 import { AgentStorage } from "./agent/agent-storage.js";
 import { attachAgentStoragePersistence } from "./persistence-hooks.js";
 import { createAgentMcpServer } from "./agent/mcp-server.js";
+import { SecureTerminalPromptBroker } from "./secure-input/secure-terminal-prompt-broker.js";
 import {
   createPaseoToolCatalog,
   type PaseoToolHostDependencies,
@@ -691,6 +692,10 @@ export async function createPaseoDaemon(
     appBaseUrl = typeof value === "string" ? value : "https://app.paseo.sh";
   });
   let wsServer: VoiceAssistantWebSocketServer | null = null;
+  const secureTerminalPromptBroker = new SecureTerminalPromptBroker({
+    terminalManager,
+    publish: (message) => wsServer?.broadcast(wrapSessionMessage(message)),
+  });
   let serviceProxyListenTarget: ListenTarget | null = null;
   const scriptHealthMonitor = new ScriptHealthMonitor({
     serviceProxy,
@@ -1391,6 +1396,7 @@ export async function createPaseoDaemon(
     agentManager,
     agentStorage,
     terminalManager,
+    secureTerminalPromptBroker,
     getDaemonTcpPort: () => (boundListenTarget?.type === "tcp" ? boundListenTarget.port : null),
     scheduleService,
     providerSnapshotManager,
@@ -1744,6 +1750,7 @@ export async function createPaseoDaemon(
               pluginRuntime,
               orchestrationSkills,
               workspaceLabelService,
+              secureTerminalPromptBroker,
             );
             pluginRuntime.bindPaseoSessionHost(wsServer);
             await pluginRuntime.start();

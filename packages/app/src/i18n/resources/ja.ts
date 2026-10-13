@@ -624,6 +624,7 @@ export const ja: TranslationResources = {
       hostDisconnected: "ホストが接続されていません",
       updateHost: "ネイティブターミナルを使用するにはホストを更新してください。",
       unableToSubscribe: "ターミナルに接続できません",
+      secureInput: en.workspace.terminal.secureInput,
     },
     tabs: {
       loading: "読み込み中...",

@@ -6121,6 +6121,72 @@ export class DaemonClient {
     this.sendSessionMessage({ type: "terminal_input", terminalId, message });
   }
 
+  async sendSecureTerminalInput(
+    terminalId: string,
+    secret: string,
+    submit = true,
+  ): Promise<CorrelatedResponsePayload<"terminal.secure_input.response">> {
+    // COMPAT(terminalSecureInput): added in v0.9.2-personal, remove after 2027-04-13.
+    if (this.getLastServerInfoMessage()?.features?.terminalSecureInput !== true) {
+      throw new Error("Update the host to use secure terminal input.");
+    }
+    const requestId = this.createRequestId();
+    return this.sendCorrelatedRequest({
+      requestId,
+      message: SessionInboundMessageSchema.parse({
+        type: "terminal.secure_input.request",
+        requestId,
+        terminalId,
+        secret,
+        submit,
+      }),
+      responseType: "terminal.secure_input.response",
+      options: { skipQueue: true },
+    });
+  }
+
+  async listSecureTerminalPrompts(): Promise<
+    CorrelatedResponsePayload<"terminal.secure_prompt.list.response">
+  > {
+    // COMPAT(secureAgentInput): added in personal v0.11.2, remove after 2027-04-13.
+    if (this.getLastServerInfoMessage()?.features?.terminalSecurePrompt !== true) {
+      throw new Error("Update the host to use agent-initiated secure input.");
+    }
+    const requestId = this.createRequestId();
+    return this.sendCorrelatedRequest({
+      requestId,
+      message: SessionInboundMessageSchema.parse({
+        type: "terminal.secure_prompt.list.request",
+        requestId,
+      }),
+      responseType: "terminal.secure_prompt.list.response",
+      options: { skipQueue: true },
+    });
+  }
+
+  async respondToSecureTerminalPrompt(input: {
+    promptId: string;
+    action: "submit" | "deny";
+    secret?: string;
+    submitNewline?: boolean;
+  }): Promise<CorrelatedResponsePayload<"terminal.secure_prompt.respond.response">> {
+    // COMPAT(secureAgentInput): added in personal v0.11.2, remove after 2027-04-13.
+    if (this.getLastServerInfoMessage()?.features?.terminalSecurePrompt !== true) {
+      throw new Error("Update the host to use agent-initiated secure input.");
+    }
+    const requestId = this.createRequestId();
+    return this.sendCorrelatedRequest({
+      requestId,
+      message: SessionInboundMessageSchema.parse({
+        type: "terminal.secure_prompt.respond.request",
+        requestId,
+        ...input,
+      }),
+      responseType: "terminal.secure_prompt.respond.response",
+      options: { skipQueue: true },
+    });
+  }
+
   async killTerminal(terminalId: string, requestId?: string): Promise<KillTerminalPayload> {
     const resolvedRequestId = this.createRequestId(requestId);
     const message = SessionInboundMessageSchema.parse({

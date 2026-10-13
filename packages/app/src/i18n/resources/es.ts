@@ -624,6 +624,7 @@ export const es: TranslationResources = {
       hostDisconnected: "Hostno está conectado",
       updateHost: "Actualiza el host para usar el renderizador de terminal nativo.",
       unableToSubscribe: "No se puede suscribir al terminal",
+      secureInput: en.workspace.terminal.secureInput,
     },
     tabs: {
       loading: "Cargando...",
