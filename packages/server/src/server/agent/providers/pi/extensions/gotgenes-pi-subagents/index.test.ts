@@ -186,4 +186,94 @@ describe("@gotgenes/pi-subagents adapter", () => {
       }),
     ).toBeUndefined();
   });
+
+  test("completes a card from a text-only get_subagent_result report", () => {
+    const host = createPiExtensionHost();
+    spawnBackground(host, "call-1", "native-1");
+    const text =
+      "Agent: native-1\nType: Explore | Status: completed | Tool uses: 3 | Duration: 4s\n" +
+      "Description: Inspect\n\nDone\n\nFull transcript available at: /tmp/child.jsonl";
+    const result = host.mapToolCall({
+      callId: "call-2",
+      toolName: "get_subagent_result",
+      args: { agent_id: "native-1" },
+      status: "completed",
+      result: { content: [{ type: "text", text }] },
+    });
+    expect(result?.subagents).toEqual([{ type: "upsert", id: "call-1", status: "completed" }]);
+    expect(result?.childSessions).toEqual([{ id: "call-1", file: "/tmp/child.jsonl" }]);
+  });
+
+  test("leaves the card alone when a text report names another agent", () => {
+    const host = createPiExtensionHost();
+    spawnBackground(host, "call-1", "native-1");
+    const result = host.mapToolCall({
+      callId: "call-2",
+      toolName: "get_subagent_result",
+      args: { agent_id: "native-1" },
+      status: "completed",
+      result: { content: [{ type: "text", text: 'Agent not found: "native-1".' }] },
+    });
+    expect(result?.subagents).toBeUndefined();
+  });
+
+  test("resume updates the original card and keeps later updates on it", () => {
+    const host = createPiExtensionHost();
+    spawnBackground(host, "call-1", "native-1");
+    const resumeArgs = { subagent_type: "Explore", prompt: "Continue", resume: "native-1" };
+    expect(
+      host.mapToolCall({
+        callId: "call-2",
+        toolName: "subagent",
+        args: resumeArgs,
+        status: "running",
+        result: null,
+      })?.subagents,
+    ).toEqual([{ type: "upsert", id: "call-1", status: "running" }]);
+    expect(
+      host.mapToolCall({
+        callId: "call-2",
+        toolName: "subagent",
+        args: resumeArgs,
+        status: "completed",
+        result: { details: { agentId: "native-1", status: "completed" } },
+      })?.subagents,
+    ).toEqual([{ type: "upsert", id: "call-1", status: "completed" }]);
+    expect(
+      host.mapCustomMessage({
+        role: "custom",
+        customType: "subagent-notification",
+        content: "done",
+        details: { id: "native-1", status: "completed" },
+      })?.subagents,
+    ).toEqual([{ type: "upsert", id: "call-1", description: undefined, status: "completed" }]);
+  });
+
+  test("treats a steered agent as completed", () => {
+    const host = createPiExtensionHost();
+    spawnBackground(host, "call-1", "native-1");
+    expect(
+      host.mapToolCall({
+        callId: "call-2",
+        toolName: "get_subagent_result",
+        args: { agent_id: "native-1" },
+        status: "completed",
+        result: { details: { agentId: "native-1", status: "steered" } },
+      })?.subagents,
+    ).toEqual([{ type: "upsert", id: "call-1", status: "completed" }]);
+  });
 });
+
+function spawnBackground(
+  host: ReturnType<typeof createPiExtensionHost>,
+  callId: string,
+  agentId: string,
+): void {
+  host.mapToolCall({
+    callId,
+    toolName: "subagent",
+    args: { subagent_type: "Explore", prompt: "Inspect" },
+    status: "completed",
+    result: { details: { agentId, status: "background" } },
+  });
+}
