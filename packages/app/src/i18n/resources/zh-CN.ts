@@ -646,6 +646,10 @@ export const zhCN: TranslationResources = {
       unableToSubscribe: "无法订阅 Terminal",
       secureInput: {
         title: "安全输入",
+        agentTitle: "Agent 请求安全输入",
+        agentContext: "Agent {{agentId}} · 终端 {{terminalName}}",
+        agentWarning:
+          "只有在信任当前 Agent 和终端命令时才批准。即使终端已关闭回显，Agent 控制的进程仍可能记录或转发密码。",
         open: "安全输入",
         label: "密码或令牌",
         hint: "直接交给当前终端，不写入聊天消息或命令历史。",

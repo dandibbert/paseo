@@ -7,29 +7,56 @@ import { Button } from "@/components/ui/button";
 
 interface TerminalSecureInputSheetProps {
   onClose: () => void;
+  onCancel?: () => Promise<void>;
   onSubmit: (secret: string, submitNewline: boolean) => Promise<void>;
   supported: boolean;
+  agentRequest?: {
+    agentId: string;
+    terminalName: string;
+    cwd: string;
+    reason: string;
+  };
 }
 
 export function TerminalSecureInputSheet({
   onClose,
+  onCancel,
   onSubmit,
   supported,
+  agentRequest,
 }: TerminalSecureInputSheetProps) {
   const { t } = useTranslation();
   const [secret, setSecret] = useState("");
   const [submitNewline, setSubmitNewline] = useState(true);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const header = useMemo(() => ({ title: t("workspace.terminal.secureInput.title") }), [t]);
+  const header = useMemo(
+    () => ({
+      title: agentRequest
+        ? t("workspace.terminal.secureInput.agentTitle")
+        : t("workspace.terminal.secureInput.title"),
+    }),
+    [agentRequest, t],
+  );
   const newlineAccessibilityState = useMemo(() => ({ checked: submitNewline }), [submitNewline]);
   const toggleNewline = useCallback(() => setSubmitNewline((value) => !value), []);
 
-  const close = useCallback(() => {
+  const close = useCallback(async () => {
     if (sending) return;
-    setSecret("");
-    onClose();
-  }, [onClose, sending]);
+    setSending(true);
+    try {
+      await onCancel?.();
+      setSecret("");
+      onClose();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not dismiss request");
+    } finally {
+      setSending(false);
+    }
+  }, [onCancel, onClose, sending]);
+  const handleClose = useCallback(() => {
+    void close();
+  }, [close]);
 
   const send = useCallback(async () => {
     if (!supported || !secret || sending) return;
@@ -53,11 +80,26 @@ export function TerminalSecureInputSheet({
     <AdaptiveModalSheet
       visible
       header={header}
-      onClose={close}
+      onClose={handleClose}
       desktopMaxWidth={460}
       testID="terminal-secure-input-sheet"
     >
       <View style={styles.body}>
+        {agentRequest ? (
+          <View style={styles.context}>
+            <Text style={styles.label}>
+              {t("workspace.terminal.secureInput.agentContext", {
+                agentId: agentRequest.agentId,
+                terminalName: agentRequest.terminalName,
+              })}
+            </Text>
+            <Text style={styles.hint}>{agentRequest.reason}</Text>
+            <Text style={styles.warning}>{agentRequest.cwd}</Text>
+            <Text style={styles.warning}>
+              {t("workspace.terminal.secureInput.agentWarning")}
+            </Text>
+          </View>
+        ) : null}
         <Text style={styles.hint}>{t("workspace.terminal.secureInput.hint")}</Text>
         <Text style={styles.warning}>{t("workspace.terminal.secureInput.warning")}</Text>
         {!supported ? (
@@ -99,7 +141,7 @@ export function TerminalSecureInputSheet({
           </Text>
         ) : null}
         <View style={styles.actions}>
-          <Button variant="secondary" onPress={close} disabled={sending}>
+          <Button variant="secondary" onPress={handleClose} disabled={sending}>
             {t("workspace.terminal.secureInput.cancel")}
           </Button>
           {supported ? (
@@ -123,6 +165,9 @@ const styles = StyleSheet.create((theme) => ({
   body: {
     padding: theme.spacing[4],
     gap: theme.spacing[3],
+  },
+  context: {
+    gap: theme.spacing[2],
   },
   hint: {
     color: theme.colors.foreground,

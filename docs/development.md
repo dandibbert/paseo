@@ -27,16 +27,35 @@ The `ios-internal` EAS profile uses the development bundle ID
 configured Apple credentials, registered test devices, and the matching Expo
 project. No Apple signing keys or provisioning profiles are committed to Git.
 
-### Secure input in terminal panes
+### Agent-initiated secure terminal input
 
-The lock icon in a focused terminal opens an ephemeral secret field. An updated
-daemon accepts the input as a correlated terminal request; it is not sent as an
-agent prompt or saved as a file. The terminal program **must** already be
-waiting for secret input with PTY echo disabled, otherwise the secret can leak
-into terminal output and its scrollback. The request doesn't make an agent
-provider's independently launched shell process accept input, and it does not
-create a credential vault or agent-initiated credential approval workflow.
-Remote terminal access should use encrypted transport (Relay or TLS).
+When Paseo's agent tools are enabled, an agent in a workspace can:
+
+1. Create a Paseo terminal with `create_terminal` and run an interactive command
+   using `send_terminal_keys`.
+2. After the command starts waiting for a password, call
+   `request_secure_terminal_input({ terminalId, reason })`.
+3. The connected desktop or mobile app displays an approval sheet, including the
+   agent, terminal, working directory and stated reason. You enter a secret or
+   deny the request. The daemon writes approved input directly to that terminal,
+   and the tool returns only `submitted`, `denied`, `expired`, or `canceled`.
+
+The daemon holds only prompt metadata in memory, not secrets. The app can list
+pending requests after reconnecting, and a request expires after ten minutes or
+is canceled when the terminal exits or the agent's tool call is aborted. One
+terminal can have at most one pending secret request.
+
+The lock icon in a terminal still supports manually sending a one-time secret.
+Neither flow saves a password in the conversation or a temporary file. Neither
+flow guarantees confidentiality against a terminal program or an agent that
+intentionally echoes, captures, or forwards the input: **only approve commands
+you trust and make sure terminal echo is disabled**. The broker can only inject
+into Paseo-managed terminals, not stdin belonging to a provider's separate
+Claude Code/Codex/Pi shell tool. Use encrypted remote transport (Relay or TLS).
+
+This is not a stored credential vault or automatic authentication. A newly
+connected mobile client must open Paseo to see any pending request; background
+push delivery depends on the platform's existing notification capability.
 
 ## Running the dev server
 

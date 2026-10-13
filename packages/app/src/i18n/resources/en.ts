@@ -643,6 +643,10 @@ export const en = {
       unableToSubscribe: "Unable to subscribe to terminal",
       secureInput: {
         title: "Secure input",
+        agentTitle: "Agent requests secure input",
+        agentContext: "Agent {{agentId}} · Terminal {{terminalName}}",
+        agentWarning:
+          "Only approve agents and terminal commands you trust. An agent-controlled process could record or forward your password even when terminal echo is disabled.",
         open: "Secure input",
         label: "Secret",
         hint: "Send a password to this terminal without putting it in chat or command history.",

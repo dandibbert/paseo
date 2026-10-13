@@ -39,6 +39,7 @@ import type { FirstAgentContext } from "../../messages.js";
 import { everyMsToFiveFieldCron } from "@getpaseo/protocol/schedule/cadence";
 import { expandUserPath, isSameOrDescendantPath, resolvePathFromBase } from "../../path-utils.js";
 import type { TerminalManager } from "../../../terminal/terminal-manager.js";
+import type { SecureTerminalPromptBroker } from "../../secure-input/secure-terminal-prompt-broker.js";
 import type { CreatePaseoWorktreeWorkflowFn } from "../../worktree-session.js";
 import type { ScheduleService } from "../../schedule/service.js";
 import {
@@ -109,6 +110,7 @@ export interface PaseoToolHostDependencies {
   agentManager: AgentManager;
   agentStorage: AgentStorage;
   terminalManager?: TerminalManager | null;
+  secureTerminalPromptBroker?: SecureTerminalPromptBroker;
   getDaemonTcpPort?: () => number | null;
   scheduleService?: ScheduleService | null;
   providerSnapshotManager: ProviderSnapshotManager;
@@ -593,6 +595,7 @@ export function createPaseoToolCatalog(options: PaseoToolHostDependencies): Pase
     agentManager,
     agentStorage,
     terminalManager,
+    secureTerminalPromptBroker,
     workspaceScripts,
     scheduleService,
     providerSnapshotManager,
@@ -2532,6 +2535,47 @@ export function createPaseoToolCatalog(options: PaseoToolHostDependencies): Pase
       };
     },
   );
+
+  if (callerAgentId && secureTerminalPromptBroker) {
+    registerTool(
+      "request_secure_terminal_input",
+      {
+        title: "Request secure terminal input",
+        description:
+          "Ask the human to enter a password or token directly into a Paseo terminal PTY. " +
+          "First create a Paseo terminal and start the interactive program with create_terminal/send_terminal_keys. " +
+          "When the program is waiting for a password with echo disabled, call this tool using its terminal ID. " +
+          "The human approves on desktop or iPhone; this tool returns only the delivery status. " +
+          "NEVER ask for the password in chat or through a file. This cannot write to your provider-native shell's stdin.",
+        inputSchema: {
+          terminalId: z.string().min(1),
+          reason: z.string().trim().min(1).max(300).describe(
+            "Explain why the interactive terminal requires a credential. Do not include the credential.",
+          ),
+        },
+        outputSchema: {
+          status: z.enum(["submitted", "denied", "expired", "canceled"]),
+        },
+      },
+      async ({ terminalId, reason }, context) => {
+        const agent = resolveCallerAgent();
+        if (!agent?.workspaceId) {
+          throw new Error("Secure input requires an agent belonging to a workspace");
+        }
+        const status = await secureTerminalPromptBroker.request({
+          agentId: callerAgentId,
+          workspaceId: agent.workspaceId,
+          terminalId,
+          reason,
+          signal: context.signal,
+        });
+        return {
+          content: [],
+          structuredContent: ensureValidJson({ status }),
+        };
+      },
+    );
+  }
 
   registerTool(
     "create_schedule",

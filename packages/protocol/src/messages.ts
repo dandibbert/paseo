@@ -3140,6 +3140,31 @@ export const TerminalSecureInputRequestSchema = z.object({
   requestId: z.string(),
 });
 
+export const SecureTerminalPromptSchema = z.object({
+  id: z.string(),
+  agentId: z.string(),
+  terminalId: z.string(),
+  terminalName: z.string(),
+  cwd: z.string(),
+  workspaceId: z.string(),
+  reason: z.string(),
+  expiresAt: z.number(),
+});
+export type SecureTerminalPrompt = z.infer<typeof SecureTerminalPromptSchema>;
+
+export const TerminalSecurePromptListRequestSchema = z.object({
+  type: z.literal("terminal.secure_prompt.list.request"),
+  requestId: z.string(),
+});
+export const TerminalSecurePromptRespondRequestSchema = z.object({
+  type: z.literal("terminal.secure_prompt.respond.request"),
+  requestId: z.string(),
+  promptId: z.string(),
+  action: z.enum(["submit", "deny"]),
+  secret: z.string().max(8192).optional(),
+  submitNewline: z.boolean().optional(),
+});
+
 export const KillTerminalRequestSchema = z.object({
   type: z.literal("kill_terminal_request"),
   terminalId: z.string(),
@@ -3470,6 +3495,8 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   UnsubscribeTerminalRequestSchema,
   TerminalInputSchema,
   TerminalSecureInputRequestSchema,
+  TerminalSecurePromptListRequestSchema,
+  TerminalSecurePromptRespondRequestSchema,
   KillTerminalRequestSchema,
   CaptureTerminalRequestSchema,
   ChatCreateRequestSchema,
@@ -3689,6 +3716,8 @@ export const ServerInfoStatusPayloadSchema = z
         workspaceTerminals: z.boolean().optional(),
         // COMPAT(terminalSecureInput): added in v0.9.2-personal, remove after 2027-04-13.
         terminalSecureInput: z.boolean().optional(),
+        // COMPAT(secureAgentInput): added in personal v0.11.2, remove after 2027-04-13.
+        terminalSecurePrompt: z.boolean().optional(),
         // COMPAT(checkoutForgeSetAutoMerge): added in v0.2.0-beta.1. Remove the
         // feature gate and checkoutGithubSetAutoMerge fallback after 2027-01-17
         // once the supported daemon floor is >= v0.2.0.
@@ -6582,6 +6611,22 @@ export const TerminalSecureInputResponseSchema = z.object({
   }),
 });
 
+export const TerminalSecurePromptListResponseSchema = z.object({
+  type: z.literal("terminal.secure_prompt.list.response"),
+  payload: z.object({
+    requestId: z.string(),
+    prompts: z.array(SecureTerminalPromptSchema),
+  }),
+});
+export const TerminalSecurePromptRespondResponseSchema = z.object({
+  type: z.literal("terminal.secure_prompt.respond.response"),
+  payload: z.object({
+    requestId: z.string(),
+    success: z.boolean(),
+    error: z.string().nullable(),
+  }),
+});
+
 export const CaptureTerminalResponseSchema = z.object({
   type: z.literal("capture_terminal_response"),
   payload: z.object({
@@ -6614,8 +6659,13 @@ export const TerminalAttentionRequiredSchema = z.object({
     title: z.string(),
     body: z.string(),
     shouldNotify: z.boolean(),
+    // COMPAT(secureAgentInput): optional so old clients ignore new prompt metadata.
+    securePrompt: SecureTerminalPromptSchema.extend({
+      state: z.enum(["pending", "resolved"]),
+    }).optional(),
   }),
 });
+export type TerminalAttentionRequired = z.infer<typeof TerminalAttentionRequiredSchema>;
 
 export const DaemonUpdateResponseSchema = z.object({
   type: z.literal("daemon.update.response"),
@@ -7194,6 +7244,8 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   RenameTerminalResponseSchema,
   SubscribeTerminalResponseSchema,
   TerminalSecureInputResponseSchema,
+  TerminalSecurePromptListResponseSchema,
+  TerminalSecurePromptRespondResponseSchema,
   KillTerminalResponseSchema,
   CaptureTerminalResponseSchema,
   TerminalStreamExitSchema,

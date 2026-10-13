@@ -1,4 +1,4 @@
-import { useRef, ReactNode, useCallback, useEffect } from "react";
+import { useRef, ReactNode, useCallback, useEffect, useState } from "react";
 import { Buffer } from "buffer";
 import { AppState } from "react-native";
 import { observeOpenWorkspaceAgentIds } from "@/stores/workspace-layout-store";
@@ -16,7 +16,7 @@ import { deriveAgentStreamTurnLiveness } from "@/timeline/session-stream-reducer
 import { planTimelineTailFetch } from "@/timeline/timeline-sync-plan";
 import { requestTimelineReplacement } from "@/timeline/timeline-replacement";
 import { type ViewedTimelineOwner } from "@/timeline/viewed-timeline-sync";
-import type { SessionOutboundMessage } from "@getpaseo/protocol/messages";
+import type { SecureTerminalPrompt, SessionOutboundMessage } from "@getpaseo/protocol/messages";
 import { parseServerInfoStatusPayload } from "@getpaseo/protocol/messages";
 import {
   buildAgentAttentionNotificationPayload,
@@ -51,6 +51,7 @@ import { toErrorMessage } from "@/utils/error-messages";
 import { showProviderNoticeToast } from "@/utils/provider-notice-toast";
 import { applyCheckoutStatusUpdateFromEvent } from "@/git/checkout-status-cache";
 import { resyncProviderSubagents, useProviderSubagentStore } from "@/subagents/provider-store";
+import { TerminalSecureInputSheet } from "@/components/terminal-secure-input-sheet";
 
 // Re-export types from session-store and draft-store for backward compatibility
 export type { DraftInput } from "@/stores/draft-store";
@@ -212,7 +213,63 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
   const voiceAudioEngine = useVoiceAudioEngineOptional();
   const queryClient = useQueryClient();
   const isConnected = useHostRuntimeIsConnected(serverId);
+  const supportsAgentSecureInput = useSessionStore(
+    (state) => state.sessions[serverId]?.serverInfo?.features?.terminalSecurePrompt === true,
+  );
+  const [pendingSecurePrompts, setPendingSecurePrompts] = useState<SecureTerminalPrompt[]>([]);
+  const activeSecurePrompt = pendingSecurePrompts[0] ?? null;
   const toast = useToast();
+
+  useEffect(() => {
+    if (!isConnected || !supportsAgentSecureInput) {
+      setPendingSecurePrompts([]);
+      return;
+    }
+    let active = true;
+    void client
+      .listSecureTerminalPrompts()
+      .then(({ prompts }) => {
+        if (active) setPendingSecurePrompts(prompts);
+      })
+      .catch(() => {
+        // The event stream still updates live requests; reconnect retries listing.
+      });
+    return () => {
+      active = false;
+    };
+  }, [client, isConnected, supportsAgentSecureInput]);
+
+  const dismissSecurePrompt = useCallback(() => {
+    if (!activeSecurePrompt) return;
+    setPendingSecurePrompts((prompts) =>
+      prompts.filter((prompt) => prompt.id !== activeSecurePrompt.id),
+    );
+  }, [activeSecurePrompt]);
+
+  const submitAgentSecurePrompt = useCallback(
+    async (secret: string, submitNewline: boolean) => {
+      if (!activeSecurePrompt) return;
+      const response = await client.respondToSecureTerminalPrompt({
+        promptId: activeSecurePrompt.id,
+        action: "submit",
+        secret,
+        submitNewline,
+      });
+      if (!response.success) throw new Error(response.error ?? "Secure input request failed");
+      dismissSecurePrompt();
+    },
+    [activeSecurePrompt, client, dismissSecurePrompt],
+  );
+
+  const denyAgentSecurePrompt = useCallback(async () => {
+    if (!activeSecurePrompt) return;
+    const response = await client.respondToSecureTerminalPrompt({
+      promptId: activeSecurePrompt.id,
+      action: "deny",
+    });
+    if (!response.success) throw new Error(response.error ?? "Could not deny secure input request");
+    dismissSecurePrompt();
+  }, [activeSecurePrompt, client, dismissSecurePrompt]);
 
   // Zustand store actions
   const setIsPlayingAudio = useSessionStore((state) => state.setIsPlayingAudio);
@@ -686,6 +743,14 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
       if (message.type !== "terminal_attention_required") {
         return;
       }
+      const change = message.payload.securePrompt;
+      if (change) {
+        const { state, ...prompt } = change;
+        setPendingSecurePrompts((current) => {
+          const other = current.filter((item) => item.id !== prompt.id);
+          return state === "pending" ? [...other, prompt] : other;
+        });
+      }
       if (!message.payload.shouldNotify) {
         return;
       }
@@ -852,5 +917,24 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
     [client],
   );
 
-  return children;
+  return (
+    <>
+      {children}
+      {activeSecurePrompt && isConnected && supportsAgentSecureInput ? (
+        <TerminalSecureInputSheet
+          key={activeSecurePrompt.id}
+          supported
+          agentRequest={{
+            agentId: activeSecurePrompt.agentId,
+            terminalName: activeSecurePrompt.terminalName,
+            cwd: activeSecurePrompt.cwd,
+            reason: activeSecurePrompt.reason,
+          }}
+          onSubmit={submitAgentSecurePrompt}
+          onCancel={denyAgentSecurePrompt}
+          onClose={dismissSecurePrompt}
+        />
+      ) : null}
+    </>
+  );
 }

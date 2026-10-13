@@ -6145,6 +6145,48 @@ export class DaemonClient {
     });
   }
 
+  async listSecureTerminalPrompts(): Promise<
+    CorrelatedResponsePayload<"terminal.secure_prompt.list.response">
+  > {
+    // COMPAT(secureAgentInput): added in personal v0.11.2, remove after 2027-04-13.
+    if (this.getLastServerInfoMessage()?.features?.terminalSecurePrompt !== true) {
+      throw new Error("Update the host to use agent-initiated secure input.");
+    }
+    const requestId = this.createRequestId();
+    return this.sendCorrelatedRequest({
+      requestId,
+      message: SessionInboundMessageSchema.parse({
+        type: "terminal.secure_prompt.list.request",
+        requestId,
+      }),
+      responseType: "terminal.secure_prompt.list.response",
+      options: { skipQueue: true },
+    });
+  }
+
+  async respondToSecureTerminalPrompt(input: {
+    promptId: string;
+    action: "submit" | "deny";
+    secret?: string;
+    submitNewline?: boolean;
+  }): Promise<CorrelatedResponsePayload<"terminal.secure_prompt.respond.response">> {
+    // COMPAT(secureAgentInput): added in personal v0.11.2, remove after 2027-04-13.
+    if (this.getLastServerInfoMessage()?.features?.terminalSecurePrompt !== true) {
+      throw new Error("Update the host to use agent-initiated secure input.");
+    }
+    const requestId = this.createRequestId();
+    return this.sendCorrelatedRequest({
+      requestId,
+      message: SessionInboundMessageSchema.parse({
+        type: "terminal.secure_prompt.respond.request",
+        requestId,
+        ...input,
+      }),
+      responseType: "terminal.secure_prompt.respond.response",
+      options: { skipQueue: true },
+    });
+  }
+
   async killTerminal(terminalId: string, requestId?: string): Promise<KillTerminalPayload> {
     const resolvedRequestId = this.createRequestId(requestId);
     const message = SessionInboundMessageSchema.parse({
