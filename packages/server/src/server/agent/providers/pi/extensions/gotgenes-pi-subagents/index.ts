@@ -9,6 +9,7 @@ const SpawnArgs = z
     subagent_type: z.string().trim().min(1),
     prompt: z.string().trim().min(1),
     description: z.string().optional(),
+    resume: z.string().trim().min(1).optional(),
   })
   .passthrough();
 const FollowupArgs = z.object({ agent_id: z.string().trim().min(1) }).passthrough();
@@ -34,10 +35,23 @@ const LiveSession = z.object({
   file: z.string().trim().min(1),
 });
 const status = (value: string): "running" | "completed" | "failed" | "canceled" => {
-  if (value === "completed") return "completed";
+  // `steered` is terminal: the agent wrapped up after reaching its turn limit.
+  if (value === "completed" || value === "steered") return "completed";
   if (value === "error") return "failed";
   if (value === "aborted" || value === "stopped") return "canceled";
   return "running";
+};
+
+/**
+ * get_subagent_result returns only `formatAgentReport` text, with no details:
+ * `Agent: <id>\nType: <name> | Status: <status> ...`, ending with
+ * `Full transcript available at: <path>` when the record has one.
+ */
+const parseAgentReport = (text: string | undefined) => {
+  const match = text?.match(/^Agent: (\S+)\nType: .*?\| Status: (\w+)/);
+  if (!match) return undefined;
+  const transcriptPath = text?.match(/\n\nFull transcript available at: (.+)$/)?.[1]?.trim();
+  return { agentId: match[1]!, status: match[2]!, transcriptPath: transcriptPath || undefined };
 };
 
 export const gotgenesPiSubagents: PiExtension = {
@@ -66,6 +80,25 @@ export const gotgenesPiSubagents: PiExtension = {
         description,
         log: extractTextFromToolResult(call.result)?.trim() ?? "",
       };
+      // A resume continues the same agent, so it updates that agent's card instead of opening one
+      // keyed by its own call ID. Remapping the agent would strand the original card at running.
+      const resumedId = args.data.resume ? callsByAgent.get(args.data.resume) : undefined;
+      if (resumedId) {
+        if (call.status === "running")
+          return {
+            detail,
+            subagents: [{ type: "upsert" as const, id: resumedId, status: "running" as const }],
+          };
+        let resumedStatus: ReturnType<typeof status> | undefined;
+        if (details.success) resumedStatus = status(details.data.status);
+        else if (call.status === "failed") resumedStatus = "failed";
+        return resumedStatus
+          ? {
+              detail,
+              subagents: [{ type: "upsert" as const, id: resumedId, status: resumedStatus }],
+            }
+          : { detail };
+      }
       if (call.status === "running")
         return {
           detail,
@@ -115,17 +148,21 @@ export const gotgenesPiSubagents: PiExtension = {
       const details = Details.safeParse(
         typeof call.result === "object" ? call.result?.details : null,
       );
+      const log = extractTextFromToolResult(call.result)?.trim() ?? "";
       const detail = {
         type: "sub_agent" as const,
         description: details.success ? details.data.description : undefined,
-        log: extractTextFromToolResult(call.result)?.trim() ?? "",
+        log,
       };
-      if (call.status === "running" || !details.success) return { detail };
-      const file = details.data.transcriptPath;
-      const childSessions = childSession(id, file);
+      if (call.status === "running") return { detail };
+      let report: { agentId: string; status: string; transcriptPath?: string } | undefined;
+      if (details.success) report = details.data;
+      else if (call.toolName === "get_subagent_result") report = parseAgentReport(log);
+      if (!report || report.agentId !== args.data.agent_id) return { detail };
+      const childSessions = childSession(id, report.transcriptPath);
       return {
         detail,
-        subagents: [{ type: "upsert" as const, id, status: status(details.data.status) }],
+        subagents: [{ type: "upsert" as const, id, status: status(report.status) }],
         childSessions,
       };
     };
