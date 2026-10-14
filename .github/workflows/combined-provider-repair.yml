@@ -1,8 +1,6 @@
-name: Combined provider editor validation and macOS builds
+name: Personal macOS Release
 
 on:
-  push:
-    branches: [main, "personal/**"]
   workflow_dispatch:
     inputs:
       verify_build_run_id:
@@ -20,7 +18,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: combined-provider-repair-${{ github.sha }}
+  group: personal-macos-${{ github.ref }}
   cancel-in-progress: false
 
 env:

@@ -2,6 +2,34 @@
 
 All workspaces share one version and release together.
 
+## Personal fork Actions
+
+Use this policy in `dandibbert/paseo`. Preserve it when merging upstream workflows.
+The npm and EAS release procedure below describes upstream distribution.
+
+| Workflow                                                                                                                                                            | When to run it                                                                                    |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| [CI](../.github/workflows/ci.yml)                                                                                                                                   | Automatic checks on main and PRs; manual full verification                                        |
+| [Linux Headless Build and Release](../.github/workflows/headless-linux.yml)                                                                                         | Automatic packaging for relevant changes; explicit release through dispatch or `headless-publish` |
+| [Personal macOS Release](../.github/workflows/combined-provider-repair.yml)                                                                                         | Manual personal installers and optional prerelease publication                                    |
+| [iOS Unsigned IPA](../.github/workflows/ios-ipa.yml)                                                                                                                | Manual device build                                                                               |
+| [Android APK Release](../.github/workflows/android-apk-release.yml)                                                                                                 | Manual build or an `android-v*` tag                                                               |
+| [Desktop Release](../.github/workflows/desktop-release.yml)                                                                                                         | Manual build or a `desktop-v*` / platform-specific desktop tag                                    |
+| [Linux Desktop Packages](../.github/workflows/desktop-packages.yml), [Docker](../.github/workflows/docker.yml), [Nix](../.github/workflows/nix.yml)                 | Manual packaging checks                                                                           |
+| [Deploy App](../.github/workflows/deploy-app.yml), [Deploy Website](../.github/workflows/deploy-website.yml), [Deploy Relay](../.github/workflows/deploy-relay.yml) | Manual deployment with the destination credentials configured                                     |
+| [Release Notes Sync](../.github/workflows/release-notes-sync.yml), [Desktop Rollout](../.github/workflows/desktop-rollout.yml)                                      | Explicit release maintenance; release notes also follow `v*` tags                                 |
+
+Automatic checks cancel superseded runs on the same branch. Manual builds and
+publication use separate concurrency groups, so a new main push cannot interrupt
+an explicit release. Ordinary pushes never deploy a service or publish installers.
+
+The personal macOS workflow retains its original file ID and artifact names so
+`verify_build_run_id` can reuse existing builds. Select it by its display name in
+Actions. Its publish step still requires green CI for the exact installer source.
+
+Use [the Linux headless guide](personal-headless-linux.md) for VPS installation,
+release promotion, and rollback.
+
 ## Two steps
 
 A release has exactly two steps. The agent does the first, the user authorizes the second.
@@ -62,7 +90,7 @@ release. This applies to both beta and stable releases.
   the changelog. Retarget remaining PRs based on `next` to `main` and delete the integrated
   `next`. Create it fresh when needed again.
 
-**Setup still needed:** CI, Docker, and Nix PR checks currently target only `main`,
+**Setup still needed:** CI checks currently target only `main`,
 and GitHub permits only squash merges. Enable checks and required-check protection
 for `next`, CI on its pushes, and merge commits for the integration PR. Handle PR
 base changes (`edited` events) so retargeting runs checks against the new base;
@@ -142,7 +170,7 @@ npm run release:patch
 npm run release:minor
 ```
 
-This bumps the version across all workspaces, runs checks, publishes to npm, and pushes the branch + tag. The tag push triggers `Desktop Release`, `Android APK Release`, `Docker`, and `Release Notes Sync` on GitHub Actions. The workflows create the GitHub Release as a draft while builds and release-note sync run. EAS picks up the same tag via the EAS GitHub app and starts the iOS + Android store builds in parallel (see "Mobile builds (EAS)" below) — there is no mobile-release workflow under `.github/workflows`.
+This bumps the version across all workspaces, runs checks, publishes to npm, and pushes the branch + tag. In the upstream repository, the tag push triggers `Desktop Release`, `Android APK Release`, `Docker`, and `Release Notes Sync` on GitHub Actions. The workflows create the GitHub Release as a draft while builds and release-note sync run. EAS picks up the same tag via the EAS GitHub app and starts the iOS + Android store builds in parallel (see "Mobile builds (EAS)" below) — there is no mobile-release workflow under `.github/workflows`. For this fork, follow [Personal fork Actions](#personal-fork-actions).
 
 After the stable release succeeds, move npm's `beta` pointer to the new stable
 version for every published package. This changes dist-tags only; do not
@@ -158,7 +186,10 @@ done
 Verify both npm tags now resolve to `PASEO_VERSION` before considering the
 stable release complete.
 
-The Docker workflow builds images from the checked-out source tree on pull requests and on `main` as non-publishing checks. Stable `vX.Y.Z` tag pushes publish `ghcr.io/getpaseo/paseo:X.Y.Z` and `ghcr.io/getpaseo/paseo:latest`; beta `vX.Y.Z-beta.N` tag pushes publish only `ghcr.io/getpaseo/paseo:X.Y.Z-beta.N` and never move `latest`.
+The Docker workflow builds images from the checked-out source tree. Manual builds
+default to a non-publishing check. Manual publication requires an exact
+`paseo_version`; images belong to the repository owner's GHCR namespace. Set
+`publish_latest` only when a stable build should also move `latest`.
 
 The production relay is the Elixir service in [getpaseo/paseo-relay](https://github.com/getpaseo/paseo-relay), with its own deployment process. Paseo releases and pushes to this repository do not deploy it. The Cloudflare relay code and workflow in this repository are legacy and are not used in production.
 
@@ -405,7 +436,10 @@ later transitions and stops itself when the release is complete.
 
 ## Release notes on GitHub
 
-The GitHub Release body is populated automatically by the `Release Notes Sync` workflow (`.github/workflows/release-notes-sync.yml`). It triggers on every `v*` tag push and on any push to `main` that touches `CHANGELOG.md`, then runs `scripts/sync-release-notes-from-changelog.mjs` to mirror the matching changelog entry into the release body. You don't need to write release notes on GitHub manually — keep `CHANGELOG.md` correct and the workflow will sync it. To force a re-sync, dispatch the workflow with the tag input.
+The `Release Notes Sync` workflow mirrors the matching `CHANGELOG.md` entry into
+the GitHub Release body. Keep release notes in the changelog. Trigger policy for
+this fork is in [Personal fork Actions](#personal-fork-actions); to force a
+re-sync, dispatch the workflow with the tag input.
 
 ## Website behavior
 
@@ -415,7 +449,7 @@ The GitHub Release body is populated automatically by the `Release Notes Sync` w
 - The default download target only moves when you publish the final stable release tag like `v0.1.41`.
 - The public `/changelog` page renders `CHANGELOG.md` as-is, so the in-flight `-beta.N` entry shows there once it lands on `main` — that's intended, it's where beta users check what's coming. Only the **default download target** stays pinned to the latest stable; the download links read GitHub's releases API, not the changelog, so a `-beta.N` heading on top never affects them.
 - The download page's "What's new" link deep-links the **minor group** anchor (`/changelog#release-0.3`), not the exact entry: the beta entry is renamed on each beta and on promotion, so the minor group remains the durable target. A version with no entry in the bundled changelog — a tag whose changelog commit hasn't redeployed the site yet — links the plain `/changelog` instead of a dead anchor.
-- The website itself is deployed by `Deploy Website` (Cloudflare Workers), which redeploys on the `release: published` event emitted when a stable draft is published and on pushes to `main` that touch `CHANGELOG.md` or `packages/website/**`. Its job condition excludes beta prereleases.
+- The website itself is deployed by `Deploy Website` (Cloudflare Workers). This fork's deployment policy is in [Personal fork Actions](#personal-fork-actions).
 
 ## Fixing a failed release build
 

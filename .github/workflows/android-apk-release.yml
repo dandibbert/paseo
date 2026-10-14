@@ -3,7 +3,6 @@ name: Android APK Release
 on:
   push:
     tags:
-      - "v*"
       - "android-v*"
   workflow_dispatch:
     inputs:

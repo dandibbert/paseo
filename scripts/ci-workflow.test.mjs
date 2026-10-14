@@ -110,6 +110,53 @@ test("change gating allows superseded workflow runs to cancel", () => {
   }
 });
 
+test("routine pushes and pull requests only schedule CI and headless packaging", () => {
+  const workflows = new URL(".github/workflows/", repoRoot);
+  for (const file of readdirSync(workflows)) {
+    const source = readFileSync(new URL(file, workflows), "utf8");
+    const trigger = source.split("jobs:", 1)[0];
+    if (file === "ci.yml" || file === "headless-linux.yml") {
+      assert.match(trigger, /push:\s*\n\s+branches: \[main/);
+      assert.match(trigger, /pull_request:\s*\n\s+branches: \[main\]/);
+    } else {
+      assert.doesNotMatch(trigger, /^\s+branches:/m, file);
+      assert.doesNotMatch(trigger, /^  (pull_request|release):/m, file);
+    }
+  }
+});
+
+test("automatic checks cancel stale work without sharing the manual release queue", () => {
+  const ci = readFileSync(ciWorkflowPath, "utf8").split("jobs:", 1)[0];
+  assert.match(ci, /group: .*github\.event_name == 'workflow_dispatch' && 'manual' \|\| 'check'/);
+  assert.match(ci, /cancel-in-progress: \$\{\{ github\.event_name != 'workflow_dispatch' \}\}/);
+
+  const headless = readFileSync(new URL(".github/workflows/headless-linux.yml", repoRoot), "utf8");
+  const concurrency = headless.split("jobs:", 1)[0];
+  assert.match(concurrency, /'workflow_dispatch' && 'manual'/);
+  assert.match(concurrency, /'refs\/heads\/headless-publish' && 'publish' \|\| 'check'/);
+  assert.match(
+    concurrency,
+    /cancel-in-progress: .*github\.event_name == 'pull_request' \|\| \(github\.event_name == 'push' && github\.ref == 'refs\/heads\/main'\)/,
+  );
+});
+
+test("headless packaging filters automatic changes and always allows explicit builds", () => {
+  const source = readFileSync(new URL(".github/workflows/headless-linux.yml", repoRoot), "utf8");
+  const jobs = jobBlocks(source);
+  const changes = jobs.get("changes")?.join("\n") ?? "";
+  const build = jobs.get("build")?.join("\n") ?? "";
+  const publish = jobs.get("publish")?.join("\n") ?? "";
+  assert.match(changes, /filters: \.github\/ci-paths\.yml/);
+  assert.match(changes, /base: \$\{\{ github\.event\.before \|\| github\.ref \}\}/);
+  assert.match(build, /needs: changes/);
+  assert.match(build, /!cancelled\(\)/);
+  assert.match(build, /github\.event_name == 'workflow_dispatch'/);
+  assert.match(build, /github\.ref == 'refs\/heads\/headless-publish'/);
+  assert.match(build, /needs\.changes\.outputs\.headless == 'true'/);
+  assert.match(publish, /inputs\.publish_release == true/);
+  assert.match(publish, /github\.ref == 'refs\/heads\/headless-publish'/);
+});
+
 test("focused contracts stay inside existing required checks", () => {
   const jobs = jobBlocks(readFileSync(ciWorkflowPath, "utf8"));
   const changes = jobs.get("changes")?.join("\n") ?? "";
@@ -202,6 +249,30 @@ test("PR routing declares stable behavior ownership", () => {
     ],
     relay: ["packages/relay/**"],
     cli: ["packages/cli/**"],
+    headless: [
+      ".github/ci-paths.yml",
+      ".github/workflows/headless-linux.yml",
+      ".dockerignore",
+      ".mise.toml",
+      ".tool-versions",
+      "package.json",
+      "package-lock.json",
+      "patches/**",
+      "tsconfig*.json",
+      "scripts/**",
+      "docker/base/**",
+      "packages/app/**",
+      "packages/client/**",
+      "packages/cli/**",
+      "packages/expo-two-way-audio/**",
+      "packages/highlight/**",
+      "packages/plugin/**",
+      "packages/protocol/**",
+      "packages/relay/**",
+      "packages/server/**",
+      "plugins/**",
+      "skills/**",
+    ],
   });
 });
 
@@ -282,22 +353,39 @@ test("browser and desktop tests have exclusive, directory-owned suites", () => {
   ]);
 });
 
-test("packaging runs on main without allocating pull-request runners", () => {
-  for (const workflowPath of [dockerWorkflowPath, nixWorkflowPath]) {
+test("optional packaging and upstream deployments only run on manual dispatch", () => {
+  for (const file of [
+    "docker.yml",
+    "nix.yml",
+    "desktop-packages.yml",
+    "combined-provider-repair.yml",
+    "ios-ipa.yml",
+    "deploy-app.yml",
+    "deploy-relay.yml",
+    "deploy-website.yml",
+  ]) {
+    const workflowPath = new URL(`.github/workflows/${file}`, repoRoot);
     const source = readFileSync(workflowPath, "utf8");
     const trigger = source.split("jobs:", 1)[0];
-    assert.match(trigger, /push:\s*\n\s+branches: \[main\]/);
-    assert.doesNotMatch(trigger, /pull_request/);
-    assert.doesNotMatch(source, /dorny\/paths-filter/);
+    assert.match(trigger, /workflow_dispatch:/, file);
+    assert.doesNotMatch(trigger, /^  (push|pull_request|release):/m, file);
   }
 });
 
-test("desktop packaging smokes main pushes and only the pull requests that touch packaging", () => {
+test("release tags target a platform without starting every platform build", () => {
+  for (const file of ["desktop-release.yml", "android-apk-release.yml"]) {
+    const trigger = readFileSync(new URL(`.github/workflows/${file}`, repoRoot), "utf8").split(
+      "jobs:",
+      1,
+    )[0];
+    assert.doesNotMatch(trigger, /- "v\*"/, file);
+    assert.match(trigger, /workflow_dispatch:/, file);
+    assert.match(trigger, /- "(?:desktop|android)-v\*"/, file);
+  }
+});
+
+test("desktop packaging retains pinned smoke dependencies", () => {
   const source = readFileSync(new URL(".github/workflows/desktop-packages.yml", repoRoot), "utf8");
-  const trigger = source.split("jobs:", 1)[0];
-  assert.match(trigger, /push:\s*\n\s+branches: \[main\]/);
-  assert.match(trigger, /pull_request:\s*\n\s+branches: \[main\]\s*\n\s+paths:/);
-  assert.match(trigger, /- "packages\/desktop\/\*\*"/);
   assert.doesNotMatch(source, /dorny\/paths-filter/);
   for (const action of ["actions/checkout", "actions/setup-node", "actions/upload-artifact"]) {
     assert.match(source, new RegExp(`${action}@[0-9a-f]{40} # v\\d+\\.\\d+\\.\\d+`));

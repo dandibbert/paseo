@@ -1,6 +1,7 @@
 # Pull-request checks are routed by the behavior they prove. Package consumers
 # do not inherit their dependencies' test suites; main and manual runs execute
-# every contract regardless of these paths.
+# every CI contract regardless of these paths. Headless packaging uses its own
+# filter for both main pushes and pull requests.
 routing:
   - ".github/ci-paths.yml"
 
@@ -85,3 +86,27 @@ relay:
 
 cli:
   - "packages/cli/**"
+
+headless:
+  - ".github/ci-paths.yml"
+  - ".github/workflows/headless-linux.yml"
+  - ".dockerignore"
+  - ".mise.toml"
+  - ".tool-versions"
+  - "package.json"
+  - "package-lock.json"
+  - "patches/**"
+  - "tsconfig*.json"
+  - "scripts/**"
+  - "docker/base/**"
+  - "packages/app/**"
+  - "packages/client/**"
+  - "packages/cli/**"
+  - "packages/expo-two-way-audio/**"
+  - "packages/highlight/**"
+  - "packages/plugin/**"
+  - "packages/protocol/**"
+  - "packages/relay/**"
+  - "packages/server/**"
+  - "plugins/**"
+  - "skills/**"

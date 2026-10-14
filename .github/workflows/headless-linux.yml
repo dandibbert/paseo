@@ -1,4 +1,4 @@
-name: Linux Headless Release
+name: Linux Headless Build and Release
 
 on:
   push:
@@ -17,12 +17,32 @@ permissions:
   contents: read
 
 concurrency:
-  group: headless-linux-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  group: headless-linux-${{ github.event_name == 'workflow_dispatch' && 'manual' || github.ref == 'refs/heads/headless-publish' && 'publish' || 'check' }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
 
 jobs:
+  changes:
+    if: github.event_name != 'workflow_dispatch' && github.ref != 'refs/heads/headless-publish'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      headless: ${{ steps.filter.outputs.headless }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 0
+      - uses: dorny/paths-filter@d1c1ffe0248fe513906c8e24db8ea791d46f8590 # v3.0.3
+        id: filter
+        with:
+          base: ${{ github.event.before || github.ref }}
+          filters: .github/ci-paths.yml
+
   build:
     name: Build and boot-test Debian 12 compatible archive
+    needs: changes
+    if: ${{ !cancelled() && (github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/headless-publish' || needs.changes.outputs.headless == 'true') }}
     runs-on: ubuntu-22.04
     timeout-minutes: 60
     steps:

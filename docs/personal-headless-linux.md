@@ -11,10 +11,14 @@ runtime. Every archive contains **headless-build.json** with its exact source co
 
 ## CI and release policy
 
-- Pushes to main and PRs build and **boot-test** the Linux AMD64 package. The successful Actions
+- Relevant main and PR changes build and **boot-test** the Linux AMD64 package, including
+  the bundled Web UI. Docs-only changes skip packaging. Manual builds and the
+  `headless-publish` promotion branch always build. See
+  [Personal fork Actions](release.md#personal-fork-actions) for the repository's trigger policy.
+  The successful Actions
   run contains an artifact named paseo-headless-linux-amd64-<full GitHub SHA>, kept for 30 days.
 - Nothing is deployed automatically; no running Agents are interrupted.
-- For an easy-to-download, commit-pinned GitHub Release, open **Actions → Linux Headless Release →
+- For an easy-to-download, commit-pinned GitHub Release, open **Actions → Linux Headless Build and Release →
   Run workflow**, select **main**, and set **publish_release=true**. This reruns the build and
   health test before publishing the two files below in a prerelease tagged **headless-<12 hex
   SHA>**:
