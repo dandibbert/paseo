@@ -124,6 +124,8 @@ export const ar: TranslationResources = {
     input: {
       accessibilityLabel: "وكيل الرسائل...",
       terminalAccessibilityLabel: "Terminal prompt",
+      fullscreen: "ملء الشاشة",
+      exitFullscreen: "الخروج من ملء الشاشة",
       focusHint: "{{shortcut}}للتركيز",
       addAttachment: "إضافة مرفق",
       interruptAgent: "عامل المقاطعة",
@@ -619,6 +621,9 @@ export const ar: TranslationResources = {
       updateHost: "حدّث المضيف لاستخدام عارض الطرفية الأصلي.",
       unableToSubscribe: "غير قادر على الاشتراك في المحطة",
       secureInput: en.workspace.terminal.secureInput,
+    },
+    sheet: {
+      openAsTab: "فتح كعلامة تبويب",
     },
     tabs: {
       loading: "تحميل...",

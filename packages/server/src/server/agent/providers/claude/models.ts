@@ -44,6 +44,15 @@ export function findClaudeModel(
   return getClaudeModels().find((model) => model.id === normalizedModelId);
 }
 
+export function getClaudeContextWindowMaxTokens(
+  modelId: string | null | undefined,
+): number | undefined {
+  if (modelId?.trim().toLowerCase().endsWith("[1m]")) {
+    return 1_000_000;
+  }
+  return findClaudeModel(modelId)?.contextWindowMaxTokens;
+}
+
 export function getClaudeModelsWithSettings(
   settings: Record<string, unknown>,
   claudeCodeVersion?: string,

@@ -124,6 +124,8 @@ export const zhCN: TranslationResources = {
     input: {
       accessibilityLabel: "给 Agent 发消息...",
       terminalAccessibilityLabel: "Terminal prompt",
+      fullscreen: "全屏",
+      exitFullscreen: "退出全屏",
       focusHint: "{{shortcut}} 聚焦",
       addAttachment: "添加附件",
       interruptAgent: "中断 Agent",
@@ -660,6 +662,9 @@ export const zhCN: TranslationResources = {
         send: "发送至终端",
         cancel: "取消",
       },
+    },
+    sheet: {
+      openAsTab: "作为标签页打开",
     },
     tabs: {
       loading: "正在加载...",
