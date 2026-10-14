@@ -136,6 +136,8 @@ export class FakePiSession implements PiRuntimeSession {
     cost: 0,
   };
   commands: PiRpcSlashCommand[] = [];
+  commandsAfterReload: PiRpcSlashCommand[] | null = null;
+  reloadRequestCount = 0;
   subagents: FakePiSubagentSnapshot[] = [];
   subagentSubscriptionError: Error | null = null;
   setSessionNameError: Error | null = null;
@@ -198,6 +200,7 @@ export class FakePiSession implements PiRuntimeSession {
     }
     this.handleTreeNavigationCommand(message);
     this.handleEntryCaptureCommand(message);
+    this.handleReloadCommand(message);
     return this.promptAck;
   }
 
@@ -447,6 +450,22 @@ export class FakePiSession implements PiRuntimeSession {
     this.treeNavigationRequests.push(payload.targetId);
     this.emitEntryCapture(undefined, "tree_navigation");
     this.emitExtensionCommandResult(payload.requestId, { ok: true, result: {} });
+  }
+
+  private handleReloadCommand(message: string): void {
+    const prefix = "/paseo_reload ";
+    if (!message.startsWith(prefix)) {
+      return;
+    }
+    const payload = JSON.parse(
+      Buffer.from(message.slice(prefix.length), "base64url").toString("utf8"),
+    ) as { requestId?: unknown };
+    if (typeof payload.requestId !== "string") {
+      return;
+    }
+    this.reloadRequestCount += 1;
+    this.commands = this.commandsAfterReload ?? this.commands;
+    this.emitExtensionCommandResult(payload.requestId, { ok: true, result: undefined });
   }
 
   private handleEntryCaptureCommand(message: string): void {
