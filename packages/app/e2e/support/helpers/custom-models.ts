@@ -13,11 +13,9 @@ export async function openCustomModels(page: Page): Promise<void> {
 
 export async function addCustomModel(page: Page, id: string): Promise<void> {
   await page.getByRole("button", { name: "Add model", exact: true }).click();
-  await page.getByPlaceholder("e.g. openai/gpt-5").fill(id);
-  await page
-    .getByTestId("add-custom-model-sheet")
-    .getByRole("button", { name: "Add", exact: true })
-    .click();
+  const editor = page.getByTestId("provider-model-editor-sheet");
+  await editor.getByPlaceholder("e.g. openai/gpt-5").fill(id);
+  await editor.getByRole("button", { name: "Save", exact: true }).click();
   await expect(page.getByRole("button", { name: `Remove ${id}`, exact: true })).toHaveCount(1);
 }
 

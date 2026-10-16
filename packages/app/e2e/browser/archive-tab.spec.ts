@@ -52,9 +52,17 @@ async function expectCompactHistoryAgentSelected(
   page: Page,
   agent: { id: string; title: string },
 ): Promise<void> {
+  // The compact header trigger shows only the tab count, so the selected agent is read from
+  // the switcher sheet's row instead of the trigger label.
   const switcher = page.getByTestId("workspace-tab-switcher-trigger");
   await expect(switcher).toBeVisible();
-  await expect(switcher).toHaveText(agent.title);
+  await switcher.click();
+  await expect(page.getByTestId(`workspace-tab-menu-agent_${agent.id}-trigger`)).toBeVisible();
+  await expect(page.getByText(agent.title, { exact: true }).filter({ visible: true })).toHaveCount(
+    1,
+  );
+  await page.getByRole("button", { name: "Bottom sheet backdrop" }).first().click();
+  await expect(page.getByRole("button", { name: "New terminal", exact: true })).toHaveCount(0);
   const composer = page
     .getByRole("textbox", { name: "Message agent..." })
     .filter({ visible: true });
