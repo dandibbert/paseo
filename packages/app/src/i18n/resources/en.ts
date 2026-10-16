@@ -678,7 +678,7 @@ export const en = {
       },
       switcher: {
         trigger: "Switch tabs ({{count}} open)",
-        title: "Switch tab",
+        title: "Workspace tabs",
         searchPlaceholder: "Search tabs",
       },
       menu: {
@@ -774,6 +774,7 @@ export const en = {
     header: {
       actions: {
         workspaceActions: "Workspace actions",
+        workspaceActionsUnhealthy: "Workspace actions, a service is unhealthy",
         newAgent: "New agent",
         newTerminal: "New terminal",
         newBrowser: "New browser tab",
@@ -821,6 +822,8 @@ export const en = {
         exitCode: "exit {{code}}",
         startFailed: "Failed to start {{scriptName}}",
         stopFailed: "Failed to stop {{scriptName}}",
+        running: "Running",
+        runningCount: "{{count}} running",
       },
     },
     tree: {
@@ -1732,13 +1735,18 @@ export const en = {
     title: "Add provider",
     search: "Search providers",
     noProviders: "No providers found",
+    clearSearch: "Clear search",
     actions: {
       add: "Add",
+      addProvider: "Add {{provider}}",
       adding: "Adding",
       installed: "Installed",
       cancel: "Cancel",
       installInstructions: "Install instructions",
       installInstructionsFor: "{{provider}} install instructions",
+    },
+    types: {
+      acp: "ACP",
     },
     errors: {
       unableToInstall: "Unable to install provider",
