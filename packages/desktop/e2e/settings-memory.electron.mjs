@@ -131,6 +131,10 @@ async function captureHeapSnapshot(session, outputPath) {
 }
 
 export async function runSettingsMemoryRegression(page) {
+  // The dev runner hands the app its own directory as an open-project request. Once the local
+  // daemon connects, the renderer navigates to that directory's workspace. Opening Settings
+  // before that lands gets the page navigated back out from under the rotation.
+  await page.waitForURL(/\/h\/[^/]+\/workspace\//, { timeout: 60_000 });
   const session = await page.context().newCDPSession(page);
   await session.send("HeapProfiler.enable");
 
