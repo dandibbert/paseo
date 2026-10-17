@@ -1803,6 +1803,56 @@ describe("PiRpcAgentSession", () => {
           { id: "one", parentId: null, text: "first" },
           { id: "two", parentId: "one-reply", text: "second" },
         ],
+        customEntries: [],
+      },
+    ]);
+  });
+
+  test("captures extension history entries anchored to the tool call they followed", async () => {
+    const pi = new FakePi();
+    const session = await createClient(pi).createSession(createConfig());
+    onTestFinished(() => session.close());
+    const listeners = await loadPaseoExtensionListeners(pi.recordedLaunches[0]!.extensionPaths[0]!);
+    const record = (startedAt: number) => ({
+      type: "custom",
+      customType: "subagents:record",
+      data: { id: "native-1", status: "completed", startedAt, result: "long report" },
+    });
+    const entries = [
+      record(50),
+      {
+        type: "message",
+        message: { role: "assistant", content: [{ type: "toolCall", id: "call-1" }] },
+      },
+      { type: "message", message: { role: "toolResult", toolCallId: "call-1" } },
+      record(100),
+      { type: "custom", customType: "other-extension", data: { secret: true } },
+      {
+        type: "message",
+        message: { role: "assistant", content: [{ type: "toolCall", id: "call-2" }] },
+      },
+      record(200),
+    ];
+    const notifications: string[] = [];
+    const context = {
+      sessionManager: { getEntries: () => entries, buildContextEntries: () => entries },
+      ui: { notify: (message: string) => notifications.push(message) },
+    };
+
+    await listeners.get("session_start")?.({}, context);
+
+    const data = (startedAt: number) => ({ id: "native-1", status: "completed", startedAt });
+    expect(Reflect.get(Object(parseEntryCapture(notifications[0]!)), "customEntries")).toEqual([
+      { customType: "subagents:record", data: data(50), after: null },
+      {
+        customType: "subagents:record",
+        data: data(100),
+        after: { toolCallId: "call-1", phase: "result" },
+      },
+      {
+        customType: "subagents:record",
+        data: data(200),
+        after: { toolCallId: "call-2", phase: "call" },
       },
     ]);
   });

@@ -3,7 +3,13 @@ import { fileURLToPath } from "node:url";
 import { createPiExtensionHost } from "../index.js";
 import { readSubagentFixture, verifySubagentFixture } from "../subagent-fixture-test.js";
 import { streamPiHistory } from "../../history-mapper.js";
-import { GOTGENES_CHILD_SESSION_MARKER, gotgenesRuntimeBridge } from "./runtime-bridge.js";
+import {
+  GOTGENES_CHILD_SESSION_MARKER,
+  GOTGENES_LIFECYCLE_MARKER,
+  gotgenesRuntimeBridge,
+} from "./runtime-bridge.js";
+import { ProviderSubagentStore } from "../../../../provider-subagents/store.js";
+import type { PiExtensionCustomMapping } from "../contract.js";
 
 const SERVICE_KEY = Symbol.for("@gotgenes/pi-subagents:service");
 
@@ -20,8 +26,13 @@ function loadRuntimeBridge() {
   return (name: string, event: unknown, ctx?: unknown) => listeners.get(name)?.(event, ctx);
 }
 
-function publishService(agents: Array<{ id: string; outputFile?: string }>): void {
-  (globalThis as Record<symbol, unknown>)[SERVICE_KEY] = { listAgents: () => agents };
+function publishService(
+  agents: Array<{ id: string; outputFile?: string; status?: string; startedAt?: number }>,
+): void {
+  (globalThis as Record<symbol, unknown>)[SERVICE_KEY] = {
+    listAgents: () => agents,
+    getRecord: (id: string) => agents.find((agent) => agent.id === id),
+  };
 }
 
 describe("@gotgenes/pi-subagents adapter", () => {
@@ -76,24 +87,16 @@ describe("@gotgenes/pi-subagents adapter", () => {
     }
   });
 
-  test("accepts a running subagent-update without a status field", () => {
+  test("treats a subagent-update without a status field as metadata", () => {
     const host = createPiExtensionHost();
-    host.mapToolCall({
-      callId: "call-1",
-      toolName: "subagent",
-      args: { subagent_type: "Explore", prompt: "Inspect" },
-      status: "completed",
-      result: { details: { agentId: "native-1", status: "background" } },
-    });
+    spawnBackground(host, "call-1", "native-1");
     const update = host.mapCustomMessage({
       role: "custom",
       customType: "subagent-update",
       content: "progress",
       details: { id: "native-1", description: "Inspect", message: "progress" },
     });
-    expect(update?.subagents).toEqual([
-      { type: "upsert", id: "call-1", description: "Inspect", status: "running" },
-    ]);
+    expect(update?.subagents).toEqual([{ type: "upsert", id: "call-1", description: "Inspect" }]);
   });
   test("maps captured foreground lifecycle live and on replay", async () => {
     const events = await verifySubagentFixture(
@@ -249,6 +252,207 @@ describe("@gotgenes/pi-subagents adapter", () => {
     ).toEqual([{ type: "upsert", id: "call-1", description: undefined, status: "completed" }]);
   });
 
+  test("relays lifecycle events only for agents the parent's service owns", () => {
+    const notifications: string[] = [];
+    const emit = loadRuntimeBridge();
+    try {
+      publishService([{ id: "native-1", status: "steered", startedAt: 100 }]);
+      emit(
+        "session_start",
+        {},
+        { ui: { notify: (message: string) => notifications.push(message) } },
+      );
+      emit("subagents:started", { id: "native-1" });
+      emit("subagents:completed", { id: "native-1", status: "steered" });
+      // A nested child's agent is not in the parent's service.
+      emit("subagents:completed", { id: "grandchild", status: "completed" });
+      expect(notifications).toEqual([
+        `${GOTGENES_LIFECYCLE_MARKER} {"agentId":"native-1","status":"running","startedAt":100}`,
+        `${GOTGENES_LIFECYCLE_MARKER} {"agentId":"native-1","status":"steered","startedAt":100}`,
+      ]);
+    } finally {
+      delete (globalThis as Record<symbol, unknown>)[SERVICE_KEY];
+    }
+  });
+
+  test("settles a background card from lifecycle events without a result query", () => {
+    for (const [native, expected] of [
+      ["completed", "completed"],
+      ["steered", "completed"],
+      ["aborted", "canceled"],
+      ["error", "failed"],
+    ] as const) {
+      const card = cardStatus();
+      card.apply(spawnBackground(card.host, "call-1", "native-1"));
+      card.apply(card.host.mapRuntimeNotification(lifecycle("native-1", "running", 100)));
+      card.apply(card.host.mapRuntimeNotification(lifecycle("native-1", native, 100)));
+      expect(card.status()).toBe(expected);
+    }
+  });
+
+  test("keeps a finished card finished through metadata, files, and stale snapshots", () => {
+    const card = cardStatus();
+    card.apply(spawnBackground(card.host, "call-1", "native-1"));
+    card.apply(card.host.mapRuntimeNotification(lifecycle("native-1", "steered", 100)));
+    const file = card.host.mapRuntimeNotification(
+      `${GOTGENES_CHILD_SESSION_MARKER} ${JSON.stringify({ agentId: "native-1", file: "/tmp/child.jsonl" })}`,
+    );
+    card.apply(file);
+    expect(file?.childSessions).toEqual([{ id: "call-1", file: "/tmp/child.jsonl" }]);
+    card.apply(
+      card.host.mapCustomMessage({
+        role: "custom",
+        customType: "subagent-update",
+        content: "progress",
+        details: { id: "native-1", description: "Renamed" },
+      }),
+    );
+    card.apply(card.host.mapRuntimeNotification(lifecycle("native-1", "running", 100)));
+    card.apply(
+      card.host.mapToolCall({
+        callId: "call-2",
+        toolName: "get_subagent_result",
+        args: { agent_id: "native-1" },
+        status: "completed",
+        result: { details: { agentId: "native-1", status: "running" } },
+      }),
+    );
+    expect(card.status()).toBe("completed");
+    expect(card.descriptor()?.description).toBe("Renamed");
+  });
+
+  test("buffers a lifecycle event that arrives before the spawn result", () => {
+    const card = cardStatus();
+    card.apply(card.host.mapRuntimeNotification(lifecycle("native-1", "completed", 100)));
+    card.apply(spawnBackground(card.host, "call-1", "native-1"));
+    expect(card.status()).toBe("completed");
+  });
+
+  test("a resume reopens the card and the old run's late completion cannot end it", () => {
+    const card = cardStatus();
+    card.apply(spawnBackground(card.host, "call-1", "native-1"));
+    card.apply(card.host.mapRuntimeNotification(lifecycle("native-1", "completed", 100)));
+    const resumeArgs = { subagent_type: "Explore", prompt: "Continue", resume: "native-1" };
+    card.apply(
+      card.host.mapToolCall({
+        callId: "call-2",
+        toolName: "subagent",
+        args: resumeArgs,
+        status: "running",
+        result: null,
+      }),
+    );
+    expect(card.status()).toBe("running");
+    card.apply(card.host.mapRuntimeNotification(lifecycle("native-1", "completed", 100)));
+    card.apply(card.host.mapRuntimeNotification(lifecycle("native-1", "running", 200)));
+    expect(card.status()).toBe("running");
+    card.apply(card.host.mapRuntimeNotification(lifecycle("native-1", "error", 200)));
+    expect(card.status()).toBe("failed");
+  });
+
+  test("restores the prior run when gotgenes refuses a resume", () => {
+    const card = cardStatus();
+    card.apply(spawnBackground(card.host, "call-1", "native-1"));
+    card.apply(card.host.mapRuntimeNotification(lifecycle("native-1", "completed", 100)));
+    const resumeArgs = { subagent_type: "Explore", prompt: "Continue", resume: "native-1" };
+    card.apply(
+      card.host.mapToolCall({
+        callId: "call-2",
+        toolName: "subagent",
+        args: resumeArgs,
+        status: "running",
+        result: null,
+      }),
+    );
+    card.apply(
+      card.host.mapToolCall({
+        callId: "call-2",
+        toolName: "subagent",
+        args: resumeArgs,
+        status: "completed",
+        result: { content: [{ type: "text", text: 'Agent not found: "native-1".' }] },
+      }),
+    );
+    expect(card.status()).toBe("completed");
+  });
+
+  test("keeps cards for same-type agents apart", () => {
+    const card = cardStatus();
+    card.apply(spawnBackground(card.host, "call-1", "native-1"));
+    card.apply(spawnBackground(card.host, "call-2", "native-2"));
+    card.apply(card.host.mapRuntimeNotification(lifecycle("native-2", "completed", 100)));
+    expect(card.status("call-1")).toBe("running");
+    expect(card.status("call-2")).toBe("completed");
+  });
+
+  test("replays subagents:record entries to settle cards whose results were never mapped", async () => {
+    const replay = async (resumed: boolean) => {
+      const events = [];
+      for await (const event of streamPiHistory(
+        "pi",
+        [
+          {
+            role: "assistant",
+            content: [
+              {
+                type: "toolCall",
+                id: "call-1",
+                name: "subagent",
+                arguments: { subagent_type: "Explore", prompt: "Inspect" },
+              },
+            ],
+          },
+          {
+            role: "toolResult",
+            toolCallId: "call-1",
+            toolName: "subagent",
+            content: [{ type: "text", text: "Started" }],
+            details: { agentId: "native-1", status: "background" },
+            isError: false,
+          },
+          ...(resumed
+            ? [
+                {
+                  role: "assistant" as const,
+                  content: [
+                    {
+                      type: "toolCall" as const,
+                      id: "call-2",
+                      name: "subagent",
+                      arguments: {
+                        subagent_type: "Explore",
+                        prompt: "Continue",
+                        resume: "native-1",
+                      },
+                    },
+                  ],
+                },
+              ]
+            : []),
+        ] as never,
+        [],
+        {},
+        undefined,
+        undefined,
+        [
+          {
+            customType: "subagents:record",
+            data: { id: "native-1", status: "steered", startedAt: 100 },
+            after: { toolCallId: "call-1", phase: "result" },
+          },
+        ],
+      ))
+        events.push(event);
+      const store = new ProviderSubagentStore();
+      for (const event of events)
+        if (event.type === "provider_subagent") store.apply("parent", "pi", event.event);
+      return store.get("parent", "call-1")?.status;
+    };
+    expect(await replay(false)).toBe("completed");
+    // A resume still in flight when history was read stays running.
+    expect(await replay(true)).toBe("running");
+  });
+
   test("treats a steered agent as completed", () => {
     const host = createPiExtensionHost();
     spawnBackground(host, "call-1", "native-1");
@@ -264,12 +468,30 @@ describe("@gotgenes/pi-subagents adapter", () => {
   });
 });
 
+function lifecycle(agentId: string, status: string, startedAt: number): string {
+  return `${GOTGENES_LIFECYCLE_MARKER} ${JSON.stringify({ agentId, status, startedAt })}`;
+}
+
+/** Folds adapter output into the real store, as the daemon does. */
+function cardStatus() {
+  const host = createPiExtensionHost();
+  const store = new ProviderSubagentStore();
+  return {
+    host,
+    apply(mapping: Pick<PiExtensionCustomMapping, "subagents"> | undefined) {
+      for (const event of mapping?.subagents ?? []) store.apply("parent", "pi", event);
+    },
+    descriptor: (id = "call-1") => store.get("parent", id),
+    status: (id = "call-1") => store.get("parent", id)?.status,
+  };
+}
+
 function spawnBackground(
   host: ReturnType<typeof createPiExtensionHost>,
   callId: string,
   agentId: string,
-): void {
-  host.mapToolCall({
+) {
+  return host.mapToolCall({
     callId,
     toolName: "subagent",
     args: { subagent_type: "Explore", prompt: "Inspect" },

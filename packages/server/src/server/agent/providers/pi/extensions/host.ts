@@ -8,6 +8,7 @@ import type { PiAgentMessage } from "../rpc-types.js";
 import { mapPiChildSession, PiChildSessionFollower } from "./child-session.js";
 import type {
   PiExtension,
+  PiExtensionCustomEntry,
   PiExtensionCustomMapping,
   PiExtensionDialog,
   PiExtensionDialogMapping,
@@ -132,6 +133,19 @@ export class PiExtensionHost {
   ): PiExtensionOutput<PiExtensionCustomMapping> | undefined {
     for (const { id, adapter } of this.sessions) {
       const mapping = this.safe(id, "mapCustomMessage", () => adapter.mapCustomMessage?.(message));
+      if (mapping) {
+        const prepared = this.safe(id, "prepare", () => this.prepare(id, mapping));
+        if (prepared) return prepared;
+      }
+    }
+    return undefined;
+  }
+
+  mapCustomEntry(
+    entry: PiExtensionCustomEntry,
+  ): PiExtensionOutput<PiExtensionCustomMapping> | undefined {
+    for (const { id, adapter } of this.sessions) {
+      const mapping = this.safe(id, "mapCustomEntry", () => adapter.mapCustomEntry?.(entry));
       if (mapping) {
         const prepared = this.safe(id, "prepare", () => this.prepare(id, mapping));
         if (prepared) return prepared;

@@ -63,12 +63,14 @@ import {
 import {
   getUserMessageText,
   streamPiHistory,
+  type PiCapturedCustomEntry,
   type PiCapturedUserMessageEntry,
 } from "./history-mapper.js";
 import { materializeProviderImage } from "../provider-image-output.js";
 import { PiCliRuntime } from "./cli-runtime.js";
 import {
   createPiExtensionHost,
+  piExtensionHistoryEntries,
   piExtensionRuntimeBridge,
   type PiExtensionEventOutput,
 } from "./extensions/index.js";
@@ -658,6 +660,38 @@ function createPiPaseoExtensionFile({
 	    };
 	}
 
+	const historyEntryFields = ${JSON.stringify(piExtensionHistoryEntries)};
+
+	// Custom entries never reach getMessages(), so each one carries the last tool call or result
+	// before it, which is where history replay applies it.
+	function toCapturedCustomEntries(entries) {
+	  const captured = [];
+	  let after = null;
+	  for (const entry of entries) {
+	    const message = entry.type === "message" ? entry.message : undefined;
+	    if (message?.role === "assistant" && Array.isArray(message.content)) {
+	      for (const part of message.content) {
+	        if (part?.type === "toolCall" && typeof part.id === "string") {
+	          after = { toolCallId: part.id, phase: "call" };
+	        }
+	      }
+	    } else if (message?.role === "toolResult" && typeof message.toolCallId === "string") {
+	      after = { toolCallId: message.toolCallId, phase: "result" };
+	    } else if (entry.type === "custom" && entry.data && typeof entry.data === "object") {
+	      const fields = Object.hasOwn(historyEntryFields, entry.customType)
+	        ? historyEntryFields[entry.customType]
+	        : undefined;
+	      if (!fields) continue;
+	      const data = {};
+	      for (const field of fields) {
+	        if (field in entry.data) data[field] = entry.data[field];
+	      }
+	      captured.push({ customType: entry.customType, data, after });
+	    }
+	  }
+	  return captured;
+	}
+
 	function emitEntryCapture(ctx, reason, requestId) {
 	  ctx.ui.notify(
 	    "${PASEO_PI_ENTRY_CAPTURE_MARKER} " +
@@ -668,6 +702,7 @@ function createPiPaseoExtensionFile({
 	        treeEntries: toCapturedUserEntries(ctx.sessionManager.getEntries()),
 	        // The entries getMessages() replays, so the nth one is the nth replayed user message.
 	        contextEntries: toCapturedUserEntries(ctx.sessionManager.buildContextEntries()),
+	        customEntries: toCapturedCustomEntries(ctx.sessionManager.buildContextEntries()),
 	      }),
 	    "info",
 	  );
@@ -957,6 +992,31 @@ function parseCapturedEntries(value: unknown): PiCapturedEntry[] {
   });
 }
 
+function parseCapturedCustomEntries(value: unknown): PiCapturedCustomEntry[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.flatMap((entry): PiCapturedCustomEntry[] => {
+    if (!isRecord(entry) || !isRecord(entry.data)) {
+      return [];
+    }
+    const customType = optionalString(entry.customType);
+    if (!customType) {
+      return [];
+    }
+    const after = isRecord(entry.after) ? entry.after : null;
+    const toolCallId = optionalString(after?.toolCallId);
+    const phase = after?.phase === "call" || after?.phase === "result" ? after.phase : undefined;
+    return [
+      {
+        customType,
+        data: entry.data,
+        after: toolCallId && phase ? { toolCallId, phase } : null,
+      },
+    ];
+  });
+}
+
 function isOptionalInputPlaceholder(placeholder: string | undefined): boolean {
   return /\boptional\b|\bskip\b/i.test(placeholder ?? "");
 }
@@ -1227,6 +1287,7 @@ export class PiRpcAgentSession implements AgentSession {
   private readonly pendingSteerSubmissions: PiPendingSteerSubmission[] = [];
   currentLeafOverrideId: string | null | undefined;
   private readonly contextUserEntries: PiCapturedEntry[] = [];
+  private contextCustomEntries: PiCapturedCustomEntry[] = [];
   private readonly treeUserEntriesById = new Map<string, PiCapturedEntry>();
   private readonly pendingExtensionResults = new Map<string, PendingExtensionResult>();
   private outOfBandCompactionEmit: ((event: AgentStreamEvent) => void) | null = null;
@@ -1460,6 +1521,7 @@ export class PiRpcAgentSession implements AgentSession {
       // At most eight 2 MiB child files per replay; later cards retain their summaries.
       createPiExtensionHost(this.logger, undefined, 16 * 1024 * 1024),
       this.closeController.signal,
+      this.contextCustomEntries,
     );
   }
 
@@ -2053,6 +2115,7 @@ export class PiRpcAgentSession implements AgentSession {
       treeEntries: parseCapturedEntries(payload.treeEntries),
       contextEntries: parseCapturedEntries(payload.contextEntries),
     });
+    this.contextCustomEntries = parseCapturedCustomEntries(payload.customEntries);
     if (typeof payload.requestId === "string") {
       this.resolveExtensionResult(payload.requestId, undefined);
     }

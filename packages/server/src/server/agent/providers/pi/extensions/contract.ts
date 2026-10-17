@@ -25,6 +25,17 @@ export interface PiExtensionToolMapping {
   childSessions?: PiChildSessionFile[];
 }
 
+/**
+ * A custom session entry (`pi.appendEntry`) replayed with history. Pi keeps these out of
+ * getMessages(), so the capture command reads them from the session and anchors each one to the
+ * tool call it followed.
+ */
+export interface PiExtensionCustomEntry {
+  customType: string;
+  /** Only the fields the extension listed in `historyEntries`. */
+  data: Record<string, unknown>;
+}
+
 export interface PiExtensionCustomMapping {
   subagents: ProviderSubagentInputEvent[];
   childSessions?: PiChildSessionFile[];
@@ -63,6 +74,8 @@ export interface PiExtensionSession {
   mapCustomMessage?(
     message: Extract<PiAgentMessage, { role: "custom" }>,
   ): PiExtensionCustomMapping | undefined;
+  /** Called during history replay for each entry type listed in `historyEntries`. */
+  mapCustomEntry?(entry: PiExtensionCustomEntry): PiExtensionCustomMapping | undefined;
   onToolStart?(call: PiExtensionToolCall, provider: string): AgentPermissionRequest | undefined;
   onToolEnd?(call: PiExtensionToolCall): void;
   mapDialog?(dialog: PiExtensionDialog, provider: string): PiExtensionDialogMapping | undefined;
@@ -79,5 +92,10 @@ export interface PiExtension {
    * state that Pi's RPC stream omits through `ctx.ui.notify`, which reaches `mapRuntimeNotification`.
    */
   runtimeBridge?: string;
+  /**
+   * Custom entry types history replay hands to `mapCustomEntry`, each with the `data` fields to
+   * keep. List only what the mapper reads; the capture travels through Pi's notify channel.
+   */
+  historyEntries?: Readonly<Record<string, readonly string[]>>;
   createSession(): PiExtensionSession;
 }
