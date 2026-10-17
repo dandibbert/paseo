@@ -70,7 +70,9 @@ jobs:
   publish:
     name: Publish pinned GitHub Release
     needs: build
-    if: ${{ (github.event_name == 'workflow_dispatch' && inputs.publish_release == true) || (github.event_name == 'push' && github.ref == 'refs/heads/headless-publish') }}
+    # `changes` is skipped for dispatch and promotion pushes. A skipped ancestor skips this job
+    # unless the condition starts with a status function.
+    if: ${{ !cancelled() && needs.build.result == 'success' && ((github.event_name == 'workflow_dispatch' && inputs.publish_release == true) || (github.event_name == 'push' && github.ref == 'refs/heads/headless-publish')) }}
     runs-on: ubuntu-22.04
     permissions:
       contents: write
