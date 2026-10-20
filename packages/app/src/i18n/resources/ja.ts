@@ -2040,6 +2040,27 @@ export const ja: TranslationResources = {
   sidebarCallout: {
     dismiss: "閉じる",
   },
+  genui: {
+    generating: "カードを生成中…",
+    changeLabel: "{{from}} → {{to}}",
+    zeroBaseline: "基準値が 0 のため変化率を計算できません",
+    unit: "単位：{{unit}}",
+    copy: "テキストとしてコピー",
+    copied: "コピーしました",
+    viewData: "データを表示",
+    hideData: "データを隠す",
+    renderError: "このカードを表示できませんでした。",
+    decision: {
+      change: "変更",
+      adjust: "調整",
+      keep: "維持",
+    },
+    priority: {
+      high: "優先度：高",
+      medium: "優先度：中",
+      low: "優先度：低",
+    },
+  },
   contextWindow: {
     noData: "コンテキストデータがありません",
     accessibilityNoData: "コンテキストウィンドウ：コンテキストデータがありません",
@@ -2196,6 +2217,11 @@ export const ja: TranslationResources = {
         label: "ターミナルスクロールバック",
         description: "組み込みターミナルバッファに保持する行数",
         accessibilityLabel: "ターミナルスクロールバック行数",
+      },
+      genuiCards: {
+        label: "チャットカードを表示",
+        description:
+          "エージェントが作成したグラフ、表、比較をツール呼び出しではなくカードで表示します",
       },
       autoExpandReasoning: {
         label: "常に思考プロセスを展開",

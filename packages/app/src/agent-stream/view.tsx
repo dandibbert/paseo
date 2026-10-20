@@ -58,6 +58,9 @@ import { useLoadOlderAgentHistory } from "@/hooks/use-load-older-agent-history";
 import { resolveContentMaxWidth, useSettings } from "@/hooks/use-settings";
 import type { ToastApi } from "@/components/toast-host";
 import { returnToTimelineTail } from "./timeline-tail-navigation";
+import { isRenderUiToolName } from "@getpaseo/protocol/tool-name-normalization";
+import { RenderUiCard } from "@/genui/render-ui-card";
+import { resolveRenderUiCardState } from "@/genui/render-ui-call";
 import type { DaemonClient } from "@getpaseo/client/internal/daemon-client";
 import { ToolCallDetailsContent } from "@/components/tool-call-details";
 import { QuestionFormCard } from "@/components/question-form-card";
@@ -335,6 +338,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
   ) {
     const { t } = useTranslation();
     const autoExpandReasoning = useSettings((settings) => settings.autoExpandReasoning);
+    const genuiCards = useSettings((settings) => settings.genuiCards);
     const toolCallDetailLevel = useSettings((settings) => settings.toolCallDetailLevel);
     const chatOutlineEnabled = useSettings((settings) => settings.chatOutlineEnabled);
     const contentMaxWidth = useSettings(resolveContentMaxWidth);
@@ -764,6 +768,14 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
             );
           }
 
+          if (genuiCards && isRenderUiToolName(data.name)) {
+            return (
+              <RenderUiCard
+                state={resolveRenderUiCardState({ status: data.status, detail: data.detail })}
+              />
+            );
+          }
+
           return (
             <ToolCallSlot
               itemId={item.id}
@@ -797,7 +809,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
           />
         );
       },
-      [context.cwd, setInlineDetailsExpanded, handleToolCallOpenFile],
+      [context.cwd, setInlineDetailsExpanded, handleToolCallOpenFile, genuiCards],
     );
 
     // Read through a stable event so live group updates do not change the renderer identity

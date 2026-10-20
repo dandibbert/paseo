@@ -2053,6 +2053,27 @@ export const ru: TranslationResources = {
   sidebarCallout: {
     dismiss: "Закрыть",
   },
+  genui: {
+    generating: "Создание карточки…",
+    changeLabel: "{{from}} → {{to}}",
+    zeroBaseline: "Нет процента изменения: базовое значение 0",
+    unit: "Единица: {{unit}}",
+    copy: "Копировать как текст",
+    copied: "Скопировано",
+    viewData: "Показать данные",
+    hideData: "Скрыть данные",
+    renderError: "Не удалось показать эту карточку.",
+    decision: {
+      change: "Изменить",
+      adjust: "Скорректировать",
+      keep: "Оставить",
+    },
+    priority: {
+      high: "Высокий приоритет",
+      medium: "Средний приоритет",
+      low: "Низкий приоритет",
+    },
+  },
   contextWindow: {
     noData: "Нет данных о контексте",
     accessibilityNoData: "Контекстное окно: нет данных о контексте",
@@ -2211,6 +2232,11 @@ export const ru: TranslationResources = {
         label: "Буфер прокрутки терминала",
         description: "Количество строк, сохраняемых во встроенном буфере терминала",
         accessibilityLabel: "Количество строк в буфере прокрутки терминала",
+      },
+      genuiCards: {
+        label: "Показывать карточки в чате",
+        description:
+          "Показывать графики, таблицы и сравнения от агентов карточками, а не вызовами инструментов",
       },
       autoExpandReasoning: {
         label: "Всегда разворачивать размышления",

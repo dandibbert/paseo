@@ -1,3 +1,4 @@
+import { isRenderUiToolName } from "@getpaseo/protocol/tool-name-normalization";
 import type { ToolCallDetail } from "@getpaseo/protocol/agent-types";
 import type { StreamItem, ToolCallItem } from "@/types/stream";
 
@@ -67,7 +68,12 @@ export function isGroupableToolCall(item: StreamItem): item is ToolCallItem {
     return false;
   }
   const descriptor = describeToolCall(item);
-  return descriptor.detail.type !== "plan" && descriptor.name.trim().toLowerCase() !== "speak";
+  // speak and render_ui are content, not tool activity; they stay in the reading flow.
+  return (
+    descriptor.detail.type !== "plan" &&
+    descriptor.name.trim().toLowerCase() !== "speak" &&
+    !isRenderUiToolName(descriptor.name)
+  );
 }
 
 function createRun(calls: readonly ToolCallItem[], isSealed: boolean): ToolCallRun {

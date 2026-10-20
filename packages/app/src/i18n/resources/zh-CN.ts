@@ -2039,6 +2039,27 @@ export const zhCN: TranslationResources = {
   sidebarCallout: {
     dismiss: "关闭",
   },
+  genui: {
+    generating: "正在生成卡片…",
+    changeLabel: "{{from}} → {{to}}",
+    zeroBaseline: "原值为 0，无法计算变化百分比",
+    unit: "单位：{{unit}}",
+    copy: "复制为文字",
+    copied: "已复制",
+    viewData: "查看数据",
+    hideData: "收起数据",
+    renderError: "无法显示这张卡片。",
+    decision: {
+      change: "修改",
+      adjust: "调整",
+      keep: "保留",
+    },
+    priority: {
+      high: "高优先级",
+      medium: "中优先级",
+      low: "低优先级",
+    },
+  },
   contextWindow: {
     noData: "暂无上下文数据",
     accessibilityNoData: "上下文窗口：暂无上下文数据",
@@ -2192,6 +2213,10 @@ export const zhCN: TranslationResources = {
         label: "终端回滚",
         description: "内置终端缓冲区保留的行数",
         accessibilityLabel: "终端回滚行数",
+      },
+      genuiCards: {
+        label: "显示聊天卡片",
+        description: "把代理生成的图表、表格和对比显示为卡片，而不是工具调用",
       },
       autoExpandReasoning: {
         label: "始终展开推理过程",

@@ -37,6 +37,10 @@ export function ChatSection() {
     (autoExpandReasoning: boolean) => void updateSettings({ autoExpandReasoning }),
     [updateSettings],
   );
+  const changeGenuiCards = useCallback(
+    (genuiCards: boolean) => void updateSettings({ genuiCards }),
+    [updateSettings],
+  );
   const changeChatOutline = useCallback(
     (chatOutlineEnabled: boolean) => void updateSettings({ chatOutlineEnabled }),
     [updateSettings],
@@ -51,6 +55,12 @@ export function ChatSection() {
             hint={t("settings.general.autoExpandReasoning.description")}
             value={settings.autoExpandReasoning}
             onValueChange={changeAutoExpandReasoning}
+          />
+          <SettingsSwitch
+            label={t("settings.general.genuiCards.label")}
+            hint={t("settings.general.genuiCards.description")}
+            value={settings.genuiCards}
+            onValueChange={changeGenuiCards}
           />
           <SettingsSelect
             label={t("settings.general.toolCallDetail.label")}

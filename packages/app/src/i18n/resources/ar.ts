@@ -2020,6 +2020,27 @@ export const ar: TranslationResources = {
   sidebarCallout: {
     dismiss: "رفض",
   },
+  genui: {
+    generating: "جارٍ إنشاء البطاقة…",
+    changeLabel: "{{from}} ← {{to}}",
+    zeroBaseline: "لا توجد نسبة تغيّر: القيمة الأساسية 0",
+    unit: "الوحدة: {{unit}}",
+    copy: "نسخ كنص",
+    copied: "تم النسخ",
+    viewData: "عرض البيانات",
+    hideData: "إخفاء البيانات",
+    renderError: "تعذّر عرض هذه البطاقة.",
+    decision: {
+      change: "تغيير",
+      adjust: "تعديل",
+      keep: "إبقاء",
+    },
+    priority: {
+      high: "أولوية عالية",
+      medium: "أولوية متوسطة",
+      low: "أولوية منخفضة",
+    },
+  },
   contextWindow: {
     noData: "لا توجد بيانات للسياق",
     accessibilityNoData: "نافذة السياق: لا توجد بيانات للسياق",
@@ -2176,6 +2197,10 @@ export const ar: TranslationResources = {
         label: "التمرير Terminal",
         description: "يتم الاحتفاظ بالخطوط في المخزن المؤقت الطرفي المدمج",
         accessibilityLabel: "خطوط التمرير Terminal",
+      },
+      genuiCards: {
+        label: "عرض بطاقات الدردشة",
+        description: "عرض المخططات والجداول والمقارنات من الوكلاء كبطاقات بدلًا من استدعاءات الأدوات",
       },
       autoExpandReasoning: {
         label: "عرض التفكير دائماً",

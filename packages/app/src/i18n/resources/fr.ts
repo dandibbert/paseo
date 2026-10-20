@@ -2066,6 +2066,27 @@ export const fr: TranslationResources = {
   sidebarCallout: {
     dismiss: "Ignorer",
   },
+  genui: {
+    generating: "Génération de la carte…",
+    changeLabel: "{{from}} → {{to}}",
+    zeroBaseline: "Pas de variation en % : la base vaut 0",
+    unit: "Unité : {{unit}}",
+    copy: "Copier en texte",
+    copied: "Copié",
+    viewData: "Voir les données",
+    hideData: "Masquer les données",
+    renderError: "Impossible d'afficher cette carte.",
+    decision: {
+      change: "Modifier",
+      adjust: "Ajuster",
+      keep: "Conserver",
+    },
+    priority: {
+      high: "Priorité haute",
+      medium: "Priorité moyenne",
+      low: "Priorité basse",
+    },
+  },
   contextWindow: {
     noData: "Aucune donnée de contexte",
     accessibilityNoData: "Fenêtre de contexte : aucune donnée de contexte",
@@ -2225,6 +2246,11 @@ export const fr: TranslationResources = {
         label: "Historique du terminal",
         description: "Lignes conservées dans le tampon du terminal intégré",
         accessibilityLabel: "Lignes d’historique du terminal",
+      },
+      genuiCards: {
+        label: "Afficher les cartes du chat",
+        description:
+          "Affiche les graphiques, tableaux et comparaisons des agents sous forme de cartes plutôt que d'appels d'outils",
       },
       autoExpandReasoning: {
         label: "Toujours afficher le raisonnement",

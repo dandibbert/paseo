@@ -2068,6 +2068,27 @@ export const es: TranslationResources = {
   sidebarCallout: {
     dismiss: "Despedir",
   },
+  genui: {
+    generating: "Generando tarjeta…",
+    changeLabel: "{{from}} → {{to}}",
+    zeroBaseline: "Sin cambio porcentual: el valor base es 0",
+    unit: "Unidad: {{unit}}",
+    copy: "Copiar como texto",
+    copied: "Copiado",
+    viewData: "Ver datos",
+    hideData: "Ocultar datos",
+    renderError: "No se pudo mostrar esta tarjeta.",
+    decision: {
+      change: "Cambiar",
+      adjust: "Ajustar",
+      keep: "Mantener",
+    },
+    priority: {
+      high: "Prioridad alta",
+      medium: "Prioridad media",
+      low: "Prioridad baja",
+    },
+  },
   contextWindow: {
     noData: "No hay datos de contexto",
     accessibilityNoData: "Ventana de contexto: No hay datos de contexto",
@@ -2227,6 +2248,11 @@ export const es: TranslationResources = {
         label: "Historial de terminal",
         description: "Líneas mantenidas en el búfer de terminal incorporado",
         accessibilityLabel: "Líneas del historial de terminal",
+      },
+      genuiCards: {
+        label: "Mostrar tarjetas en el chat",
+        description:
+          "Muestra los gráficos, tablas y comparaciones de los agentes como tarjetas en lugar de llamadas a herramientas",
       },
       autoExpandReasoning: {
         label: "Siempre expandir razonamiento",
