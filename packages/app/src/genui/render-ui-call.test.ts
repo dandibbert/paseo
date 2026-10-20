@@ -53,6 +53,30 @@ describe("resolveRenderUiCardState", () => {
     ).toEqual({ status: "unsupported", fallbackText: "雷达图摘要" });
   });
 
+  it("withholds the last streamed value because it may still be growing", () => {
+    expect(
+      resolveRenderUiCardState({ status: "running", detail: unknownDetail({ type: "metric" }) }),
+    ).toMatchObject({ preview: { type: null } });
+    expect(
+      resolveRenderUiCardState({
+        status: "running",
+        detail: unknownDetail({
+          type: "metricComparison",
+          title: "30 天理",
+        }),
+      }),
+    ).toMatchObject({ preview: { title: null } });
+    expect(
+      resolveRenderUiCardState({
+        status: "running",
+        detail: unknownDetail({
+          type: "metricComparison",
+          data: { items: [{ id: "old", label: "旧套餐", value: 75 }] },
+        }),
+      }),
+    ).toMatchObject({ preview: { metricItems: [] } });
+  });
+
   it("previews only the complete, valid prefix while generating", () => {
     const state = resolveRenderUiCardState({
       status: "running",

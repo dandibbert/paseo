@@ -12,6 +12,9 @@ import { validateRenderUiInput } from "@getpaseo/protocol/genui/render-ui-valida
 
 // What the generating card may show before the call completes. Only fields that are
 // complete and individually valid make it in, so the accepted card never contradicts it.
+// Streaming providers (Claude) send a best-effort parse of the partial JSON, where the
+// last string or number may still be growing ("7" before "7500"). A value is known to be
+// complete only once a later key or array element exists, so the last one is withheld.
 export interface RenderUiPreview {
   type: RenderUiType | null;
   title: string | null;
@@ -59,7 +62,7 @@ function readValidItems<T>(
     return [];
   }
   const items: T[] = [];
-  for (const item of value) {
+  for (const item of value.slice(0, -1)) {
     const parsed = parse(item);
     if (!parsed.success) {
       break;
@@ -69,10 +72,16 @@ function readValidItems<T>(
   return items;
 }
 
+function isClosedKey(keys: readonly string[], key: string): boolean {
+  const index = keys.indexOf(key);
+  return index !== -1 && index < keys.length - 1;
+}
+
 export function buildRenderUiPreview(raw: unknown): RenderUiPreview {
   const record = readRecord(raw);
-  const type = RenderUiTypeSchema.safeParse(record?.type);
-  const title = record?.title;
+  const keys = record ? Object.keys(record) : [];
+  const type = RenderUiTypeSchema.safeParse(isClosedKey(keys, "type") ? record?.type : undefined);
+  const title = isClosedKey(keys, "title") ? record?.title : undefined;
   const data = readRecord(record?.data);
   const resolvedType = type.success ? type.data : null;
   return {
