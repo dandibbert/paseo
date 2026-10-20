@@ -99,6 +99,13 @@ import {
   createPaseoWorktreeCommand,
 } from "../../worktree/commands.js";
 import { registerBrowserTools } from "../../browser-tools/tools.js";
+import {
+  acceptRenderUiInput,
+  RENDER_UI_DESCRIPTION,
+  RENDER_UI_INPUT_SHAPE,
+  RENDER_UI_OUTPUT_SHAPE,
+  RENDER_UI_TITLE,
+} from "./render-ui/render-ui-tool.js";
 import type { BrowserToolsBroker } from "../../browser-tools/broker.js";
 import {
   PaseoToolInputError,
@@ -1323,6 +1330,20 @@ export function createPaseoToolCatalog(options: PaseoToolHostDependencies): Pase
   if (options.voiceOnly) {
     return toCatalog();
   }
+
+  registerTool(
+    "render_ui",
+    {
+      title: RENDER_UI_TITLE,
+      description: RENDER_UI_DESCRIPTION,
+      inputSchema: RENDER_UI_INPUT_SHAPE,
+      outputSchema: RENDER_UI_OUTPUT_SHAPE,
+    },
+    async (args) => ({
+      content: [],
+      structuredContent: ensureValidJson(acceptRenderUiInput(args)),
+    }),
+  );
 
   if (options.browserToolsEnabled && options.browserToolsBroker) {
     registerBrowserTools({

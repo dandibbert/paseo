@@ -82,6 +82,17 @@ export function getPaseoToolLeafName(name: string): string | null {
   return null;
 }
 
+// render_ui arrives as a bare native tool, an OpenCode-style `paseo_` tool, or a
+// namespaced MCP tool (`mcp__paseo__render_ui`, `paseo.render_ui`).
+export function isRenderUiToolName(name: string): boolean {
+  const normalized = normalizeToolName(name);
+  return (
+    normalized === "render_ui" ||
+    normalized === "paseo_render_ui" ||
+    getPaseoToolLeafName(normalized) === "render_ui"
+  );
+}
+
 export function isLikelyExternalToolName(name: string): boolean {
   const normalized = normalizeToolName(name);
   if (!normalized) {
