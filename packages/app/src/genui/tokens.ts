@@ -1,7 +1,9 @@
 // GenUI design tokens. Values come from design/genui/docs/genui-visual-spec.md (measured
 // from ChatGPT web, light and dark). GenUI cards read only these tokens, never the Paseo
 // palette; docs/design.md lists this as a deliberate exception. Sizes are shared by both
-// schemes, colors switch with the active Paseo theme's colorScheme.
+// schemes. The palette is exposed as `theme.genui` (styles/theme.ts) so StyleSheet.create
+// tracks it: on web, Unistyles turns theme strings such as `colorScheme` into CSS
+// variables, so branching on `theme.colorScheme` inside a stylesheet always sees light.
 
 export type GenuiColorScheme = "light" | "dark";
 

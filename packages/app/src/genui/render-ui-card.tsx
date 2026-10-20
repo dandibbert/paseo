@@ -8,10 +8,11 @@ import {
   type ErrorInfo,
   type ReactNode,
 } from "react";
-import { Pressable, Text, View, type LayoutChangeEvent } from "react-native";
+import { Text, View, type LayoutChangeEvent } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { useTranslation } from "react-i18next";
 import type { RenderUiInput, RenderUiType } from "@getpaseo/protocol/genui/render-ui-schema";
+import { Button } from "@/components/ui/button";
 import type { Theme } from "@/styles/theme";
 import { copyToClipboard } from "@/utils/copy-to-clipboard";
 import { MetricTilePair } from "./components/metric-views";
@@ -20,7 +21,7 @@ import { buildRenderUiDataText, buildRenderUiPlainText } from "./plain-text";
 import type { RenderUiCardState, RenderUiPreview } from "./render-ui-call";
 import { RenderUiNodeView } from "./render-ui-node";
 import { genuiStyles } from "./styles";
-import { GENUI_RADIUS, GENUI_SPACE, GENUI_TEXT, getGenuiColors, type GenuiColors } from "./tokens";
+import { GENUI_RADIUS, GENUI_SPACE, GENUI_TEXT, type GenuiColors } from "./tokens";
 
 const COPIED_RESET_MS = 1500;
 
@@ -41,7 +42,7 @@ const ESTIMATED_HEIGHT: Record<RenderUiType, number> = {
 const UNKNOWN_TYPE_ESTIMATE = 120;
 
 function genuiColorsFromTheme(theme: Theme): { colors: GenuiColors } {
-  return { colors: getGenuiColors(theme.colorScheme) };
+  return { colors: theme.genui };
 }
 
 interface BoundaryProps {
@@ -135,20 +136,25 @@ function CardActions({ input }: { input: RenderUiInput }) {
         </View>
       ) : null}
       <View style={styles.actions}>
-        <Pressable onPress={handleCopy} accessibilityRole="button" hitSlop={8} testID="genui-copy">
-          <Text style={styles.actionText}>{copied ? t("genui.copied") : t("genui.copy")}</Text>
-        </Pressable>
-        <Pressable
+        <Button
+          variant="ghost"
+          size="xs"
+          onPress={handleCopy}
+          textStyle={styles.actionText}
+          testID="genui-copy"
+        >
+          {copied ? t("genui.copied") : t("genui.copy")}
+        </Button>
+        <Button
+          variant="ghost"
+          size="xs"
           onPress={toggleData}
-          accessibilityRole="button"
           accessibilityState={dataButtonState}
-          hitSlop={8}
+          textStyle={styles.actionText}
           testID="genui-view-data"
         >
-          <Text style={styles.actionText}>
-            {showData ? t("genui.hideData") : t("genui.viewData")}
-          </Text>
-        </Pressable>
+          {showData ? t("genui.hideData") : t("genui.viewData")}
+        </Button>
       </View>
     </View>
   );
@@ -217,7 +223,7 @@ export function RenderUiCard({ state }: { state: RenderUiCardState }) {
 }
 
 const styles = StyleSheet.create((theme) => {
-  const colors = getGenuiColors(theme.colorScheme);
+  const colors = theme.genui;
   return {
     root: {
       width: "100%",
@@ -244,7 +250,7 @@ const styles = StyleSheet.create((theme) => {
     actions: {
       flexDirection: "row",
       justifyContent: "flex-end",
-      gap: GENUI_SPACE.lg,
+      gap: GENUI_SPACE.xs,
     },
     actionText: {
       ...GENUI_TEXT.xs,

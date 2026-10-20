@@ -4,7 +4,7 @@ import type { TableData } from "@getpaseo/protocol/genui/render-ui-schema";
 import { formatCell } from "../format";
 import { withContentKeys } from "../keyed";
 import { genuiStyles } from "../styles";
-import { GENUI_SPACE, GENUI_TEXT, getGenuiColors } from "../tokens";
+import { GENUI_SPACE, GENUI_TEXT } from "../tokens";
 
 const MIN_COLUMN_WIDTH = 96;
 // Static, so it can go straight to contentContainerStyle (see docs/unistyles.md).
@@ -69,7 +69,7 @@ export function TableView({ data }: { data: TableData }) {
 }
 
 const styles = StyleSheet.create((theme) => {
-  const colors = getGenuiColors(theme.colorScheme);
+  const colors = theme.genui;
   return {
     root: {
       gap: GENUI_SPACE.sm,

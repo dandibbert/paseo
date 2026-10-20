@@ -1,5 +1,6 @@
 import { Platform } from "react-native";
 import { darkHighlightColors, lightHighlightColors } from "@getpaseo/highlight";
+import { getGenuiColors } from "@/genui/tokens";
 
 export const baseColors = {
   // Base colors
@@ -706,6 +707,8 @@ export function buildDarkTheme(semanticColors: ReturnType<typeof buildDarkSemant
       palette: baseColors,
       syntax: darkHighlightColors,
     },
+    // GenUI cards use their own measured palette; see packages/app/src/genui/tokens.ts.
+    genui: getGenuiColors("dark"),
     shadow: darkShadow,
     ...commonTheme,
   } as const;
@@ -768,6 +771,7 @@ export function buildLightTheme(semanticColors: ReturnType<typeof buildLightSema
       palette: baseColors,
       syntax: lightHighlightColors,
     },
+    genui: getGenuiColors("light"),
     shadow: lightShadow,
     ...commonTheme,
   } as const;

@@ -1,10 +1,10 @@
 import { StyleSheet } from "react-native-unistyles";
-import { GENUI_RADIUS, GENUI_SPACE, GENUI_TEXT, getGenuiColors } from "./tokens";
+import { GENUI_RADIUS, GENUI_SPACE, GENUI_TEXT } from "./tokens";
 
 // Text and surface styles shared by GenUI components. Colors come from the GenUI
 // tokens for the active scheme, never from the Paseo palette.
 export const genuiStyles = StyleSheet.create((theme) => {
-  const colors = getGenuiColors(theme.colorScheme);
+  const colors = theme.genui;
   return {
     caption: {
       ...GENUI_TEXT.sm,
@@ -30,7 +30,7 @@ export const genuiStyles = StyleSheet.create((theme) => {
     itemTitle: {
       ...GENUI_TEXT.md,
       color: colors.text,
-      fontWeight: "600",
+      fontWeight: "500",
     },
     metricValue: {
       ...GENUI_TEXT.title2xl,
