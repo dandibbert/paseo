@@ -1,0 +1,45 @@
+{
+  "type": "table",
+  "title": "方案对照",
+  "data": {
+    "columns": [
+      {
+        "field": "name",
+        "label": "方案"
+      },
+      {
+        "field": "cost",
+        "label": "价格（元）"
+      },
+      {
+        "field": "quota",
+        "label": "项目额度（项）"
+      },
+      {
+        "field": "limit",
+        "label": "限制"
+      }
+    ],
+    "rows": [
+      {
+        "name": "A",
+        "cost": 50,
+        "quota": 3,
+        "limit": "仅网页"
+      },
+      {
+        "name": "B",
+        "cost": 35,
+        "quota": 2,
+        "limit": "仅手机"
+      },
+      {
+        "name": "C",
+        "cost": 78,
+        "quota": 6,
+        "limit": "支持多端"
+      }
+    ]
+  },
+  "fallbackText": "方案 A 50 元/3 项/仅网页，B 35 元/2 项/仅手机，C 78 元/6 项/多端。"
+}

@@ -1,0 +1,11 @@
+{
+  "type": "metric",
+  "title": "项目质量",
+  "data": {
+    "label": "任务完成率",
+    "value": 92.4,
+    "unit": "%",
+    "detail": "过去七天，模拟数据"
+  },
+  "fallbackText": "过去七天的模拟任务完成率为 92.4%。"
+}

@@ -1,0 +1,11 @@
+{
+  "type": "progress",
+  "title": "里程碑进度",
+  "data": {
+    "label": "已完成任务",
+    "current": 46,
+    "total": 50,
+    "unit": "项"
+  },
+  "fallbackText": "50 项任务已完成 46 项，完成率 92%。"
+}

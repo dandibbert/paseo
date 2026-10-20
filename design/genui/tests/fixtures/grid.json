@@ -1,0 +1,25 @@
+{
+  "type": "grid",
+  "title": "项目完成情况",
+  "data": {
+    "children": [
+      {
+        "type": "metric",
+        "data": {
+          "label": "项目 A 完成率",
+          "value": 80,
+          "unit": "%"
+        }
+      },
+      {
+        "type": "metric",
+        "data": {
+          "label": "项目 B 完成率",
+          "value": 60,
+          "unit": "%"
+        }
+      }
+    ]
+  },
+  "fallbackText": "项目 A 完成率 80%，项目 B 完成率 60%。"
+}

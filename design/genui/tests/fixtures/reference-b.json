@@ -1,0 +1,32 @@
+{
+  "type": "chart.bar",
+  "title": "30 天等效理论容量",
+  "data": {
+    "description": "单位：十亿 Token；假设充分利用所有刷新额度",
+    "x": "model",
+    "series": [
+      {
+        "field": "old",
+        "label": "旧套餐"
+      },
+      {
+        "field": "new",
+        "label": "新套餐"
+      }
+    ],
+    "rows": [
+      {
+        "model": "DS V4.1 Flash",
+        "old": 7.8,
+        "new": 1.1
+      },
+      {
+        "model": "GLM-5.3 Flash",
+        "old": 9.5,
+        "new": 1.4
+      }
+    ],
+    "yUnit": "十亿 Token"
+  },
+  "fallbackText": "DS 新旧容量分别为 1.1 与 7.8 十亿 Token；GLM 新旧容量分别为 1.4 与 9.5 十亿 Token。"
+}

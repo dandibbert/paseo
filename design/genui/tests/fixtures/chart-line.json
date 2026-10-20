@@ -1,0 +1,46 @@
+{
+  "type": "chart.line",
+  "title": "七次响应测试",
+  "data": {
+    "description": "按测试先后顺序；单位秒",
+    "x": "run",
+    "series": [
+      {
+        "field": "latency",
+        "label": "响应耗时"
+      }
+    ],
+    "rows": [
+      {
+        "run": "1",
+        "latency": 2.4
+      },
+      {
+        "run": "2",
+        "latency": 2.1
+      },
+      {
+        "run": "3",
+        "latency": 2.6
+      },
+      {
+        "run": "4",
+        "latency": 1.9
+      },
+      {
+        "run": "5",
+        "latency": 1.8
+      },
+      {
+        "run": "6",
+        "latency": 1.6
+      },
+      {
+        "run": "7",
+        "latency": 1.4
+      }
+    ],
+    "yUnit": "秒"
+  },
+  "fallbackText": "七次测试耗时依次为 2.4、2.1、2.6、1.9、1.8、1.6、1.4 秒，整体下降。"
+}
