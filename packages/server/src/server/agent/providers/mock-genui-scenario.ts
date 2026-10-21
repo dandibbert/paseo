@@ -39,6 +39,60 @@ const REFERENCE_INPUTS: Partial<Record<RenderUiType, unknown>> = {
     },
     fallbackText: "DS 由 7.8 降到 1.1，GLM 由 9.5 降到 1.4，单位十亿 Token。",
   },
+  // Mirrors a real overview a model produced: three different children side by side,
+  // including a six-category bar chart and a table with long unbroken words.
+  grid: {
+    type: "grid",
+    title: "组件总览",
+    data: {
+      children: [
+        {
+          type: "metric",
+          data: {
+            label: "支持的组件类型",
+            value: 10,
+            unit: "种",
+            detail: "含基础展示组件与组合容器",
+          },
+        },
+        {
+          type: "chart.bar",
+          title: "组件类型分布",
+          data: {
+            x: "group",
+            series: [{ field: "count", label: "类型数量" }],
+            rows: [
+              { group: "指标", count: 2 },
+              { group: "进度", count: 1 },
+              { group: "图表", count: 3 },
+              { group: "表格", count: 1 },
+              { group: "分级建议", count: 1 },
+              { group: "组合容器", count: 2 },
+            ],
+            yUnit: "种",
+          },
+        },
+        {
+          type: "table",
+          title: "常用组件举例",
+          data: {
+            columns: [
+              { field: "type", label: "组件" },
+              { field: "use", label: "适用场景" },
+            ],
+            rows: [
+              { type: "metricComparison", use: "两个数值的变化对比" },
+              { type: "progress", use: "已完成数量与总量" },
+              { type: "chart.line", use: "按时间排列的趋势" },
+              { type: "chart.pie", use: "各部分的构成占比" },
+              { type: "priorityList", use: "区分修改、调整和保留的建议" },
+            ],
+          },
+        },
+      ],
+    },
+    fallbackText: "共 10 种组件；图表类最多，有 3 种。",
+  },
   priorityList: {
     type: "priorityList",
     data: {

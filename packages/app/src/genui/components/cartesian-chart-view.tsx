@@ -7,15 +7,17 @@ import Svg, {
   Path,
   Stop,
   Text as SvgText,
+  TSpan,
 } from "react-native-svg";
 import type { CartesianChartData } from "@getpaseo/protocol/genui/render-ui-schema";
 import {
   buildValueAxis,
   lineSegments,
   roundedBarPath,
+  layoutCategoryLabels,
   scaleValue,
-  visibleLabelIndices,
   type AxisScale,
+  type CategoryLabelLayout,
 } from "../chart-layout";
 import { formatAxisTick, formatCell } from "../format";
 import {
@@ -30,7 +32,8 @@ import { ChartFrame } from "./chart-frame";
 
 const TICK_FONT_SIZE = 12;
 const APPROX_CHAR_WIDTH = 7;
-const X_LABEL_BAND = 28;
+const LABEL_LINE_HEIGHT = 15;
+const LABEL_TOP_GAP = 8;
 const PLOT_TOP = 10;
 const AXIS_LABEL_GAP = 10;
 const MAX_BAR_WIDTH = 160;
@@ -43,6 +46,7 @@ interface PlotGeometry {
   bottom: number;
   axis: AxisScale;
   slot: number;
+  labels: CategoryLabelLayout;
 }
 
 function readNumericValues(data: CartesianChartData): number[] {
@@ -67,37 +71,65 @@ function buildGeometry(input: {
   const longestTick = Math.max(...axis.ticks.map((tick) => formatAxisTick(tick).length));
   const left = longestTick * APPROX_CHAR_WIDTH + AXIS_LABEL_GAP;
   const right = input.width;
-  const bottom = input.height - X_LABEL_BAND;
+  const slot = (right - left) / input.data.rows.length;
+  const labels = layoutCategoryLabels({
+    labels: input.data.rows.map((row) => formatCell(row[input.data.x])),
+    slotWidth: slot,
+    fontSize: TICK_FONT_SIZE,
+  });
   return {
     left,
     right,
     top: PLOT_TOP,
-    bottom,
+    bottom: input.height - labels.bandHeight,
     axis,
-    slot: (right - left) / input.data.rows.length,
+    slot,
+    labels,
   };
 }
 
-function truncateLabel(text: string, maxWidth: number): string {
-  const maxChars = Math.max(1, Math.floor(maxWidth / APPROX_CHAR_WIDTH));
-  return text.length > maxChars ? `${text.slice(0, Math.max(1, maxChars - 1))}…` : text;
+function CategoryLabels({ geometry, colors }: { geometry: PlotGeometry; colors: GenuiColors }) {
+  const firstBaseline = geometry.bottom + LABEL_TOP_GAP + TICK_FONT_SIZE;
+  if (geometry.labels.mode === "rotated") {
+    return geometry.labels.labels.map((label, index) => {
+      const x = geometry.left + geometry.slot * (index + 0.5);
+      return (
+        <SvgText
+          key={`x-${x}`}
+          x={x}
+          y={firstBaseline}
+          fontSize={TICK_FONT_SIZE}
+          fill={colors.textSecondary}
+          textAnchor="end"
+          transform={`rotate(-45 ${x} ${firstBaseline})`}
+        >
+          {label}
+        </SvgText>
+      );
+    });
+  }
+  return geometry.labels.lines.map((lines, index) => {
+    const x = geometry.left + geometry.slot * (index + 0.5);
+    return (
+      <SvgText
+        key={`x-${x}`}
+        x={x}
+        y={firstBaseline}
+        fontSize={TICK_FONT_SIZE}
+        fill={colors.textSecondary}
+        textAnchor="middle"
+      >
+        {lines.map((line, lineIndex) => (
+          <TSpan key={`${x}-${line}`} x={x} dy={lineIndex === 0 ? 0 : LABEL_LINE_HEIGHT}>
+            {line}
+          </TSpan>
+        ))}
+      </SvgText>
+    );
+  });
 }
 
-function AxisLayer({
-  geometry,
-  data,
-  colors,
-}: {
-  geometry: PlotGeometry;
-  data: CartesianChartData;
-  colors: GenuiColors;
-}) {
-  const labelIndices = visibleLabelIndices({
-    count: data.rows.length,
-    slotWidth: geometry.slot,
-    minLabelWidth: 56,
-  });
-  const labelWidth = geometry.slot * (labelIndices[1] ?? data.rows.length) - 4;
+function AxisLayer({ geometry, colors }: { geometry: PlotGeometry; colors: GenuiColors }) {
   return (
     <>
       {geometry.axis.ticks.map((tick) => {
@@ -130,18 +162,7 @@ function AxisLayer({
           </SvgText>,
         ];
       })}
-      {labelIndices.map((index) => (
-        <SvgText
-          key={`x-${index}`}
-          x={geometry.left + geometry.slot * (index + 0.5)}
-          y={geometry.bottom + 20}
-          fontSize={TICK_FONT_SIZE}
-          fill={colors.textSecondary}
-          textAnchor="middle"
-        >
-          {truncateLabel(formatCell(data.rows[index]?.[data.x]), labelWidth)}
-        </SvgText>
-      ))}
+      <CategoryLabels geometry={geometry} colors={colors} />
     </>
   );
 }
@@ -327,7 +348,7 @@ export function CartesianChartView({
         const geometry = buildGeometry({ data, width, height });
         return (
           <Svg width={width} height={height}>
-            <AxisLayer geometry={geometry} data={data} colors={colors} />
+            <AxisLayer geometry={geometry} colors={colors} />
             {kind === "bar" ? (
               <BarLayer
                 geometry={geometry}

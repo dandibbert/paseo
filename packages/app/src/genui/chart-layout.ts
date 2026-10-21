@@ -159,16 +159,136 @@ export function lineSegments(
   return segments;
 }
 
-// Indices of category labels to draw so neighbours do not overlap.
-export function visibleLabelIndices(input: {
-  count: number;
-  slotWidth: number;
-  minLabelWidth: number;
-}): number[] {
-  const every = Math.max(1, Math.ceil(input.minLabelWidth / Math.max(1, input.slotWidth)));
-  const indices: number[] = [];
-  for (let index = 0; index < input.count; index += every) {
-    indices.push(index);
+const CJK_PATTERN = /[\u2E80-\u9FFF\uAC00-\uD7AF\uF900-\uFAFF\uFF00-\uFFEF]/u;
+const LATIN_CHAR_RATIO = 0.6;
+const LINE_HEIGHT_RATIO = 1.25;
+const MAX_LABEL_LINES = 2;
+const ROTATED_MAX_WIDTH = 96;
+const ROTATED_SIN = Math.SQRT1_2;
+
+// SVG text cannot be measured before it is drawn on every platform, so widths are
+// estimated: full-width (CJK) glyphs are about one em, Latin about 0.6 em.
+export function estimateTextWidth(text: string, fontSize: number): number {
+  let width = 0;
+  for (const char of text) {
+    width += CJK_PATTERN.test(char) ? fontSize : fontSize * LATIN_CHAR_RATIO;
   }
-  return indices;
+  return width;
+}
+
+function truncateToWidth(text: string, maxWidth: number, fontSize: number): string {
+  if (estimateTextWidth(text, fontSize) <= maxWidth) {
+    return text;
+  }
+  let result = "";
+  for (const char of text) {
+    if (estimateTextWidth(`${result}${char}…`, fontSize) > maxWidth) {
+      break;
+    }
+    result += char;
+  }
+  return `${result}…`;
+}
+
+// Latin words stay whole; CJK breaks between any two characters.
+function tokenize(text: string): string[] {
+  return (
+    text.match(
+      /[\u2E80-\u9FFF\uAC00-\uD7AF\uF900-\uFAFF\uFF00-\uFFEF]|[^\s\u2E80-\u9FFF\uAC00-\uD7AF\uF900-\uFAFF\uFF00-\uFFEF]+\s*|\s+/gu,
+    ) ?? []
+  );
+}
+
+function wrapLabel(text: string, maxWidth: number, fontSize: number): string[] {
+  const lines: string[] = [];
+  let current = "";
+  for (const token of tokenize(text)) {
+    const candidate = `${current}${token}`;
+    if (current && estimateTextWidth(candidate.trimEnd(), fontSize) > maxWidth) {
+      lines.push(current.trimEnd());
+      current = token.trimStart();
+    } else {
+      current = candidate;
+    }
+  }
+  if (current.trim()) {
+    lines.push(current.trimEnd());
+  }
+  if (lines.length <= MAX_LABEL_LINES) {
+    return lines.map((line) => truncateToWidth(line, maxWidth, fontSize));
+  }
+  const kept = lines.slice(0, MAX_LABEL_LINES - 1);
+  const rest = lines.slice(MAX_LABEL_LINES - 1).join(" ");
+  return [...kept, truncateToWidth(rest, maxWidth, fontSize)].map((line) =>
+    truncateToWidth(line, maxWidth, fontSize),
+  );
+}
+
+export type CategoryLabelLayout =
+  | { mode: "horizontal"; lines: string[][]; bandHeight: number }
+  | { mode: "rotated"; labels: string[]; bandHeight: number };
+
+// Every category keeps its label. Labels wrap to two lines under their slot; when slots
+// are too narrow for two full-width characters, all labels turn 45° instead.
+export function layoutCategoryLabels(input: {
+  labels: readonly string[];
+  slotWidth: number;
+  fontSize: number;
+}): CategoryLabelLayout {
+  const { labels, slotWidth, fontSize } = input;
+  const lineHeight = fontSize * LINE_HEIGHT_RATIO;
+  const maxWidth = slotWidth - 4;
+  if (maxWidth >= fontSize * 2) {
+    const lines = labels.map((label) => wrapLabel(label, maxWidth, fontSize));
+    const lineCount = Math.max(1, ...lines.map((label) => label.length));
+    return { mode: "horizontal", lines, bandHeight: Math.ceil(12 + lineHeight * lineCount) };
+  }
+  const truncated = labels.map((label) => truncateToWidth(label, ROTATED_MAX_WIDTH, fontSize));
+  const widest = Math.max(0, ...truncated.map((label) => estimateTextWidth(label, fontSize)));
+  return {
+    mode: "rotated",
+    labels: truncated,
+    bandHeight: Math.ceil(12 + widest * ROTATED_SIN + fontSize),
+  };
+}
+
+const TABLE_FONT_SIZE = 14;
+const TABLE_CELL_PADDING = 16;
+const TABLE_MIN_COLUMN = 72;
+const TABLE_MAX_COLUMN = 240;
+// Header cells are semibold, which runs a little wider than the estimate.
+const TABLE_HEADER_WIDTH_FACTOR = 1.1;
+
+export interface TableColumnWidth {
+  // Narrowest the column can get without breaking a word: its longest token.
+  min: number;
+  // Width that fits the widest cell on one line.
+  preferred: number;
+}
+
+function clampColumn(width: number): number {
+  return Math.round(Math.min(TABLE_MAX_COLUMN, Math.max(TABLE_MIN_COLUMN, width)));
+}
+
+// Columns start at the width that fits their widest cell and shrink toward their longest
+// unbreakable token, so CJK text wraps before the table scrolls and a long word such as
+// "metricComparison" is never clipped.
+export function estimateTableColumnWidths(input: {
+  headers: readonly string[];
+  rows: ReadonlyArray<readonly string[]>;
+}): TableColumnWidth[] {
+  return input.headers.map((header, columnIndex) => {
+    const texts = [header, ...input.rows.map((row) => row[columnIndex] ?? "")];
+    const widthOf = (text: string, factor: number) =>
+      estimateTextWidth(text.trim(), TABLE_FONT_SIZE) * factor;
+    const factorFor = (index: number) => (index === 0 ? TABLE_HEADER_WIDTH_FACTOR : 1);
+    const preferred = Math.max(...texts.map((text, index) => widthOf(text, factorFor(index))));
+    const longestToken = Math.max(
+      ...texts.flatMap((text, index) =>
+        tokenize(text).map((token) => widthOf(token, factorFor(index))),
+      ),
+    );
+    const min = clampColumn(longestToken + TABLE_CELL_PADDING);
+    return { min, preferred: Math.max(min, clampColumn(preferred + TABLE_CELL_PADDING)) };
+  });
 }

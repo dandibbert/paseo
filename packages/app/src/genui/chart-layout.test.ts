@@ -6,7 +6,8 @@ import {
   pieSlicePaths,
   roundedBarPath,
   scaleValue,
-  visibleLabelIndices,
+  estimateTableColumnWidths,
+  layoutCategoryLabels,
 } from "./chart-layout";
 import { formatAxisTick, formatCell, formatSignedPercent, formatWithUnit } from "./format";
 
@@ -101,13 +102,68 @@ describe("lineSegments", () => {
   });
 });
 
-describe("visibleLabelIndices", () => {
-  it("keeps every label when they fit", () => {
-    expect(visibleLabelIndices({ count: 3, slotWidth: 100, minLabelWidth: 40 })).toEqual([0, 1, 2]);
+describe("layoutCategoryLabels", () => {
+  it("keeps every label and wraps CJK labels to two lines", () => {
+    const layout = layoutCategoryLabels({
+      labels: ["指标", "进度", "柱状图", "折线图", "分级建议", "表格"],
+      slotWidth: 30,
+      fontSize: 12,
+    });
+    expect(layout).toEqual({
+      mode: "horizontal",
+      lines: [["指标"], ["进度"], ["柱状", "图"], ["折线", "图"], ["分级", "建议"], ["表格"]],
+      bandHeight: 42,
+    });
   });
 
-  it("skips labels that would overlap", () => {
-    expect(visibleLabelIndices({ count: 7, slotWidth: 20, minLabelWidth: 50 })).toEqual([0, 3, 6]);
+  it("keeps Latin words whole and truncates past two lines", () => {
+    const layout = layoutCategoryLabels({
+      labels: ["DS V4.1 Flash", "a very long model name here"],
+      slotWidth: 60,
+      fontSize: 12,
+    });
+    expect(layout.mode).toBe("horizontal");
+    if (layout.mode !== "horizontal") return;
+    expect(layout.lines[0]).toEqual(["DS V4.1", "Flash"]);
+    expect(layout.lines[1]).toHaveLength(2);
+    expect(layout.lines[1][1].endsWith("…")).toBe(true);
+  });
+
+  it("rotates every label when slots are too narrow", () => {
+    const layout = layoutCategoryLabels({
+      labels: Array.from({ length: 30 }, (_, index) => `day ${index + 1}`),
+      slotWidth: 18,
+      fontSize: 12,
+    });
+    expect(layout.mode).toBe("rotated");
+    if (layout.mode !== "rotated") return;
+    expect(layout.labels).toHaveLength(30);
+  });
+});
+
+describe("estimateTableColumnWidths", () => {
+  it("prefers one line per cell but can shrink CJK text down to its longest word", () => {
+    expect(
+      estimateTableColumnWidths({
+        headers: ["组件", "适用场景"],
+        rows: [
+          ["metricComparison", "两个数值的变化对比"],
+          ["progress", "已完成数量与总量"],
+        ],
+      }),
+    ).toEqual([
+      { min: 150, preferred: 150 },
+      { min: 72, preferred: 142 },
+    ]);
+  });
+
+  it("clamps very short and very long columns", () => {
+    expect(
+      estimateTableColumnWidths({ headers: ["A", "B"], rows: [["x", "很".repeat(40)]] }),
+    ).toEqual([
+      { min: 72, preferred: 72 },
+      { min: 72, preferred: 240 },
+    ]);
   });
 });
 

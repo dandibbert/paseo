@@ -82,8 +82,13 @@ test("shows the data behind a card and copies it as text", async ({ page }) => {
     await openAgentRoute(page, agent);
     const card = page.getByTestId("genui-card");
     await expect(card).toHaveCount(1, { timeout: 60_000 });
+    const closedHeight = (await card.boundingBox())?.height;
     await card.getByTestId("genui-view-data").click();
     await expect(card.getByTestId("genui-data-text")).toContainText("方案\t价格（元）");
+    // Closing the data panel gives its space back instead of leaving a gap.
+    await card.getByTestId("genui-view-data").click();
+    await expect(card.getByTestId("genui-data-text")).toHaveCount(0);
+    await expect.poll(async () => (await card.boundingBox())?.height).toBe(closedHeight);
     await card.getByTestId("genui-copy").click();
     await expect(card.getByTestId("genui-copy")).toHaveText("Copied");
   } finally {

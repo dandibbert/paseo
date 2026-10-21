@@ -160,15 +160,12 @@ function CardActions({ input }: { input: RenderUiInput }) {
   );
 }
 
-function AcceptedCard({ input }: { input: RenderUiInput }) {
+function AcceptedContent({ input }: { input: RenderUiInput }) {
   const { t } = useTranslation();
   return (
-    <View style={styles.acceptedStack}>
-      <RenderUiErrorBoundary fallbackText={buildRenderUiPlainText(input) || t("genui.renderError")}>
-        <AcceptedBody input={input} uniProps={genuiColorsFromTheme} />
-      </RenderUiErrorBoundary>
-      <CardActions input={input} />
-    </View>
+    <RenderUiErrorBoundary fallbackText={buildRenderUiPlainText(input) || t("genui.renderError")}>
+      <AcceptedBody input={input} uniProps={genuiColorsFromTheme} />
+    </RenderUiErrorBoundary>
   );
 }
 
@@ -182,8 +179,9 @@ function estimateHeight(state: RenderUiCardState): number {
   return 0;
 }
 
-// One render_ui call in the timeline. Height only grows while generating and once
-// accepted, so the list never jumps; a rejected call collapses to nothing.
+// One render_ui call in the timeline. The card body's height only grows while generating
+// and once accepted, so the list never jumps; a rejected call collapses to nothing. The
+// actions and the "View data" panel sit outside that floor so closing the panel shrinks.
 export function RenderUiCard({ state }: { state: RenderUiCardState }) {
   const { t } = useTranslation();
   const [minHeight, setMinHeight] = useState(() => estimateHeight(state));
@@ -191,6 +189,7 @@ export function RenderUiCard({ state }: { state: RenderUiCardState }) {
   useEffect(() => {
     setMinHeight((current) => Math.max(current, estimate));
   }, [estimate]);
+  const bodyStyle = useMemo(() => ({ minHeight }), [minHeight]);
   const handleLayout = useCallback((event: LayoutChangeEvent) => {
     const height = Math.ceil(event.nativeEvent.layout.height);
     setMinHeight((current) => (height > current ? height : current));
@@ -208,16 +207,18 @@ export function RenderUiCard({ state }: { state: RenderUiCardState }) {
   }
   return (
     <View
-      style={[styles.root, { minHeight }]}
-      onLayout={handleLayout}
+      style={[styles.root, styles.acceptedStack]}
       testID={state.status === "accepted" ? "genui-card" : "genui-card-generating"}
       accessibilityLabel={state.status === "generating" ? t("genui.generating") : undefined}
     >
-      {state.status === "accepted" ? (
-        <AcceptedCard input={state.input} />
-      ) : (
-        <PreviewBody preview={state.preview} />
-      )}
+      <View style={bodyStyle} onLayout={handleLayout}>
+        {state.status === "accepted" ? (
+          <AcceptedContent input={state.input} />
+        ) : (
+          <PreviewBody preview={state.preview} />
+        )}
+      </View>
+      {state.status === "accepted" ? <CardActions input={state.input} /> : null}
     </View>
   );
 }
