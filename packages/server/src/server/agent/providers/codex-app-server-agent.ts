@@ -120,6 +120,7 @@ import {
 import type { WorkspaceGitService } from "../../workspace-git-service.js";
 import {
   applyCodexToolPolicy,
+  approveAutoApprovedPaseoTools,
   CodexProviderOptionsSchema,
   type CodexProviderOptions,
 } from "./codex/options.js";
@@ -5744,7 +5745,7 @@ export class CodexAppServerAgentSession implements AgentSession {
       for (const [name, serverConfig] of Object.entries(this.config.mcpServers)) {
         mcpServers[name] = toCodexMcpConfig(serverConfig);
       }
-      innerConfig.mcp_servers = mcpServers;
+      innerConfig.mcp_servers = approveAutoApprovedPaseoTools(mcpServers);
     }
     const configured = applyCodexToolPolicy(innerConfig, this.config.toolPolicy);
     return Object.keys(configured).length > 0 ? configured : null;

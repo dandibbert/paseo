@@ -9,6 +9,7 @@ The v1 schemas, cross-field checks and derived values live in `packages/protocol
 - Derived numbers (`changePercent`, progress, pie shares) come only from `compute.ts`. The tool returns them as `derived` so the model quotes the same value the card draws.
 - The tool description carries the minimal-format table. `render-ui-tool.test.ts` fails if it drifts from `skills/paseo-genui/SKILL.md`; edit both together.
 - Rejections name the failing path and include the correct format and an example, so the model can fix the call in one retry.
+- `render_ui` never asks for permission: it only displays content. Claude gets it in `allowedTools` and Codex gets `approval_mode = "approve"` for it whenever the Paseo MCP server is attached (`AUTO_APPROVED_PASEO_TOOLS` in `packages/server/src/server/agent/runtime-mcp-config.ts`). Add a tool there only if it has no side effects.
 - Wire compatibility: provider parsers already map `render_ui` to `ToolCallDetail { type: "unknown" }`, so no protocol type changed. A client that cannot validate a completed call (for example a newer daemon added a type) shows the call's `fallbackText` instead of a card.
 
 ## Card states

@@ -1,5 +1,6 @@
 import type { ProviderOptions, ToolPolicy } from "@getpaseo/protocol/agent-types";
 import { z } from "zod";
+import { AUTO_APPROVED_PASEO_TOOLS, PASEO_MCP_SERVER_NAME } from "../../runtime-mcp-config.js";
 
 const ApprovalPolicySchema = z.union([
   z.enum(["untrusted", "on-request", "never"]),
@@ -84,6 +85,23 @@ export function applyCodexToolPolicy(
     };
   }
   return { ...config, mcp_servers: mcpServers };
+}
+
+// Marks display-only Paseo tools as approved in the Paseo MCP server's Codex config so
+// they skip the approval prompt. Other tools keep the server's default approval mode.
+export function approveAutoApprovedPaseoTools(
+  mcpServers: Record<string, unknown>,
+): Record<string, unknown> {
+  const paseo = mcpServers[PASEO_MCP_SERVER_NAME];
+  if (paseo === undefined) {
+    return mcpServers;
+  }
+  const serverConfig = readRecord(paseo);
+  const tools = readRecord(serverConfig.tools);
+  for (const tool of AUTO_APPROVED_PASEO_TOOLS) {
+    tools[tool] = { ...readRecord(tools[tool]), approval_mode: "approve" };
+  }
+  return { ...mcpServers, [PASEO_MCP_SERVER_NAME]: { ...serverConfig, tools } };
 }
 
 function readRecord(value: unknown): Record<string, unknown> {
