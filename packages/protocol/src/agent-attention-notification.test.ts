@@ -71,6 +71,29 @@ describe("buildAgentAttentionNotificationPayload", () => {
     });
   });
 
+  it("describes a render_ui permission request by its card text, not its JSON", () => {
+    const payload = buildAgentAttentionNotificationPayload({
+      reason: "permission",
+      serverId: "srv-2",
+      workspaceId: "workspace-2",
+      agentId: "agent-2",
+      permissionRequest: {
+        id: "perm-2",
+        provider: "opencode",
+        name: "paseo_render_ui",
+        kind: "tool",
+        input: {
+          type: "metricComparison",
+          title: "Quota",
+          data: { items: [] },
+          fallbackText: "Quota fell from 7 to 1.",
+        },
+      },
+    });
+
+    expect(payload.body).toBe("Quota — Quota fell from 7 to 1.");
+  });
+
   it("uses error-specific defaults when reason is error", () => {
     const payload = buildAgentAttentionNotificationPayload({
       reason: "error",

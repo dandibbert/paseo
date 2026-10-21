@@ -1,7 +1,11 @@
 import type { AgentTimelineItem } from "./agent-sdk-types.js";
 import type { AgentAttachment } from "@getpaseo/protocol/messages";
 import type { AgentTimelineRow } from "./agent-timeline-store-types.js";
-import { isLikelyExternalToolName } from "@getpaseo/protocol/tool-name-normalization";
+import { summarizeRenderUiInput } from "@getpaseo/protocol/genui/render-ui-summary";
+import {
+  isLikelyExternalToolName,
+  isRenderUiToolName,
+} from "@getpaseo/protocol/tool-name-normalization";
 import { buildToolCallDisplayModel } from "@getpaseo/protocol/tool-call-display";
 import { projectTimelineRows } from "./timeline-projection.js";
 
@@ -108,6 +112,13 @@ function formatToolCallEntry(
     metadata: item.metadata,
   });
   const displayName = display.displayName;
+  if (isRenderUiToolName(item.name)) {
+    // A chat card: show what it says, never its JSON.
+    const card = formatToolSummary(
+      summarizeRenderUiInput(inputFromUnknownDetail(item.detail)) ?? undefined,
+    );
+    return activityEntry(card ? `[${displayName}] ${card}` : `[${displayName}]`);
+  }
   const summary = formatToolSummary(display.summary);
   if (
     (options?.includeExternalToolInput ?? true) &&
