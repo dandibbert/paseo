@@ -2625,6 +2625,11 @@ export const es: TranslationResources = {
           hint: "Los agentes podrán gestionar árboles de trabajo, agentes y horarios.",
           accessibilityLabel: "Inyectar herramientasPaseo",
         },
+        genuiPrompt: {
+          title: "Instrucciones de tarjetas de chat",
+          hint: "Indica a los agentes cuándo mostrar gráficos, tablas y comparaciones como tarjetas de chat",
+          accessibilityLabel: "Instrucciones de tarjetas de chat",
+        },
         systemPrompt: {
           title: "Aviso del sistema",
           hint: "Agrega un mensaje del sistema a todos los agentes.",

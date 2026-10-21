@@ -104,6 +104,9 @@
         "appendSystemPrompt": {
           "type": "string"
         },
+        "genuiSystemPrompt": {
+          "type": "boolean"
+        },
         "terminalProfiles": {
           "type": "array",
           "items": {

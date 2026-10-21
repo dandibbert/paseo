@@ -2737,6 +2737,11 @@ export const en = {
           hint: "Agents will be able to manage worktrees, agents and schedules",
           accessibilityLabel: "Inject Paseo tools",
         },
+        genuiPrompt: {
+          title: "Chat card instructions",
+          hint: "Tells agents when to draw charts, tables and comparisons as chat cards",
+          accessibilityLabel: "Chat card instructions",
+        },
         systemPrompt: {
           title: "System prompt",
           hint: "Adds a system prompt to all agents",

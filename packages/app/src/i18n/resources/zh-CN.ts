@@ -2581,6 +2581,11 @@ export const zhCN: TranslationResources = {
           hint: "Agent 将能够管理 worktree、Agent 和计划",
           accessibilityLabel: "注入 Paseo tools",
         },
+        genuiPrompt: {
+          title: "聊天卡片指引",
+          hint: "告诉 Agent 何时把图表、表格和对比画成聊天卡片",
+          accessibilityLabel: "聊天卡片指引",
+        },
         systemPrompt: {
           title: "System prompt",
           hint: "为所有 Agent 添加 system prompt",

@@ -290,6 +290,7 @@ export function HostAgentsPage({ serverId }: { serverId: string }) {
           <InjectPaseoToolsCard serverId={serverId} />
           <BrowserToolsOptInCard serverId={serverId} />
           <AppendSystemPromptCard serverId={serverId} />
+          <GenuiSystemPromptCard serverId={serverId} />
         </SettingsSection>
       ) : (
         <View style={[settingsStyles.card, styles.emptyCard]}>
@@ -971,6 +972,51 @@ function EnableTerminalAgentHooksCard({ serverId }: { serverId: string }) {
           onValueChange={handleValueChange}
           accessibilityLabel="Enable terminal agent hooks"
           testID="host-page-terminal-agent-hooks-switch"
+        />
+      </View>
+    </View>
+  );
+}
+
+function GenuiSystemPromptCard({ serverId }: { serverId: string }) {
+  const { t } = useTranslation();
+  const isConnected = useHostRuntimeIsConnected(serverId);
+  const { config, patchConfig } = useDaemonConfig(serverId);
+  const supported = useSessionStore(
+    (state) => state.sessions[serverId]?.serverInfo?.features?.genuiSystemPrompt === true,
+  );
+
+  const handleValueChange = useCallback(
+    (next: boolean) => {
+      void patchConfig({ genuiSystemPrompt: next }).catch((error) => {
+        console.error("[HostPage] Failed to update chat card instructions", error);
+        Alert.alert(
+          t("settings.host.orchestration.genuiPrompt.title"),
+          error instanceof Error ? error.message : String(error),
+        );
+      });
+    },
+    [patchConfig, t],
+  );
+
+  if (!isConnected || !supported) return null;
+
+  return (
+    <View style={settingsStyles.card} testID="host-page-genui-prompt-card">
+      <View style={settingsStyles.row}>
+        <View style={settingsStyles.rowContent}>
+          <Text style={settingsStyles.rowTitle}>
+            {t("settings.host.orchestration.genuiPrompt.title")}
+          </Text>
+          <Text style={settingsStyles.rowHint}>
+            {t("settings.host.orchestration.genuiPrompt.hint")}
+          </Text>
+        </View>
+        <Switch
+          value={config?.genuiSystemPrompt !== false}
+          onValueChange={handleValueChange}
+          accessibilityLabel={t("settings.host.orchestration.genuiPrompt.accessibilityLabel")}
+          testID="host-page-genui-prompt-switch"
         />
       </View>
     </View>

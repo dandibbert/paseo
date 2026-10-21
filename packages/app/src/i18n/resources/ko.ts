@@ -2579,6 +2579,11 @@ export const ko: TranslationResources = {
           hint: "에이전트가 워크트리, 에이전트, 일정을 관리할 수 있습니다",
           accessibilityLabel: "Paseo 도구 주입",
         },
+        genuiPrompt: {
+          title: "채팅 카드 지침",
+          hint: "차트, 표, 비교를 채팅 카드로 그릴 시점을 에이전트에 알려줍니다",
+          accessibilityLabel: "채팅 카드 지침",
+        },
         systemPrompt: {
           title: "시스템 프롬프트",
           hint: "모든 에이전트에 시스템 프롬프트를 추가합니다",

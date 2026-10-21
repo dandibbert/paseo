@@ -203,6 +203,7 @@ export const MutableDaemonConfigSchema = z
     autoArchiveAfterMerge: z.boolean().default(false),
     enableTerminalAgentHooks: z.boolean().default(false),
     appendSystemPrompt: z.string().default(""),
+    genuiSystemPrompt: z.boolean().optional(),
     terminalProfiles: z.array(TerminalProfileSchema).optional(),
     agentProfiles: z.array(AgentProfileSchema).optional(),
     skills: z.object({ selection: AgentSkillSelectionSchema.optional() }).strict().optional(),
@@ -224,6 +225,7 @@ export const MutableDaemonConfigPatchSchema = z
     autoArchiveAfterMerge: z.boolean().optional(),
     enableTerminalAgentHooks: z.boolean().optional(),
     appendSystemPrompt: z.string().optional(),
+    genuiSystemPrompt: z.boolean().optional(),
     terminalProfiles: z.array(TerminalProfileSchema).optional(),
     agentProfiles: z.array(AgentProfileSchema).optional(),
     pluginsEnabled: z.boolean().optional(),
@@ -3718,6 +3720,8 @@ export const ServerInfoStatusPayloadSchema = z
         terminalSecureInput: z.boolean().optional(),
         // COMPAT(secureAgentInput): added in personal v0.11.2, remove after 2027-04-13.
         terminalSecurePrompt: z.boolean().optional(),
+        // COMPAT(genuiSystemPrompt): added in personal v0.11.4, remove gate after 2027-04-21.
+        genuiSystemPrompt: z.boolean().optional(),
         // COMPAT(checkoutForgeSetAutoMerge): added in v0.2.0-beta.1. Remove the
         // feature gate and checkoutGithubSetAutoMerge fallback after 2027-01-17
         // once the supported daemon floor is >= v0.2.0.

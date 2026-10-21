@@ -2627,6 +2627,11 @@ export const fr: TranslationResources = {
           hint: "Les agents pourront gérer les worktrees, les agents et les planifications",
           accessibilityLabel: "Injecter les outils Paseo",
         },
+        genuiPrompt: {
+          title: "Consignes des cartes de chat",
+          hint: "Indique aux agents quand afficher graphiques, tableaux et comparaisons en cartes de chat",
+          accessibilityLabel: "Consignes des cartes de chat",
+        },
         systemPrompt: {
           title: "Prompt système",
           hint: "Ajoute un prompt système à tous les agents",

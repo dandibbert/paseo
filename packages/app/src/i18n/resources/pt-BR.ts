@@ -2607,6 +2607,11 @@ export const ptBR: TranslationResources = {
           hint: "Agentes poderão gerenciar worktrees, agentes e agendamentos",
           accessibilityLabel: "Injetar ferramentas do Paseo",
         },
+        genuiPrompt: {
+          title: "Instruções de cartões de chat",
+          hint: "Diz aos agentes quando mostrar gráficos, tabelas e comparações como cartões de chat",
+          accessibilityLabel: "Instruções de cartões de chat",
+        },
         systemPrompt: {
           title: "Prompt do sistema",
           hint: "Adiciona um prompt do sistema a todos os agentes",

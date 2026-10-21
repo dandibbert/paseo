@@ -2568,6 +2568,11 @@ export const ar: TranslationResources = {
           hint: "سيتمكن الوكلاء من إدارة أشجار العمل والوكلاء والجداول الزمنية",
           accessibilityLabel: "حقن أدوات Paseo",
         },
+        genuiPrompt: {
+          title: "تعليمات بطاقات الدردشة",
+          hint: "يخبر الوكلاء متى يرسمون المخططات والجداول والمقارنات كبطاقات دردشة",
+          accessibilityLabel: "تعليمات بطاقات الدردشة",
+        },
         systemPrompt: {
           title: "موجه النظام",
           hint: "إضافة موجه النظام إلى كافة الوكلاء",

@@ -335,6 +335,8 @@ export interface AgentManagerOptions {
   paseoToolCatalogFactory?: PaseoToolCatalogFactory;
   resolvePaseoToolPolicy?: (provider: AgentProvider) => ProviderPaseoToolsPolicy | undefined;
   appendSystemPrompt?: string;
+  // Appends the render_ui card policy for agents that can call render_ui. Defaults to true.
+  genuiSystemPrompt?: boolean;
   agentStreamCoalesceWindowMs?: number;
   rescueTimeouts?: AgentManagerRescueTimeouts;
   beforeSteerUnavailableFallback?: (input: {
@@ -769,6 +771,7 @@ export class AgentManager {
     provider: AgentProvider,
   ) => ProviderPaseoToolsPolicy | undefined;
   private appendSystemPrompt: string;
+  private genuiSystemPrompt: boolean;
   private onAgentAttention?: AgentAttentionCallback;
   private onAgentArchived?: AgentArchivedCallback;
   private onWorkspaceStateMayHaveChanged?: (params: { cwd: string }) => void;
@@ -789,6 +792,7 @@ export class AgentManager {
     this.configurePaseoTools(options);
     this.resolvePaseoToolPolicy = options.resolvePaseoToolPolicy ?? (() => undefined);
     this.appendSystemPrompt = options.appendSystemPrompt ?? "";
+    this.genuiSystemPrompt = options.genuiSystemPrompt !== false;
     this.logger = options.logger.child({ module: "agent", component: "agent-manager" });
     this.rescueTimeouts = {
       reloadSessionCloseMs:
@@ -898,6 +902,10 @@ export class AgentManager {
 
   setAppendSystemPrompt(prompt: string | null | undefined): void {
     this.appendSystemPrompt = prompt ?? "";
+  }
+
+  setGenuiSystemPrompt(enabled: boolean): void {
+    this.genuiSystemPrompt = enabled;
   }
 
   public getMetricsSnapshot(): AgentMetricsSnapshot {
@@ -5318,6 +5326,7 @@ export class AgentManager {
       }),
       {
         renderUi:
+          this.genuiSystemPrompt &&
           paseoToolsReachable &&
           isPaseoToolEnabled(paseoToolPolicy, "render_ui") &&
           storedConfig.internal !== true,

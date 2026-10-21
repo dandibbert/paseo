@@ -2320,6 +2320,11 @@ test("appends the render_ui card policy only when the agent can call render_ui",
   paseoToolPolicy = { disabledTools: ["render_ui"] };
   await create();
   expect(client.createdConfigs[2]?.daemonAppendSystemPrompt).toBe("Daemon instructions.");
+
+  paseoToolPolicy = {};
+  manager.setGenuiSystemPrompt(false);
+  await create();
+  expect(client.createdConfigs[3]?.daemonAppendSystemPrompt).toBe("Daemon instructions.");
 });
 
 test("setAgentMode persists the selected mode across session reload", async () => {
