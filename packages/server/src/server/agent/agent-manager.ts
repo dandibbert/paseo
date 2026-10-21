@@ -84,7 +84,8 @@ import { isStaleProviderSessionError } from "./stale-provider-session-error.js";
 import { stripInternalPaseoMcpServer, withRuntimePaseoMcpServer } from "./runtime-mcp-config.js";
 import { resolveCreateAgentTitles } from "./create-agent-title.js";
 import type { PaseoToolCatalogFactory } from "./tools/types.js";
-import { isPaseoToolPolicyEnabled } from "./paseo-tool-policy.js";
+import { isPaseoToolEnabled, isPaseoToolPolicyEnabled } from "./paseo-tool-policy.js";
+import { RENDER_UI_SYSTEM_PROMPT } from "./tools/render-ui/render-ui-prompt.js";
 import {
   ProviderSubagentStore,
   type ProviderSubagentDescriptor,
@@ -5304,22 +5305,37 @@ export class AgentManager {
     const paseoToolPolicy = this.paseoToolsEnabled
       ? this.resolvePaseoToolPolicy(storedConfig.provider)
       : { enabled: false };
+    const paseoToolsReachable =
+      this.paseoToolsEnabled &&
+      isPaseoToolPolicyEnabled(paseoToolPolicy) &&
+      Boolean(this.mcpBaseUrl);
     const launchConfig = this.applyDaemonAppendSystemPrompt(
       withRuntimePaseoMcpServer({
         config: storedConfig,
         agentId,
-        mcpBaseUrl:
-          this.paseoToolsEnabled && isPaseoToolPolicyEnabled(paseoToolPolicy)
-            ? this.mcpBaseUrl
-            : null,
+        mcpBaseUrl: paseoToolsReachable ? this.mcpBaseUrl : null,
         mcpAuthToken: this.mcpAuthToken,
       }),
+      {
+        renderUi:
+          paseoToolsReachable &&
+          isPaseoToolEnabled(paseoToolPolicy, "render_ui") &&
+          storedConfig.internal !== true,
+      },
     );
     return { storedConfig, launchConfig, paseoToolPolicy };
   }
 
-  private applyDaemonAppendSystemPrompt(config: AgentSessionConfig): AgentSessionConfig {
-    const daemonAppendSystemPrompt = this.appendSystemPrompt.trim();
+  private applyDaemonAppendSystemPrompt(
+    config: AgentSessionConfig,
+    options: { renderUi: boolean },
+  ): AgentSessionConfig {
+    const daemonAppendSystemPrompt = [
+      this.appendSystemPrompt.trim(),
+      options.renderUi ? RENDER_UI_SYSTEM_PROMPT : "",
+    ]
+      .filter((part) => part.length > 0)
+      .join("\n\n");
     const next = { ...config };
     delete next.daemonAppendSystemPrompt;
 
