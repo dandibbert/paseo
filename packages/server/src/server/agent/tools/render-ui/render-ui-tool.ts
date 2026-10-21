@@ -18,7 +18,9 @@ const MAX_REPORTED_ISSUES = 8;
 export const RENDER_UI_TITLE = "Render UI";
 
 export const RENDER_UI_DESCRIPTION = [
-  "Show a native card in the chat: comparison, metric, progress, bar/line/pie chart, table, or prioritized actions. Use it only when a visual is clearly easier to read than Markdown; most answers need none, and one answer rarely needs more than two. Write a short lead-in sentence before the call and the explanation after it.",
+  "Show a native card in the chat. Decide this when you choose how to answer: whenever the answer contains one of these data shapes, call render_ui instead of writing a Markdown table, a list of numbers or an HTML file. Two comparable values that changed (old/new, before/after, A/B) -> metricComparison. One key number -> metric. Done out of total -> progress. Values across categories -> chart.bar. Values over time or steps -> chart.line. Shares of a whole -> chart.pie. Several items with several attributes (anything you would put in a Markdown table) -> table. Recommendations split into change/adjust/keep -> priorityList. Several of these together -> card or grid.",
+  "",
+  "Do not call it for greetings, explanations, code fixes or code snippets, narrative, answers without numbers or structured data, or when the user asks for plain text. One answer usually needs one or two cards. Write one lead-in sentence before the call and the interpretation after it; do not repeat every number from the card in the text.",
   "",
   "Parameters: {type, title?, data, fallbackText?, schemaVersion?}. Always pass fallbackText: 1-3 sentences that stand alone with the key entities, numbers and units. Give raw numbers only; percentages and changes are computed by Paseo and returned in `derived`, which you may quote. Never invent values; use null for unknown. Colors, CSS, HTML and pixel sizes are not accepted. `changeIntent` says whether the change is good, bad or neutral for the user; omit it when unsure.",
   "",
