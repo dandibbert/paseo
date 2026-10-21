@@ -16,6 +16,11 @@ import { Button } from "@/components/ui/button";
 import type { Theme } from "@/styles/theme";
 import { copyToClipboard } from "@/utils/copy-to-clipboard";
 import { MetricTilePair } from "./components/metric-views";
+import {
+  applyHeightFloorLayout,
+  createHeightFloor,
+  raiseHeightFloorToEstimate,
+} from "./height-floor";
 import { withContentKeys } from "./keyed";
 import { buildRenderUiDataText, buildRenderUiPlainText } from "./plain-text";
 import type { RenderUiCardState, RenderUiPreview } from "./render-ui-call";
@@ -179,21 +184,32 @@ function estimateHeight(state: RenderUiCardState): number {
   return 0;
 }
 
-// One render_ui call in the timeline. The card body's height only grows while generating
-// and once accepted, so the list never jumps; a rejected call collapses to nothing. The
-// actions and the "View data" panel sit outside that floor so closing the panel shrinks.
+// One render_ui call in the timeline. The card body keeps a minimum height so the list does
+// not jump while it streams in (see height-floor.ts); a rejected call collapses to nothing.
+// The actions and the "View data" panel sit outside that floor so closing the panel shrinks.
 export function RenderUiCard({ state }: { state: RenderUiCardState }) {
   const { t } = useTranslation();
-  const [minHeight, setMinHeight] = useState(() => estimateHeight(state));
   const estimate = estimateHeight(state);
+  const generating = state.status === "generating";
+  const [floor, setFloor] = useState(() => createHeightFloor(estimate));
   useEffect(() => {
-    setMinHeight((current) => Math.max(current, estimate));
+    setFloor((current) => raiseHeightFloorToEstimate(current, estimate));
   }, [estimate]);
-  const bodyStyle = useMemo(() => ({ minHeight }), [minHeight]);
-  const handleLayout = useCallback((event: LayoutChangeEvent) => {
-    const height = Math.ceil(event.nativeEvent.layout.height);
-    setMinHeight((current) => (height > current ? height : current));
-  }, []);
+  const bodyStyle = useMemo(() => ({ minHeight: floor.minHeight }), [floor.minHeight]);
+  const handleLayout = useCallback(
+    (event: LayoutChangeEvent) => {
+      const { width, height } = event.nativeEvent.layout;
+      setFloor((current) =>
+        applyHeightFloorLayout({
+          floor: current,
+          layout: { width: Math.round(width), height: Math.ceil(height) },
+          estimate,
+          generating,
+        }),
+      );
+    },
+    [estimate, generating],
+  );
 
   if (state.status === "rejected") {
     return null;
