@@ -315,4 +315,57 @@ describe("validateRenderUiInput rejections", () => {
       },
     });
   });
+
+  it("rejects a horizontal bar chart with more rows than fit", () => {
+    const rows = Array.from({ length: 41 }, (_, index) => ({ name: `r${index}`, v: index }));
+    const result = issuesOf({
+      type: "chart.bar",
+      data: { x: "name", series: [{ field: "v", label: "V" }], rows, orientation: "horizontal" },
+    });
+    expect(result.issues.map((issue) => issue.path)).toEqual([["data", "rows"]]);
+  });
+
+  it("rejects duplicate action labels and actions on nested children", () => {
+    const duplicate = issuesOf({
+      type: "metric",
+      data: { label: "a", value: 1 },
+      actions: [
+        { label: "Go", prompt: "one" },
+        { label: "Go", prompt: "two" },
+      ],
+    });
+    expect(duplicate.issues.map((issue) => issue.path)).toEqual([["actions"]]);
+    issuesOf({
+      type: "card",
+      data: {
+        children: [
+          {
+            type: "metric",
+            data: { label: "a", value: 1 },
+            actions: [{ label: "Go", prompt: "one" }],
+          },
+        ],
+      },
+    });
+  });
+});
+
+describe("validateRenderUiInput steps and actions", () => {
+  it("accepts steps with statuses and a card with actions", () => {
+    const result = validateRenderUiInput({
+      type: "steps",
+      title: "Release",
+      data: {
+        items: [
+          { title: "Build", status: "done", meta: "Mon" },
+          { title: "Test", status: "current", body: "Running the iOS suite." },
+          { title: "Ship" },
+        ],
+      },
+      actions: [{ label: "Continue", prompt: "Continue with the release." }],
+    });
+    expect(result.ok ? result.input.actions : result.issues).toEqual([
+      { label: "Continue", prompt: "Continue with the release." },
+    ]);
+  });
 });

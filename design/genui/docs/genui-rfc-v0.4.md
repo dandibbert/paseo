@@ -137,26 +137,28 @@ skills/paseo-genui/
 ```ts
 render_ui({
   type: "metricComparison" | "metric" | "progress" | "chart.bar" | "chart.line"
-      | "chart.pie" | "table" | "priorityList" | "card" | "grid",
+      | "chart.pie" | "table" | "priorityList" | "steps" | "card" | "grid",
   title?: string,
   data: object,          // 工具层不约束，由服务端按 type 严格校验
   fallbackText?: string, // 通知、日志、旧客户端显示的纯文本摘要；Skill 要求默认提供
+  actions?: Array<{ label: string, prompt: string }>, // 顶层可选，1–4 个后续按钮（v0.5）
   schemaVersion?: 1,     // 可选，省略按 1 处理
 })
 ```
 
-- 组件的完整格式不写进参数 Schema。每个组件的**最简格式**写在 `render_ui` 的工具说明（description）里，十个合计约 300 token。工具说明与 `SKILL.md` 的表格必须逐字一致，内容如下：
+- 组件的完整格式不写进参数 Schema。每个组件的**最简格式**写在 `render_ui` 的工具说明（description）里，十一个合计约 330 token。工具说明与 `SKILL.md` 的表格必须逐字一致，内容如下：
 
 | type               | `data` 的最小结构（省略可选字段）                                                                                               |
 | ------------------ | ------------------------------------------------------------------------------------------------------------------------------- |
 | `metricComparison` | `{items:[{id,label,value,unit?},…],compare:{from,to,metric:"changePercent",precision?,changeIntent?:"good"\|"bad"\|"neutral"}}` |
 | `metric`           | `{label,value,unit?,detail?}`                                                                                                   |
 | `progress`         | `{label,current,total,unit?}`，`total>0`                                                                                        |
-| `chart.bar`        | `{x,series:[{field,label}],rows:[{[x]:类别,[field]:数值}],yUnit?}`                                                              |
-| `chart.line`       | 与 `chart.bar` 相同；`rows` 必须已经按时间/步骤排序                                                                             |
+| `chart.bar`        | `{x,series:[{field,label}],rows:[{[x]:类别,[field]:数值}],yUnit?,orientation?:"vertical"\|"horizontal"}`                        |
+| `chart.line`       | 与 `chart.bar` 相同但没有 `orientation`；`rows` 必须已经按时间/步骤排序                                                         |
 | `chart.pie`        | `{labelField,valueField,rows:[{[labelField]:名称,[valueField]:非负数}],unit?}`                                                  |
 | `table`            | `{columns:[{field,label}],rows:[{[field]:值}]}`                                                                                 |
 | `priorityList`     | `{items:[{decision:"change"\|"adjust"\|"keep",priority?:"high"\|"medium"\|"low",title,body}]}`                                  |
+| `steps`            | `{items:[{title,body?,meta?,status?:"done"\|"current"\|"todo"\|"blocked"}]}`                                                    |
 | `card`             | `{children:[{type,title?,data},…]}`，语义相关的少量子组件                                                                       |
 | `grid`             | `{children:[{type,title?,data},…]}`，同类并列实体，自动响应式                                                                   |
 
@@ -428,6 +430,13 @@ render_ui({
 - **组件**：`metricComparison`、`metric`、`progress`、`chart.bar`、`chart.line`、`chart.pie`、`table`、`priorityList`，组合容器 `card`、`grid`。
 - **不做**：交互控件、派生计算表达式、`sendAgentPrompt`、图片、地图、代码块兜底。
 - **之后按实际需要加**：时间线、步骤列表、代码对比、slider 和 select。每加一个只扩充组件名列表、最简格式表和服务端 Schema。
+
+### v0.5 增补（已实现）
+
+- `steps`：步骤、计划、里程碑与时间线，每项可带 `done` / `current` / `todo` / `blocked` 状态。
+- `chart.bar.orientation`：省略时 App 在类别名放不下时自动改为横向；横向最多 40 行。
+- 顶层 `actions`：1–4 个后续按钮。点按后显示 `prompt` 全文，用户确认后作为用户消息发给画卡片的 Agent；只在最新一轮、Agent 已结束回答时可用。这是 `sendAgentPrompt` 的收窄版本：只能发消息，不能执行其他动作。
+- 旧 App 不认识的类型和字段一律显示 `fallbackText`。
 
 ### M0：验证（先做）
 

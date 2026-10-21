@@ -5,7 +5,9 @@ import {
   type ChangePercentResult,
 } from "./compute.js";
 import {
+  HORIZONTAL_BAR_MAX_ROWS,
   RenderUiInputSchema,
+  type BarChartData,
   type CartesianChartData,
   type MetricComparisonData,
   type PieChartData,
@@ -64,6 +66,7 @@ export function validateRenderUiInput(raw: unknown): RenderUiValidationResult {
   }
   const issues: RenderUiIssue[] = [];
   collectSemanticIssues(parsed.data, ["data"], issues);
+  checkActionLabels(parsed.data, issues);
   if (issues.length > 0) {
     return { ok: false, type: parsed.data.type, issues };
   }
@@ -141,6 +144,9 @@ function collectSemanticIssues(
       checkMetricComparison(component.data, dataPath, issues);
       return;
     case "chart.bar":
+      checkCartesianChart(component.data, dataPath, issues);
+      checkBarOrientation(component.data, dataPath, issues);
+      return;
     case "chart.line":
       checkCartesianChart(component.data, dataPath, issues);
       return;
@@ -241,6 +247,26 @@ function checkCartesianChart(
       }
     }
   });
+}
+
+function checkBarOrientation(
+  data: BarChartData,
+  path: RenderUiIssuePath,
+  issues: RenderUiIssue[],
+): void {
+  if (data.orientation === "horizontal" && data.rows.length > HORIZONTAL_BAR_MAX_ROWS) {
+    issues.push({
+      path: [...path, "rows"],
+      message: `a horizontal bar chart takes at most ${HORIZONTAL_BAR_MAX_ROWS} rows, got ${data.rows.length}`,
+    });
+  }
+}
+
+function checkActionLabels(input: RenderUiInput, issues: RenderUiIssue[]): void {
+  const labels = (input.actions ?? []).map((action) => action.label.trim());
+  if (new Set(labels).size !== labels.length) {
+    issues.push({ path: ["actions"], message: "action labels must be unique" });
+  }
 }
 
 function checkPieChart(data: PieChartData, path: RenderUiIssuePath, issues: RenderUiIssue[]): void {

@@ -101,7 +101,7 @@
 
 ## 2. v1 十种组件的选择矩阵
 
-RFC v0.4 的合法 `type` 为：`metricComparison`、`metric`、`progress`、`chart.bar`、`chart.line`、`chart.pie`、`table`、`priorityList`、`card`、`grid`。
+RFC v0.4 的合法 `type` 为：`metricComparison`、`metric`、`progress`、`chart.bar`、`chart.line`、`chart.pie`、`table`、`priorityList`、`card`、`grid`；设计包 v0.5 增加 `steps`、`chart.bar` 的 `orientation` 和顶层 `actions`。
 
 | 组件               | 正确触发条件                                   | 不适合的情况                           | 关键数据要求                                                                  |
 | ------------------ | ---------------------------------------------- | -------------------------------------- | ----------------------------------------------------------------------------- |
@@ -113,6 +113,7 @@ RFC v0.4 的合法 `type` 为：`metricComparison`、`metric`、`progress`、`ch
 | `chart.pie`        | 多类别构成占比，类别数不多且数值非负           | 排名精确差异、负值、零合计、很多小切片 | `labelField`、`valueField`、非负 `rows`；比例由 App 计算                      |
 | `table`            | 多实体 × 多属性；精确定位单元格比形状重要      | 只有两个数字、内容可一句话说完         | 有含义的列名、可扫描的行、统一口径                                            |
 | `priorityList`     | **有明确行动决定/建议层次**且每项需解释        | 仅仅是三条普通并列事实                 | `decision:change/adjust/keep`；可选独立 `priority:high/medium/low`；标题/正文 |
+| `steps`            | 有先后顺序的步骤、计划、里程碑，可带完成状态   | 没有先后关系的并列要点                 | 每项标题；状态只在确知时填写；`meta` 放日期或负责人                           |
 | `card`             | 一组事实确实构成单个语义对象，需整体呈现       | 每段正文都包框                         | 单一主题、允许的子元素、无重复标题                                            |
 | `grid`             | 多个**同类型并列实体**，视觉对齐带来收益       | 宽度紧凑、异质内容被强行拼在一起       | 子项同类、统一字段顺序、考虑移动端降为单列                                    |
 
@@ -123,10 +124,11 @@ RFC v0.4 的合法 `type` 为：`metricComparison`、`metric`、`progress`、`ch
 3. **`table` vs 图表**：读者需要具体单元格和属性 → 表格；需要一眼看整体差异/趋势 → 图表；必要时图表中保留精确 tooltip，不默认重复整张表。
 4. **`priorityList` vs Markdown 列表**：确有“需要修改/可以调整/建议保留”的行动决定 → 组件；三项平等知识点 → Markdown 列表。`decision` 是行动，`priority` 是紧急程度，不能混为同一个 `level`。
 5. **`card`/`grid` vs 单个组件**：优先单个语义组件；容器只用于显著提升关联感或避免散乱。
+6. **`steps` vs `priorityList` vs Markdown 列表**：有先后顺序或进度 → `steps`；有修改/调整/保留的行动决定 → `priorityList`；平等要点 → Markdown 列表。
 
 ### 2.2 明确不支持的类型，禁止假装已实现
 
-`chart.scatter`、timeline、flowchart、slider、segmented-control、checkbox、input、select、date-picker、popover、carousel、image、map 等**不在本修订版 v1 组件清单**。如果需要这些视觉表达，改用现有组件或 Markdown；不要传入未知 `type`，也不要输出 HTML 来“偷做”。
+`chart.scatter`、flowchart、slider、segmented-control、checkbox、input、select、date-picker、popover、carousel、image、map 等**不在组件清单**（时间线用 `steps`）。唯一的交互是顶层 `actions` 后续按钮，由用户确认后发出一条消息。如果需要这些视觉表达，改用现有组件或 Markdown；不要传入未知 `type`，也不要输出 HTML 来“偷做”。
 
 未来扩展组件时只补充矩阵及示例，**不应改变判断“是否需要 UI”的总原则**。
 
@@ -270,23 +272,23 @@ RFC v0.4 的合法 `type` 为：`metricComparison`、`metric`、`progress`、`ch
 
 此处的“参考”指本次对话中展示过的实际 GenUI 样本**内容组织方式**；不是 ChatGPT 的隐藏渲染规则。v1 支持本修订版的十种组件：
 
-| 参考编号 | 样本形态                   | Paseo v1 对应策略                 | 备注                                     |
-| -------- | -------------------------- | --------------------------------- | ---------------------------------------- |
-| G01      | 多项指标仪表盘             | `grid` + `metric` / `progress`    | 仅当多指标确实有关联                     |
-| G02      | 两个额度数字 + 降幅        | **`metricComparison`**            | 黄金参考 A                               |
-| G03      | 两模型分组柱状图           | **`chart.bar`**                   | 黄金参考 B                               |
-| G04      | 模型响应时间趋势           | `chart.line`                      | 需有有序横轴                             |
-| G05      | 构成占比饼图               | **`chart.pie`**（修订版 v1 新增） | 只给真实非负构成；图例与占比由 App 生成  |
-| G06      | 散点图                     | v1 **不支持**；用 `table` 或文字  | 不得伪造 scatter 类型                    |
-| G07      | 三层修改建议               | **`priorityList`**                | 黄金参考 C                               |
-| G08      | 功能对照表                 | `table`                           | 精确单元格为主                           |
-| G09      | 里程碑时间线               | Markdown 有序列表或 `table`       | 不假装 timeline 已存在                   |
-| G10      | 流程步骤/卡片格            | `grid` + `card`，或 Markdown 流程 | 关系复杂时优先文字与 Mermaid（已有能力） |
-| G11–G14  | 滑块、分段控制、筛选、表单 | v1 不支持，文字引导/Markdown      | 真正交互为后续版本                       |
-| G15      | 轮播                       | v1 不支持                         | 不用 grid 假装横向可滑动                 |
-| G16      | 图片与说明                 | v1 不支持 GenUI 图片组件          | 普通 Markdown 图片可按既有功能工作       |
-| G17      | Popover                    | v1 不支持                         | 普通脚注或句内解释                       |
-| G18      | 代码与说明                 | 普通 Markdown 代码围栏            | 无需 GenUI                               |
+| 参考编号 | 样本形态                   | Paseo v1 对应策略                  | 备注                                     |
+| -------- | -------------------------- | ---------------------------------- | ---------------------------------------- |
+| G01      | 多项指标仪表盘             | `grid` + `metric` / `progress`     | 仅当多指标确实有关联                     |
+| G02      | 两个额度数字 + 降幅        | **`metricComparison`**             | 黄金参考 A                               |
+| G03      | 两模型分组柱状图           | **`chart.bar`**                    | 黄金参考 B                               |
+| G04      | 模型响应时间趋势           | `chart.line`                       | 需有有序横轴                             |
+| G05      | 构成占比饼图               | **`chart.pie`**（修订版 v1 新增）  | 只给真实非负构成；图例与占比由 App 生成  |
+| G06      | 散点图                     | v1 **不支持**；用 `table` 或文字   | 不得伪造 scatter 类型                    |
+| G07      | 三层修改建议               | **`priorityList`**                 | 黄金参考 C                               |
+| G08      | 功能对照表                 | `table`                            | 精确单元格为主                           |
+| G09      | 里程碑时间线               | **`steps`**（v0.5），`meta` 放日期 | 状态只在确知时填写                       |
+| G10      | 流程步骤/卡片格            | `steps`；分支多时用 Mermaid        | 关系复杂时优先文字与 Mermaid（已有能力） |
+| G11–G14  | 滑块、分段控制、筛选、表单 | 不支持；选择题用顶层 `actions`     | 自由输入仍由用户在输入框完成             |
+| G15      | 轮播                       | v1 不支持                          | 不用 grid 假装横向可滑动                 |
+| G16      | 图片与说明                 | v1 不支持 GenUI 图片组件           | 普通 Markdown 图片可按既有功能工作       |
+| G17      | Popover                    | v1 不支持                          | 普通脚注或句内解释                       |
+| G18      | 代码与说明                 | 普通 Markdown 代码围栏             | 无需 GenUI                               |
 
 **注意：** 参考 A/B/C 是**具体内容黄金测试**，G01–G18 是**选择与编排黄金案例**；两套验收目标不要混在一起。
 

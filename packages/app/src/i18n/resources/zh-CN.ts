@@ -2059,6 +2059,19 @@ export const zhCN: TranslationResources = {
       medium: "中优先级",
       low: "低优先级",
     },
+    step: "第 {{number}} 步",
+    stepStatus: {
+      done: "已完成",
+      current: "进行中",
+      todo: "待办",
+      blocked: "受阻",
+    },
+    action: {
+      send: "发送",
+      cancel: "取消",
+      sent: "已发送",
+      failed: "消息发送失败，请重试。",
+    },
   },
   contextWindow: {
     noData: "暂无上下文数据",

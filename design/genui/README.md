@@ -1,7 +1,7 @@
-# Paseo GenUI — 设计包 v0.4
+# Paseo GenUI — 设计包 v0.5
 
 **日期**：2026-10-20
-**状态**：设计文档、Skill 与测试样例；尚未实现，不能当作可用功能。
+**状态**：设计文档、Skill 与测试样例。v1 与 v0.5 增补已在 Paseo 实现，运行时代码见 `docs/genui.md`。
 
 本包把 RFC v0.3.1 与上一版修订包（RFC v0.2.1、生成规范 v0.2、视觉规范 v0.1.1、Skill v0.2）合并为同一套协议。所有文件之间的一致性由 `tests/verify.py` 交叉校验。
 
@@ -14,9 +14,9 @@
 | `docs/genui-visual-acceptance.md`     | 视觉验收 v0.2 | 达标标准、红线、截图矩阵、评分、逐项验收清单                                |
 | `docs/genui-generation-guidelines.md` | 生成规范 v0.3 | Skill 的完整依据与评测说明，给开发者看，不注入模型                          |
 | `skills/paseo-genui/SKILL.md`         | Skill v0.3    | 模型运行时加载的简短规则与最简格式表                                        |
-| `skills/paseo-genui/references/`      | v0.3          | 十个组件的完整格式；A/B/C 完整回答示例                                      |
+| `skills/paseo-genui/references/`      | v0.5          | 十一个组件与 `actions` 的完整格式；A/B/C 完整回答示例                       |
 | `schemas/render-ui.v1.schema.json`    | 设计草案      | 机器可读的参数结构，实现时转为服务端 Zod                                    |
-| `tests/fixtures/`                     | —             | 十个组件各一份固定输入，用于静态预览页和截图                                |
+| `tests/fixtures/`                     | —             | 每个组件至少一份固定输入，用于静态预览页和截图                              |
 | `tests/generation-cases.json`         | v0.4          | 20 个跨模型行为用例（期望，不是实测结果）                                   |
 | `tests/verify.py`                     | —             | 静态校验：Schema、语义、跨文件一致性                                        |
 | `docs/assets/genui/`                  | —             | 参考图 A、B、C                                                              |
@@ -36,6 +36,12 @@
 - `metricComparison.compare.changeIntent`（good / bad / neutral）决定变化值颜色，不按数值正负。
 - 工具成功返回 `{ok, accepted, type, derived}`；`accepted` 只表示参数被接受。
 - 视觉数值全部以实测规范为准，实现为独立的 GenUI 设计变量，不混用 Paseo 主题颜色。
+
+## v0.5 增补
+
+- 新组件 `steps`（步骤、计划、里程碑，可带状态）。
+- `chart.bar` 可选 `orientation`；省略时由 App 按标签宽度自动选择横竖。
+- 顶层 `actions` 后续按钮：用户确认后把 `prompt` 作为用户消息发回 Agent。
 
 ## 本地静态校验
 

@@ -18,17 +18,19 @@ const MAX_REPORTED_ISSUES = 8;
 export const RENDER_UI_TITLE = "Render UI";
 
 export const RENDER_UI_DESCRIPTION = [
-  "Show a native card in the chat. Decide this when you choose how to answer: whenever the answer contains one of these data shapes, call render_ui instead of writing a Markdown table, a list of numbers or an HTML file. Two comparable values that changed (old/new, before/after, A/B) -> metricComparison. One key number -> metric. Done out of total -> progress. Values across categories -> chart.bar. Values over time or steps -> chart.line. Shares of a whole -> chart.pie. Several items with several attributes (anything you would put in a Markdown table) -> table. Recommendations split into change/adjust/keep -> priorityList. Several of these together -> card or grid.",
+  'Show a native card in the chat. Decide this when you choose how to answer: whenever the answer contains one of these data shapes, call render_ui instead of writing a Markdown table, a list of numbers or an HTML file. Two comparable values that changed (old/new, before/after, A/B) -> metricComparison. One key number -> metric. Done out of total -> progress. Values across categories -> chart.bar (orientation "horizontal" for long category names). Values over time or steps -> chart.line. Shares of a whole -> chart.pie. Several items with several attributes (anything you would put in a Markdown table) -> table. Recommendations split into change/adjust/keep -> priorityList. Ordered steps, a plan or milestones, optionally with done/current/todo/blocked status -> steps. Several of these together -> card or grid.',
   "",
   "Do not call it for greetings, explanations, code fixes or code snippets, narrative, answers without numbers or structured data, or when the user asks for plain text. One answer usually needs one or two cards. Write one lead-in sentence before the call and the interpretation after it; do not repeat every number from the card in the text.",
   "",
-  "Parameters: {type, title?, data, fallbackText?, schemaVersion?}. Always pass fallbackText: 1-3 sentences that stand alone with the key entities, numbers and units. Give raw numbers only; percentages and changes are computed by Paseo and returned in `derived`, which you may quote. Never invent values; use null for unknown. Colors, CSS, HTML and pixel sizes are not accepted. `changeIntent` says whether the change is good, bad or neutral for the user; omit it when unsure.",
+  "Parameters: {type, title?, data, fallbackText?, actions?, schemaVersion?}. Always pass fallbackText: 1-3 sentences that stand alone with the key entities, numbers and units. Give raw numbers only; percentages and changes are computed by Paseo and returned in `derived`, which you may quote. Never invent values; use null for unknown. Colors, CSS, HTML and pixel sizes are not accepted. `changeIntent` says whether the change is good, bad or neutral for the user; omit it when unsure.",
   "",
   "Minimal `data` per type ([x] and [field] stand for the field names you chose, not literal keys):",
   "",
   renderMinimalFormatTable(),
   "",
-  "card children are leaf types; grid children are leaf types or one level of card. Children take {type,title?,data} with no fallbackText.",
+  "card children are leaf types; grid children are leaf types or one level of card. Children take {type,title?,data} with no fallbackText or actions.",
+  "",
+  "actions: when the answer ends with a choice between 2-4 concrete next steps, add [{label, prompt}] to the top-level card. label is at most 40 characters and unique; prompt is the full message, in the user's words, that you receive as a user message if the user presses the button and confirms. Put actions on at most one card per answer, never on informational cards, and still state the options in your text.",
   "",
   "On a validation error, fix the named fields and call again, at most two more times; then answer in Markdown. Success means the data was accepted, not that a client has displayed it.",
 ].join("\n");
@@ -45,6 +47,10 @@ export const RENDER_UI_INPUT_SHAPE = {
     .string()
     .optional()
     .describe("Standalone plain-text summary for notifications and older clients."),
+  actions: z
+    .array(z.record(z.string(), z.unknown()))
+    .optional()
+    .describe("Optional follow-up buttons: [{label, prompt}], 1-4, top-level only."),
   schemaVersion: z
     .literal(RENDER_UI_SCHEMA_VERSION)
     .optional()

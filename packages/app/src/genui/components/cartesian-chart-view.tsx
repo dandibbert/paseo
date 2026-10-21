@@ -1,4 +1,4 @@
-import { useId } from "react";
+import { useCallback, useId } from "react";
 import Svg, {
   Circle,
   Defs,
@@ -9,10 +9,16 @@ import Svg, {
   Text as SvgText,
   TSpan,
 } from "react-native-svg";
-import type { CartesianChartData } from "@getpaseo/protocol/genui/render-ui-schema";
+import {
+  HORIZONTAL_BAR_MAX_ROWS,
+  type BarChartData,
+  type CartesianChartData,
+} from "@getpaseo/protocol/genui/render-ui-schema";
 import {
   buildValueAxis,
+  chartHeightForWidth,
   lineSegments,
+  prefersHorizontalBars,
   roundedBarPath,
   layoutCategoryLabels,
   scaleValue,
@@ -29,6 +35,7 @@ import {
   type GenuiColors,
 } from "../tokens";
 import { ChartFrame } from "./chart-frame";
+import { HorizontalBarChart, horizontalBarChartHeight } from "./horizontal-bar-chart";
 
 const TICK_FONT_SIZE = 12;
 const APPROX_CHAR_WIDTH = 7;
@@ -86,6 +93,22 @@ function buildGeometry(input: {
     slot,
     labels,
   };
+}
+
+// An explicit orientation wins; otherwise bars lie down when their labels would not fit
+// under vertical bars at this width.
+function isHorizontalBarChart(data: BarChartData, width: number): boolean {
+  if (data.orientation) {
+    return data.orientation === "horizontal";
+  }
+  const axis = buildValueAxis(readNumericValues(data));
+  const longestTick = Math.max(...axis.ticks.map((tick) => formatAxisTick(tick).length));
+  return prefersHorizontalBars({
+    labels: data.rows.map((row) => formatCell(row[data.x])),
+    plotWidth: width - (longestTick * APPROX_CHAR_WIDTH + AXIS_LABEL_GAP),
+    fontSize: TICK_FONT_SIZE,
+    maxRows: HORIZONTAL_BAR_MAX_ROWS,
+  });
 }
 
 function CategoryLabels({ geometry, colors }: { geometry: PlotGeometry; colors: GenuiColors }) {
@@ -321,16 +344,21 @@ function describeChart(data: CartesianChartData): string {
     .join("; ");
 }
 
-export function CartesianChartView({
-  kind,
-  data,
-  colors,
-}: {
-  kind: "bar" | "line";
-  data: CartesianChartData;
-  colors: GenuiColors;
-}) {
+type CartesianChartProps =
+  | { kind: "bar"; data: BarChartData; colors: GenuiColors }
+  | { kind: "line"; data: CartesianChartData; colors: GenuiColors };
+
+export function CartesianChartView(props: CartesianChartProps) {
+  const { kind, data, colors } = props;
   const gradientPrefix = `genui-bar-${useId().replace(/[^a-zA-Z0-9_-]/g, "")}`;
+  const barData = props.kind === "bar" ? props.data : null;
+  const heightForWidth = useCallback(
+    (width: number) =>
+      barData && isHorizontalBarChart(barData, width)
+        ? horizontalBarChartHeight(barData, width)
+        : chartHeightForWidth(width),
+    [barData],
+  );
   const legend = data.series.map((series, index) => ({
     key: series.field,
     label: series.label,
@@ -343,8 +371,14 @@ export function CartesianChartView({
       legend={legend}
       colors={colors}
       accessibilityLabel={describeChart(data)}
+      heightForWidth={heightForWidth}
     >
       {({ width, height }) => {
+        if (barData && isHorizontalBarChart(barData, width)) {
+          return (
+            <HorizontalBarChart data={barData} colors={colors} width={width} height={height} />
+          );
+        }
         const geometry = buildGeometry({ data, width, height });
         return (
           <Svg width={width} height={height}>

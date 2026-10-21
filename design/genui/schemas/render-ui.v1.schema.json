@@ -91,6 +91,28 @@
           "minLength": 1,
           "maxLength": 1000
         },
+        "actions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "label": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 40
+              },
+              "prompt": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2000
+              }
+            },
+            "required": ["label", "prompt"],
+            "additionalProperties": false
+          },
+          "minItems": 1,
+          "maxItems": 4
+        },
         "schemaVersion": {
           "const": 1
         }
@@ -138,6 +160,28 @@
           "type": "string",
           "minLength": 1,
           "maxLength": 1000
+        },
+        "actions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "label": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 40
+              },
+              "prompt": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2000
+              }
+            },
+            "required": ["label", "prompt"],
+            "additionalProperties": false
+          },
+          "minItems": 1,
+          "maxItems": 4
         },
         "schemaVersion": {
           "const": 1
@@ -191,6 +235,28 @@
           "type": "string",
           "minLength": 1,
           "maxLength": 1000
+        },
+        "actions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "label": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 40
+              },
+              "prompt": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2000
+              }
+            },
+            "required": ["label", "prompt"],
+            "additionalProperties": false
+          },
+          "minItems": 1,
+          "maxItems": 4
         },
         "schemaVersion": {
           "const": 1
@@ -261,6 +327,9 @@
               "type": "string",
               "minLength": 1,
               "maxLength": 160
+            },
+            "orientation": {
+              "enum": ["vertical", "horizontal"]
             }
           },
           "required": ["x", "series", "rows"],
@@ -270,6 +339,28 @@
           "type": "string",
           "minLength": 1,
           "maxLength": 1000
+        },
+        "actions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "label": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 40
+              },
+              "prompt": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2000
+              }
+            },
+            "required": ["label", "prompt"],
+            "additionalProperties": false
+          },
+          "minItems": 1,
+          "maxItems": 4
         },
         "schemaVersion": {
           "const": 1
@@ -350,6 +441,28 @@
           "minLength": 1,
           "maxLength": 1000
         },
+        "actions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "label": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 40
+              },
+              "prompt": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2000
+              }
+            },
+            "required": ["label", "prompt"],
+            "additionalProperties": false
+          },
+          "minItems": 1,
+          "maxItems": 4
+        },
         "schemaVersion": {
           "const": 1
         }
@@ -411,6 +524,28 @@
           "type": "string",
           "minLength": 1,
           "maxLength": 1000
+        },
+        "actions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "label": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 40
+              },
+              "prompt": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2000
+              }
+            },
+            "required": ["label", "prompt"],
+            "additionalProperties": false
+          },
+          "minItems": 1,
+          "maxItems": 4
         },
         "schemaVersion": {
           "const": 1
@@ -480,6 +615,28 @@
           "minLength": 1,
           "maxLength": 1000
         },
+        "actions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "label": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 40
+              },
+              "prompt": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2000
+              }
+            },
+            "required": ["label", "prompt"],
+            "additionalProperties": false
+          },
+          "minItems": 1,
+          "maxItems": 4
+        },
         "schemaVersion": {
           "const": 1
         }
@@ -537,6 +694,110 @@
           "type": "string",
           "minLength": 1,
           "maxLength": 1000
+        },
+        "actions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "label": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 40
+              },
+              "prompt": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2000
+              }
+            },
+            "required": ["label", "prompt"],
+            "additionalProperties": false
+          },
+          "minItems": 1,
+          "maxItems": 4
+        },
+        "schemaVersion": {
+          "const": 1
+        }
+      },
+      "required": ["type", "data"],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "type": {
+          "const": "steps"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "data": {
+          "type": "object",
+          "properties": {
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "title": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 160
+                  },
+                  "body": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 1000
+                  },
+                  "meta": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 160
+                  },
+                  "status": {
+                    "enum": ["done", "current", "todo", "blocked"]
+                  }
+                },
+                "required": ["title"],
+                "additionalProperties": false
+              },
+              "minItems": 1,
+              "maxItems": 20
+            }
+          },
+          "required": ["items"],
+          "additionalProperties": false
+        },
+        "fallbackText": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1000
+        },
+        "actions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "label": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 40
+              },
+              "prompt": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2000
+              }
+            },
+            "required": ["label", "prompt"],
+            "additionalProperties": false
+          },
+          "minItems": 1,
+          "maxItems": 4
         },
         "schemaVersion": {
           "const": 1
@@ -801,6 +1062,9 @@
                             "type": "string",
                             "minLength": 1,
                             "maxLength": 160
+                          },
+                          "orientation": {
+                            "enum": ["vertical", "horizontal"]
                           }
                         },
                         "required": ["x", "series", "rows"],
@@ -1044,6 +1308,58 @@
                     },
                     "required": ["type", "data"],
                     "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "type": {
+                        "const": "steps"
+                      },
+                      "title": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 160
+                      },
+                      "data": {
+                        "type": "object",
+                        "properties": {
+                          "items": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "title": {
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 160
+                                },
+                                "body": {
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 1000
+                                },
+                                "meta": {
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 160
+                                },
+                                "status": {
+                                  "enum": ["done", "current", "todo", "blocked"]
+                                }
+                              },
+                              "required": ["title"],
+                              "additionalProperties": false
+                            },
+                            "minItems": 1,
+                            "maxItems": 20
+                          }
+                        },
+                        "required": ["items"],
+                        "additionalProperties": false
+                      }
+                    },
+                    "required": ["type", "data"],
+                    "additionalProperties": false
                   }
                 ]
               },
@@ -1058,6 +1374,28 @@
           "type": "string",
           "minLength": 1,
           "maxLength": 1000
+        },
+        "actions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "label": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 40
+              },
+              "prompt": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2000
+              }
+            },
+            "required": ["label", "prompt"],
+            "additionalProperties": false
+          },
+          "minItems": 1,
+          "maxItems": 4
         },
         "schemaVersion": {
           "const": 1
@@ -1322,6 +1660,9 @@
                             "type": "string",
                             "minLength": 1,
                             "maxLength": 160
+                          },
+                          "orientation": {
+                            "enum": ["vertical", "horizontal"]
                           }
                         },
                         "required": ["x", "series", "rows"],
@@ -1557,6 +1898,58 @@
                             },
                             "minItems": 1,
                             "maxItems": 12
+                          }
+                        },
+                        "required": ["items"],
+                        "additionalProperties": false
+                      }
+                    },
+                    "required": ["type", "data"],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "type": {
+                        "const": "steps"
+                      },
+                      "title": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 160
+                      },
+                      "data": {
+                        "type": "object",
+                        "properties": {
+                          "items": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "title": {
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 160
+                                },
+                                "body": {
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 1000
+                                },
+                                "meta": {
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 160
+                                },
+                                "status": {
+                                  "enum": ["done", "current", "todo", "blocked"]
+                                }
+                              },
+                              "required": ["title"],
+                              "additionalProperties": false
+                            },
+                            "minItems": 1,
+                            "maxItems": 20
                           }
                         },
                         "required": ["items"],
@@ -1822,6 +2215,9 @@
                                           "type": "string",
                                           "minLength": 1,
                                           "maxLength": 160
+                                        },
+                                        "orientation": {
+                                          "enum": ["vertical", "horizontal"]
                                         }
                                       },
                                       "required": ["x", "series", "rows"],
@@ -2065,6 +2461,58 @@
                                   },
                                   "required": ["type", "data"],
                                   "additionalProperties": false
+                                },
+                                {
+                                  "type": "object",
+                                  "properties": {
+                                    "type": {
+                                      "const": "steps"
+                                    },
+                                    "title": {
+                                      "type": "string",
+                                      "minLength": 1,
+                                      "maxLength": 160
+                                    },
+                                    "data": {
+                                      "type": "object",
+                                      "properties": {
+                                        "items": {
+                                          "type": "array",
+                                          "items": {
+                                            "type": "object",
+                                            "properties": {
+                                              "title": {
+                                                "type": "string",
+                                                "minLength": 1,
+                                                "maxLength": 160
+                                              },
+                                              "body": {
+                                                "type": "string",
+                                                "minLength": 1,
+                                                "maxLength": 1000
+                                              },
+                                              "meta": {
+                                                "type": "string",
+                                                "minLength": 1,
+                                                "maxLength": 160
+                                              },
+                                              "status": {
+                                                "enum": ["done", "current", "todo", "blocked"]
+                                              }
+                                            },
+                                            "required": ["title"],
+                                            "additionalProperties": false
+                                          },
+                                          "minItems": 1,
+                                          "maxItems": 20
+                                        }
+                                      },
+                                      "required": ["items"],
+                                      "additionalProperties": false
+                                    }
+                                  },
+                                  "required": ["type", "data"],
+                                  "additionalProperties": false
                                 }
                               ]
                             },
@@ -2092,6 +2540,28 @@
           "type": "string",
           "minLength": 1,
           "maxLength": 1000
+        },
+        "actions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "label": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 40
+              },
+              "prompt": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2000
+              }
+            },
+            "required": ["label", "prompt"],
+            "additionalProperties": false
+          },
+          "minItems": 1,
+          "maxItems": 4
         },
         "schemaVersion": {
           "const": 1

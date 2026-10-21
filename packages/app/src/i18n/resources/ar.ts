@@ -2040,6 +2040,19 @@ export const ar: TranslationResources = {
       medium: "أولوية متوسطة",
       low: "أولوية منخفضة",
     },
+    step: "الخطوة {{number}}",
+    stepStatus: {
+      done: "مكتمل",
+      current: "قيد التنفيذ",
+      todo: "للتنفيذ",
+      blocked: "متوقف",
+    },
+    action: {
+      send: "إرسال",
+      cancel: "إلغاء",
+      sent: "تم الإرسال",
+      failed: "تعذر إرسال الرسالة. حاول مرة أخرى.",
+    },
   },
   contextWindow: {
     noData: "لا توجد بيانات للسياق",

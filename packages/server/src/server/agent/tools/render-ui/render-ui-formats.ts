@@ -46,7 +46,8 @@ export const RENDER_UI_FORMATS: Record<RenderUiType, RenderUiFormat> = {
     },
   },
   "chart.bar": {
-    minimal: "`{x,series:[{field,label}],rows:[{[x]:类别,[field]:数值}],yUnit?}`",
+    minimal:
+      '`{x,series:[{field,label}],rows:[{[x]:类别,[field]:数值}],yUnit?,orientation?:"vertical"|"horizontal"}`',
     example: {
       type: "chart.bar",
       title: "模型容量对比",
@@ -66,7 +67,7 @@ export const RENDER_UI_FORMATS: Record<RenderUiType, RenderUiFormat> = {
     },
   },
   "chart.line": {
-    minimal: "与 `chart.bar` 相同；`rows` 必须已经按时间/步骤排序",
+    minimal: "与 `chart.bar` 相同但没有 `orientation`；`rows` 必须已经按时间/步骤排序",
     example: {
       type: "chart.line",
       title: "响应耗时",
@@ -133,6 +134,21 @@ export const RENDER_UI_FORMATS: Record<RenderUiType, RenderUiFormat> = {
         ],
       },
       fallbackText: "优先修改阶段衔接，其次调整环境描写，保留人物声音。",
+    },
+  },
+  steps: {
+    minimal: '`{items:[{title,body?,meta?,status?:"done"|"current"|"todo"|"blocked"}]}`',
+    example: {
+      type: "steps",
+      title: "发布流程",
+      data: {
+        items: [
+          { title: "合并上游", status: "done", meta: "周一" },
+          { title: "真机测试", status: "current", body: "等待 iOS 测试结果。" },
+          { title: "合并到 main", status: "todo" },
+        ],
+      },
+      fallbackText: "合并上游已完成，正在真机测试，之后合并到 main。",
     },
   },
   card: {

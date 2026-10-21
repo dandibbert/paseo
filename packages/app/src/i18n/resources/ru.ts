@@ -2073,6 +2073,19 @@ export const ru: TranslationResources = {
       medium: "Средний приоритет",
       low: "Низкий приоритет",
     },
+    step: "Шаг {{number}}",
+    stepStatus: {
+      done: "Готово",
+      current: "В работе",
+      todo: "К выполнению",
+      blocked: "Заблокировано",
+    },
+    action: {
+      send: "Отправить",
+      cancel: "Отмена",
+      sent: "Отправлено",
+      failed: "Не удалось отправить сообщение. Попробуйте ещё раз.",
+    },
   },
   contextWindow: {
     noData: "Нет данных о контексте",

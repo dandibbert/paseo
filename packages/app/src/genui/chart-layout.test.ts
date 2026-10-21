@@ -8,6 +8,9 @@ import {
   scaleValue,
   estimateTableColumnWidths,
   layoutCategoryLabels,
+  layoutHorizontalBars,
+  prefersHorizontalBars,
+  roundedHorizontalBarPath,
 } from "./chart-layout";
 import { formatAxisTick, formatCell, formatSignedPercent, formatWithUnit } from "./format";
 
@@ -190,5 +193,82 @@ describe("format", () => {
     expect(formatAxisTick(25000)).toBe("25K");
     expect(formatAxisTick(3_400_000)).toBe("3.4M");
     expect(formatAxisTick(0.1 + 0.2)).toBe("0.3");
+  });
+});
+
+describe("prefersHorizontalBars", () => {
+  it("keeps short labels vertical", () => {
+    expect(
+      prefersHorizontalBars({
+        labels: ["A", "B", "C"],
+        plotWidth: 300,
+        fontSize: 12,
+        maxRows: 40,
+      }),
+    ).toBe(false);
+  });
+
+  it("lays bars down when labels would be cut or rotated", () => {
+    const paths = [
+      "packages/server/src/server/agent",
+      "packages/app/src/components",
+      "packages/protocol/src",
+      "packages/cli/src/commands",
+    ];
+    expect(
+      prefersHorizontalBars({ labels: paths, plotWidth: 300, fontSize: 12, maxRows: 40 }),
+    ).toBe(true);
+    const many = Array.from({ length: 30 }, (_, index) => `第${index}组`);
+    expect(prefersHorizontalBars({ labels: many, plotWidth: 300, fontSize: 12, maxRows: 40 })).toBe(
+      true,
+    );
+  });
+
+  it("stays vertical when there are more rows than a horizontal chart takes", () => {
+    const many = Array.from({ length: 60 }, (_, index) => `第${index}组`);
+    expect(prefersHorizontalBars({ labels: many, plotWidth: 300, fontSize: 12, maxRows: 40 })).toBe(
+      false,
+    );
+  });
+});
+
+describe("layoutHorizontalBars", () => {
+  it("caps the label column and fits bands to bars or two label lines", () => {
+    const layout = layoutHorizontalBars({
+      labels: ["packages/server/src/server/agent", "app"],
+      seriesCount: 2,
+      width: 320,
+      fontSize: 12,
+    });
+    expect(layout.labelWidth).toBeLessThanOrEqual(128);
+    expect(layout.labelLines[0].length).toBeLessThanOrEqual(2);
+    expect(layout.labelLines[1]).toEqual(["app"]);
+    expect(layout.bandHeight).toBeGreaterThanOrEqual(2 * 14 + 4);
+  });
+});
+
+describe("roundedHorizontalBarPath", () => {
+  it("rounds the end away from the baseline", () => {
+    expect(
+      roundedHorizontalBarPath({ y: 0, height: 10, valueX: 50, baselineX: 10, radius: 4 }),
+    ).toBe("M10,0 L46,0 Q50,0 50,4 L50,6 Q50,10 46,10 L10,10 Z");
+    expect(
+      roundedHorizontalBarPath({ y: 0, height: 10, valueX: 0, baselineX: 30, radius: 4 }),
+    ).toBe("M30,0 L4,0 Q0,0 0,4 L0,6 Q0,10 4,10 L30,10 Z");
+  });
+});
+
+describe("long label wrapping", () => {
+  it("breaks a file path after its slashes to fill two lines", () => {
+    const layout = layoutHorizontalBars({
+      labels: ["packages/server/src/server/agent"],
+      seriesCount: 1,
+      width: 320,
+      fontSize: 12,
+    });
+    const [lines] = layout.labelLines;
+    expect(lines).toHaveLength(2);
+    expect(lines[0].endsWith("/")).toBe(true);
+    expect(lines.join("").replace("…", "").length).toBeGreaterThan("packages/server/s".length);
   });
 });

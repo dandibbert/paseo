@@ -137,6 +137,42 @@ export function pieSlicePaths(input: {
   });
 }
 
+// Horizontal counterpart of roundedBarPath: the end away from the baseline is rounded.
+export function roundedHorizontalBarPath(input: {
+  y: number;
+  height: number;
+  valueX: number;
+  baselineX: number;
+  radius: number;
+}): string {
+  const { y, height } = input;
+  const left = Math.min(input.valueX, input.baselineX);
+  const right = Math.max(input.valueX, input.baselineX);
+  const width = right - left;
+  const r = Math.max(0, Math.min(input.radius, height / 2, width));
+  const bottom = y + height;
+  if (input.valueX >= input.baselineX) {
+    return [
+      `M${left},${y}`,
+      `L${right - r},${y}`,
+      `Q${right},${y} ${right},${y + r}`,
+      `L${right},${bottom - r}`,
+      `Q${right},${bottom} ${right - r},${bottom}`,
+      `L${left},${bottom}`,
+      "Z",
+    ].join(" ");
+  }
+  return [
+    `M${right},${y}`,
+    `L${left + r},${y}`,
+    `Q${left},${y} ${left},${y + r}`,
+    `L${left},${bottom - r}`,
+    `Q${left},${bottom} ${left + r},${bottom}`,
+    `L${right},${bottom}`,
+    "Z",
+  ].join(" ");
+}
+
 // Split a series into drawable runs; a null value breaks the line instead of dropping to 0.
 export function lineSegments(
   points: ReadonlyArray<{ x: number; y: number | null }>,
@@ -199,10 +235,39 @@ function tokenize(text: string): string[] {
   );
 }
 
+// A token wider than the line, such as a file path, breaks after its separators and
+// then between characters, so it can fill the second line instead of being cut short.
+function splitLongToken(token: string, maxWidth: number, fontSize: number): string[] {
+  if (estimateTextWidth(token.trimEnd(), fontSize) <= maxWidth) {
+    return [token];
+  }
+  const pieces = token.match(/[^/\\._-]+[/\\._-]*|[/\\._-]+/g) ?? [token];
+  const result: string[] = [];
+  for (const piece of pieces) {
+    if (estimateTextWidth(piece, fontSize) <= maxWidth) {
+      result.push(piece);
+      continue;
+    }
+    let chunk = "";
+    for (const char of piece) {
+      if (chunk && estimateTextWidth(`${chunk}${char}`, fontSize) > maxWidth) {
+        result.push(chunk);
+        chunk = "";
+      }
+      chunk += char;
+    }
+    if (chunk) {
+      result.push(chunk);
+    }
+  }
+  return result;
+}
+
 function wrapLabel(text: string, maxWidth: number, fontSize: number): string[] {
   const lines: string[] = [];
   let current = "";
-  for (const token of tokenize(text)) {
+  const tokens = tokenize(text).flatMap((token) => splitLongToken(token, maxWidth, fontSize));
+  for (const token of tokens) {
     const candidate = `${current}${token}`;
     if (current && estimateTextWidth(candidate.trimEnd(), fontSize) > maxWidth) {
       lines.push(current.trimEnd());
@@ -249,6 +314,72 @@ export function layoutCategoryLabels(input: {
     mode: "rotated",
     labels: truncated,
     bandHeight: Math.ceil(12 + widest * ROTATED_SIN + fontSize),
+  };
+}
+
+function isLabelShortened(label: string, lines: readonly string[]): boolean {
+  return lines.some((line) => line.endsWith("…")) && !label.endsWith("…");
+}
+
+// Vertical bars stay the default; a chart whose category labels would turn 45° or lose
+// characters under their bars reads better lying down. plotWidth is the width left of
+// the value axis labels.
+export function prefersHorizontalBars(input: {
+  labels: readonly string[];
+  plotWidth: number;
+  fontSize: number;
+  maxRows: number;
+}): boolean {
+  if (input.labels.length === 0 || input.labels.length > input.maxRows) {
+    return false;
+  }
+  const layout = layoutCategoryLabels({
+    labels: input.labels,
+    slotWidth: input.plotWidth / input.labels.length,
+    fontSize: input.fontSize,
+  });
+  if (layout.mode === "rotated") {
+    return true;
+  }
+  return input.labels.some((label, index) => isLabelShortened(label, layout.lines[index] ?? []));
+}
+
+const HORIZONTAL_BAR_THICKNESS = 14;
+const HORIZONTAL_BAR_GAP = 4;
+const HORIZONTAL_BAND_PADDING = 14;
+const HORIZONTAL_LABEL_MAX_SHARE = 0.4;
+
+export interface HorizontalBarLayout {
+  bandHeight: number;
+  barThickness: number;
+  barGap: number;
+  labelWidth: number;
+  labelLines: string[][];
+}
+
+// Each category gets a band tall enough for its bars or its two-line label, whichever is
+// taller. Labels sit left of the plot and take at most 40% of the width.
+export function layoutHorizontalBars(input: {
+  labels: readonly string[];
+  seriesCount: number;
+  width: number;
+  fontSize: number;
+}): HorizontalBarLayout {
+  const { labels, seriesCount, width, fontSize } = input;
+  const maxLabelWidth = Math.max(fontSize * 4, width * HORIZONTAL_LABEL_MAX_SHARE);
+  const widest = Math.max(0, ...labels.map((label) => estimateTextWidth(label, fontSize)));
+  const labelWidth = Math.ceil(Math.min(maxLabelWidth, widest));
+  const labelLines = labels.map((label) => wrapLabel(label, labelWidth, fontSize));
+  const lineCount = Math.max(1, ...labelLines.map((lines) => lines.length));
+  const barsHeight =
+    seriesCount * HORIZONTAL_BAR_THICKNESS + (seriesCount - 1) * HORIZONTAL_BAR_GAP;
+  const labelHeight = lineCount * fontSize * LINE_HEIGHT_RATIO;
+  return {
+    bandHeight: Math.ceil(Math.max(barsHeight, labelHeight) + HORIZONTAL_BAND_PADDING),
+    barThickness: HORIZONTAL_BAR_THICKNESS,
+    barGap: HORIZONTAL_BAR_GAP,
+    labelWidth,
+    labelLines,
   };
 }
 

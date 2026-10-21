@@ -2073,6 +2073,19 @@ export const ptBR: TranslationResources = {
       medium: "Prioridade média",
       low: "Prioridade baixa",
     },
+    step: "Etapa {{number}}",
+    stepStatus: {
+      done: "Concluído",
+      current: "Em andamento",
+      todo: "A fazer",
+      blocked: "Bloqueado",
+    },
+    action: {
+      send: "Enviar",
+      cancel: "Cancelar",
+      sent: "Enviado",
+      failed: "Não foi possível enviar a mensagem. Tente novamente.",
+    },
   },
   contextWindow: {
     noData: "Sem dados de contexto",

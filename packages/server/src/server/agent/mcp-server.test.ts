@@ -6295,6 +6295,43 @@ describe("render_ui MCP tool", () => {
     expect(text).toContain("Minimal data for metric: `{label,value,unit?,detail?}`");
   });
 
+  it("passes follow-up actions through to validation", async () => {
+    const client = await connectRenderUiClient();
+    const result = await client.callTool({
+      name: "render_ui",
+      arguments: {
+        type: "metric",
+        data: { label: "完成率", value: 92 },
+        actions: [
+          { label: "继续", prompt: "继续下一步。" },
+          { label: "继续", prompt: "先停一下。" },
+        ],
+      },
+    });
+    expect(result.isError).toBe(true);
+    const text = z
+      .array(z.object({ type: z.literal("text"), text: z.string() }))
+      .parse(result.content)[0].text;
+    expect(text).toContain("- actions: action labels must be unique");
+  });
+
+  it("reports unknown keys inside an action instead of dropping them", async () => {
+    const client = await connectRenderUiClient();
+    const result = await client.callTool({
+      name: "render_ui",
+      arguments: {
+        type: "metric",
+        data: { label: "完成率", value: 92 },
+        actions: [{ label: "继续", prompt: "继续下一步。", style: "primary" }],
+      },
+    });
+    expect(result.isError).toBe(true);
+    const text = z
+      .array(z.object({ type: z.literal("text"), text: z.string() }))
+      .parse(result.content)[0].text;
+    expect(text).toContain("- actions[0]: Unrecognized key");
+  });
+
   it("is not offered to voice-only sessions", async () => {
     const { agentManager, agentStorage } = createTestDeps();
     const server = await createAgentMcpServer({

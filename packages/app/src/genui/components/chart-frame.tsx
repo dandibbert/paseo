@@ -18,6 +18,8 @@ interface ChartFrameProps {
   legend: readonly LegendEntry[];
   colors: GenuiColors;
   accessibilityLabel: string;
+  // Plot height for a measured width; defaults to the spec chart height.
+  heightForWidth?: (width: number) => number;
   children: (size: { width: number; height: number }) => ReactNode;
 }
 
@@ -29,6 +31,7 @@ export function ChartFrame({
   legend,
   colors,
   accessibilityLabel,
+  heightForWidth = chartHeightForWidth,
   children,
 }: ChartFrameProps) {
   const { t } = useTranslation();
@@ -40,13 +43,13 @@ export function ChartFrame({
   const caption = [description, unit ? t("genui.unit", { unit }) : null]
     .filter((part): part is string => Boolean(part))
     .join(" · ");
-  const height = width > 0 ? chartHeightForWidth(width) : 0;
+  const height = width > 0 ? heightForWidth(width) : 0;
 
   return (
     <View style={styles.root}>
       {caption ? <Text style={genuiStyles.caption}>{caption}</Text> : null}
       <View
-        style={[styles.plot, height > 0 ? { height } : null]}
+        style={[styles.plot, height > 0 ? { height, minHeight: height } : null]}
         onLayout={handleLayout}
         accessible
         accessibilityRole="image"

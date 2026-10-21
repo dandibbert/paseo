@@ -2050,6 +2050,19 @@ export const ko: TranslationResources = {
       medium: "보통 우선순위",
       low: "낮은 우선순위",
     },
+    step: "{{number}}단계",
+    stepStatus: {
+      done: "완료",
+      current: "진행 중",
+      todo: "할 일",
+      blocked: "막힘",
+    },
+    action: {
+      send: "보내기",
+      cancel: "취소",
+      sent: "보냄",
+      failed: "메시지를 보내지 못했습니다. 다시 시도하세요.",
+    },
   },
   contextWindow: {
     noData: "컨텍스트 데이터 없음",

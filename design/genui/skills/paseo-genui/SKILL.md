@@ -1,6 +1,6 @@
 ---
 name: paseo-genui
-description: 回答里出现数值对比、时间趋势、分类数值、占比构成、多实体多属性（原本要写 Markdown 表格）、完成进度或分级修改建议时使用：用 render_ui 在 Paseo 聊天里画原生卡片，代替 Markdown 表格和数字列表。
+description: 回答里出现数值对比、时间趋势、分类数值、占比构成、多实体多属性（原本要写 Markdown 表格）、完成进度、步骤与里程碑或分级修改建议时使用：用 render_ui 在 Paseo 聊天里画原生卡片，代替 Markdown 表格和数字列表。
 ---
 
 # Paseo GenUI — 生成与编排
@@ -11,17 +11,18 @@ description: 回答里出现数值对比、时间趋势、分类数值、占比�
 
 写回答之前先检查：答案里有没有下表中的数据形态。**命中就调用 `render_ui`，不要改写成 Markdown 表格、数字列表或 HTML 文件。** 这一步在决定回答形式时做，不要等用户追问。
 
-| 答案里出现                                    | 用                 |
-| --------------------------------------------- | ------------------ |
-| 两个同口径数值的变化（新旧、前后、方案 A/B）  | `metricComparison` |
-| 一个需要突出的关键数值                        | `metric`           |
-| 已完成 / 总量                                 | `progress`         |
-| 几个类别各自的数值                            | `chart.bar`        |
-| 按时间或步骤排列的一组数值                    | `chart.line`       |
-| 各部分占整体的比例                            | `chart.pie`        |
-| 多个对象 × 多个属性（本来会写 Markdown 表格） | `table`            |
-| 分成修改 / 调整 / 保留的建议                  | `priorityList`     |
-| 以上几种需要并排或成组展示                    | `card` / `grid`    |
+| 答案里出现                                     | 用                 |
+| ---------------------------------------------- | ------------------ |
+| 两个同口径数值的变化（新旧、前后、方案 A/B）   | `metricComparison` |
+| 一个需要突出的关键数值                         | `metric`           |
+| 已完成 / 总量                                  | `progress`         |
+| 几个类别各自的数值                             | `chart.bar`        |
+| 按时间或步骤排列的一组数值                     | `chart.line`       |
+| 各部分占整体的比例                             | `chart.pie`        |
+| 多个对象 × 多个属性（本来会写 Markdown 表格）  | `table`            |
+| 分成修改 / 调整 / 保留的建议                   | `priorityList`     |
+| 有先后顺序的步骤、计划或里程碑（可带完成状态） | `steps`            |
+| 以上几种需要并排或成组展示                     | `card` / `grid`    |
 
 不调用的情况：问候、概念解释、代码修复与代码片段、叙事、答案里没有数值或结构化数据、用户要求纯文本或不要图。不得虚构值、补零、凭空补日期；不能把单位不同的数值画在同一根纵轴上。
 
@@ -29,22 +30,35 @@ description: 回答里出现数值对比、时间趋势、分类数值、占比�
 
 ## `render_ui` 最小契约
 
-工具参数为 `{type, title?, data, fallbackText?, schemaVersion?}`，其中 `schemaVersion` 省略时按 `1` 处理；**`data` 的准确完整格式见相邻 `references/components.md`**。调用工具，不要只输出 JSON 代码围栏。
+工具参数为 `{type, title?, data, fallbackText?, actions?, schemaVersion?}`，其中 `schemaVersion` 省略时按 `1` 处理；**`data` 的准确完整格式见相邻 `references/components.md`**。调用工具，不要只输出 JSON 代码围栏。
 
 | type               | `data` 的最小结构（省略可选字段）                                                                                               |
 | ------------------ | ------------------------------------------------------------------------------------------------------------------------------- |
 | `metricComparison` | `{items:[{id,label,value,unit?},…],compare:{from,to,metric:"changePercent",precision?,changeIntent?:"good"\|"bad"\|"neutral"}}` |
 | `metric`           | `{label,value,unit?,detail?}`                                                                                                   |
 | `progress`         | `{label,current,total,unit?}`，`total>0`                                                                                        |
-| `chart.bar`        | `{x,series:[{field,label}],rows:[{[x]:类别,[field]:数值}],yUnit?}`                                                              |
-| `chart.line`       | 与 `chart.bar` 相同；`rows` 必须已经按时间/步骤排序                                                                             |
+| `chart.bar`        | `{x,series:[{field,label}],rows:[{[x]:类别,[field]:数值}],yUnit?,orientation?:"vertical"\|"horizontal"}`                        |
+| `chart.line`       | 与 `chart.bar` 相同但没有 `orientation`；`rows` 必须已经按时间/步骤排序                                                         |
 | `chart.pie`        | `{labelField,valueField,rows:[{[labelField]:名称,[valueField]:非负数}],unit?}`                                                  |
 | `table`            | `{columns:[{field,label}],rows:[{[field]:值}]}`                                                                                 |
 | `priorityList`     | `{items:[{decision:"change"\|"adjust"\|"keep",priority?:"high"\|"medium"\|"low",title,body}]}`                                  |
+| `steps`            | `{items:[{title,body?,meta?,status?:"done"\|"current"\|"todo"\|"blocked"}]}`                                                    |
 | `card`             | `{children:[{type,title?,data},…]}`，语义相关的少量子组件                                                                       |
 | `grid`             | `{children:[{type,title?,data},…]}`，同类并列实体，自动响应式                                                                   |
 
 > 动态字段标记（如 `[x]`）是**说明用记法，不是实际 JSON 键名**。复制 `references/components.md` 中对应真实样例再填写。`chart.pie` 已纳入修订版 v1；其他交互类组件（slider、map、carousel、form 等）仍不支持。
+
+- `chart.bar` 的 `orientation` 通常省略：App 在类别名放不下时自动改为横向。类别名很长（文件路径、模型全名）或类别超过 8 个时可直接写 `"horizontal"`，横向最多 40 行。
+- `steps` 的 `meta` 放日期、负责人等短标签；`status` 全部省略时显示为编号列表。做完了什么、正在做什么、接下来做什么，用一张 `steps`，不要拆成几段文字。
+
+## 后续按钮 `actions`
+
+回答最后要用户在 2–4 个具体的下一步里选一个时（选方案 A 还是 B、继续还是先停），在**顶层**卡片上加 `actions:[{label,prompt}]`。用户点按钮、确认后，`prompt` 原样作为用户消息发给你。
+
+- `label` 不超过 40 字，写动作本身（“采用方案 A”“继续发布”），不同按钮的 `label` 不能重复。
+- `prompt` 写成用户会说的完整一句话，不依赖按钮文字也能看懂（“采用方案 A，按刚才的步骤改 config.ts”）。
+- 一次回答最多一张卡片带按钮；需要用户自由输入的问题、只是信息展示的卡片，都不加按钮。
+- 按钮只在这一轮回答结束后、用户发出下一条消息前可点。正文照常写出选项，不要只靠按钮表达。
 
 ## 输出质量
 
@@ -60,4 +74,4 @@ description: 回答里出现数值对比、时间趋势、分类数值、占比�
 - **工具接受 ≠ 客户端一定已显示**。调用流式阶段仅是草稿预览；以完成并通过校验的数据为准。
 - 字段不确定时按需读取 `references/components.md` 对应节；三个原图复现用 `references/golden-examples.md`。不要将整个设计文档自动加载到上下文。
 - 校验失败按字段错误局部修正，最多额外重试 2 次；仍失败就用 Markdown 完整回答。工具关闭/不可用也正常回答，不擅自生成 HTML 文件。
-- `render_ui` 只负责**展示**，不执行写文件、付款、发送消息等副作用。
+- `render_ui` 只负责**展示**，不执行写文件、付款、发送消息等副作用；`actions` 也只是给用户一个按钮，由用户确认后发出消息。

@@ -20,7 +20,7 @@ def strict_load(text):
 S=strict_load((ROOT/'schemas/render-ui.v1.schema.json').read_text(encoding='utf-8'))
 assert Draft202012Validator.check_schema(S) is None
 validator=Draft202012Validator(S)
-SUPPORTED={'metricComparison','metric','progress','chart.bar','chart.line','chart.pie','table','priorityList','card','grid'}
+SUPPORTED={'metricComparison','metric','progress','chart.bar','chart.line','chart.pie','table','priorityList','steps','card','grid'}
 
 def semantic(d):
  typ=d['type']; data=d['data']
@@ -45,6 +45,8 @@ def semantic(d):
     if s['field'] not in row: raise ValueError('missing series field')
     val=row[s['field']]
     if val is not None and (type(val) not in [int,float]): raise ValueError('non-numeric series value')
+ if typ=='chart.bar' and data.get('orientation')=='horizontal' and len(data['rows'])>40:
+  raise ValueError('horizontal bar chart over 40 rows')
  if typ=='chart.pie':
   total=0
   for row in data['rows']:
@@ -64,10 +66,15 @@ def semantic(d):
    semantic(ch)
  return None
 
+def actions_ok(d):
+ labels=[a['label'].strip() for a in d.get('actions',[])]
+ if len(labels)!=len(set(labels)): raise ValueError('duplicate action labels')
+
 for path in sorted((ROOT/'tests/fixtures').glob('*.json')):
  d=strict_load(path.read_text(encoding='utf-8'))
  validator.validate(d)
  semantic(d)
+ actions_ok(d)
  print('OK',path.name,d['type'])
 assert {json.loads(p.read_text())['type'] for p in (ROOT/'tests/fixtures').glob('*.json')}==SUPPORTED
 cases=strict_load((ROOT/'tests/generation-cases.json').read_text(encoding='utf-8'))
@@ -110,4 +117,4 @@ for doc in (ROOT/'docs').glob('*.md'):
  text=doc.read_text(encoding='utf-8')
  assert 'RFC v0.2.1' not in text, f'stale RFC reference in {doc.name}'
  assert 'genui-visual-quality.md' not in text or doc.name=='genui-rfc-v0.4.md' or doc.name=='genui-visual-acceptance.md', f'stale visual doc reference in {doc.name}'
-print('PASS: 10 component fixtures + 20 behavior cases + Markdown JSON examples + v0.4 cross-file checks')
+print('PASS: 11 component types + 20 behavior cases + Markdown JSON examples + v0.4 cross-file checks')

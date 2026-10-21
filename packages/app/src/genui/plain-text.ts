@@ -90,6 +90,20 @@ function describeNode(node: RenderUiNode): string[] {
         node,
         node.data.items.map((item) => `- ${item.title}: ${item.body}`),
       );
+    case "steps":
+      return withTitle(
+        node,
+        node.data.items.map((item, index) =>
+          [
+            `${index + 1}.`,
+            item.status ? `[${item.status}]` : null,
+            item.meta ? `${item.meta} ·` : null,
+            item.body ? `${item.title}: ${item.body}` : item.title,
+          ]
+            .filter((part): part is string => part !== null)
+            .join(" "),
+        ),
+      );
     case "card":
     case "grid":
       return withTitle(

@@ -2106,6 +2106,19 @@ export const en = {
       medium: "Medium priority",
       low: "Low priority",
     },
+    step: "Step {{number}}",
+    stepStatus: {
+      done: "Done",
+      current: "In progress",
+      todo: "To do",
+      blocked: "Blocked",
+    },
+    action: {
+      send: "Send",
+      cancel: "Cancel",
+      sent: "Sent",
+      failed: "Couldn't send the message. Try again.",
+    },
   },
   contextWindow: {
     noData: "No context data",

@@ -2086,6 +2086,19 @@ export const fr: TranslationResources = {
       medium: "Priorité moyenne",
       low: "Priorité basse",
     },
+    step: "Étape {{number}}",
+    stepStatus: {
+      done: "Terminé",
+      current: "En cours",
+      todo: "À faire",
+      blocked: "Bloqué",
+    },
+    action: {
+      send: "Envoyer",
+      cancel: "Annuler",
+      sent: "Envoyé",
+      failed: "Impossible d’envoyer le message. Réessayez.",
+    },
   },
   contextWindow: {
     noData: "Aucune donnée de contexte",

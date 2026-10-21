@@ -2060,6 +2060,19 @@ export const ja: TranslationResources = {
       medium: "優先度：中",
       low: "優先度：低",
     },
+    step: "ステップ {{number}}",
+    stepStatus: {
+      done: "完了",
+      current: "進行中",
+      todo: "未着手",
+      blocked: "ブロック中",
+    },
+    action: {
+      send: "送信",
+      cancel: "キャンセル",
+      sent: "送信済み",
+      failed: "メッセージを送信できませんでした。もう一度お試しください。",
+    },
   },
   contextWindow: {
     noData: "コンテキストデータがありません",

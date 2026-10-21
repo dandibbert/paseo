@@ -55,11 +55,12 @@
 
 ## `chart.bar` 和 `chart.line`
 
-**同一数值单位、多类别或有序序列**。`data={description?, x, series:[{field,label}], rows:[{...}], yUnit?}`。
+**同一数值单位、多类别或有序序列**。`data={description?, x, series:[{field,label}], rows:[{...}], yUnit?}`；`chart.bar` 另有可选 `orientation: "vertical" | "horizontal"`。
 
 - `x` 指定真实行字段名；`series.field` 指定同一行的数值字段名，必须存在且为数字或 `null`（`null` 是缺失，非 0）。
 - `bar` 比较**离散类别**；`line` 表示已按时间或步骤排序的数据点。不能把两个异量纲的数列放在共用纵轴。
 - 图表标签、配色、坐标轴与 tooltip 均由客户端生成，模型只给数据与口径。
+- `orientation` 通常省略：类别名在竖向柱下放不下时，客户端自动改为横向。类别名很长（文件路径、模型全名）或类别超过 8 个时可直接写 `"horizontal"`；横向最多 40 行，超过会被拒绝。`chart.line` 没有这个字段。
 
 ```json
 {
@@ -205,6 +206,65 @@
 }
 ```
 
+## `steps`（v0.5 新增）
+
+**有先后顺序的步骤、计划或里程碑**。`data.items[]` 每项 `{title, body?, meta?, status?}`，1–20 项，顺序即展示顺序。
+
+- `status` 取 `done`（已完成）、`current`（进行中）、`todo`（待办）、`blocked`（受阻），各有不同形状的标记；全部省略时显示为编号列表。只在真的知道状态时填写。
+- `meta` 放日期、时间、负责人等短标签，显示在标题上方；`body` 放一两句说明。
+- 只是几条并列建议、没有先后关系时用 Markdown 列表或 `priorityList`，不用 `steps`。
+
+```json
+{
+  "type": "steps",
+  "title": "发布流程",
+  "data": {
+    "items": [
+      { "title": "合并上游", "status": "done", "meta": "周一" },
+      { "title": "修复 CI", "status": "done", "meta": "周二" },
+      {
+        "title": "真机测试",
+        "status": "current",
+        "meta": "今天",
+        "body": "macOS 和 iOS 包已出，等待测试结果。"
+      },
+      { "title": "合并到 main", "status": "todo" }
+    ]
+  },
+  "fallbackText": "合并上游和修复 CI 已完成，正在真机测试，之后合并到 main。"
+}
+```
+
+## `actions`（顶层后续按钮，v0.5 新增）
+
+顶层参数 `actions:[{label, prompt}]`，1–4 个，只能放在顶层，`card`/`grid` 的子组件不能带。用户点按钮后，App 显示 `prompt` 全文；用户确认后，`prompt` 原样作为用户消息发回给你。
+
+- 只在回答最后需要用户从几个具体下一步中选一个时使用；一次回答最多一张卡片带按钮。
+- `label` 不超过 40 字且互不相同，写动作本身；`prompt` 不超过 2000 字，写成用户会说的完整一句话，不依赖按钮文字也能看懂。
+- 按钮在这一轮回答结束后才能点；用户发出下一条消息后，旧卡片上的按钮失效。正文仍要写出这些选项。
+
+```json
+{
+  "type": "metricComparison",
+  "title": "两种缓存方案的 p95 延迟",
+  "data": {
+    "items": [
+      { "id": "a", "label": "方案 A：内存缓存", "value": 42, "unit": "ms" },
+      { "id": "b", "label": "方案 B：Redis", "value": 58, "unit": "ms" }
+    ],
+    "compare": { "from": "a", "to": "b", "metric": "changePercent", "changeIntent": "bad" }
+  },
+  "fallbackText": "内存缓存 p95 为 42 ms，Redis 为 58 ms，高约 38.1%。",
+  "actions": [
+    {
+      "label": "采用方案 A",
+      "prompt": "采用方案 A（内存缓存），按刚才的步骤修改 cache.ts 并补上测试。"
+    },
+    { "label": "采用方案 B", "prompt": "采用方案 B（Redis），按刚才的步骤接入 Redis 并补上测试。" }
+  ]
+}
+```
+
 ## `card` 与 `grid`（组合容器）
 
 `data.children` 为嵌入式 `{type,title?,data}` 数组，**子组件不需要** `fallbackText`（回退文字由最外层给出）。容器最多嵌套两层：顶层 `card` 可包含叶组件；顶层 `grid` 可包含同级叶组件或一层 `card`。不要在 card 里放 grid、在 grid 里放 grid，也不要复制同一信息多次。
@@ -259,7 +319,7 @@
 
 ## 通用限制及错误处理
 
-- 不接受文字以外的远程资源、脚本或链接式动作；数值必须有限（不能 `NaN` / `Infinity`）。
-- 参数初始最大 16 KiB，嵌套最多两层；bar/line 至多 200 个数据点，pie 最多 24 类，table 最多 50 行。代码库仍需服务端严格检查动态字段引用与单位一致性；仅验证 JSON Schema 不足以保证这些语义条件。
+- 不接受文字以外的远程资源、脚本或链接；唯一的动作是顶层 `actions`，且只会在用户确认后发出一条用户消息；数值必须有限（不能 `NaN` / `Infinity`）。
+- 参数初始最大 16 KiB，嵌套最多两层；bar/line 至多 200 行（横向 bar 至多 40 行），pie 最多 24 类，table 最多 50 行，steps 最多 20 项。代码库仍需服务端严格检查动态字段引用与单位一致性；仅验证 JSON Schema 不足以保证这些语义条件。
 - `render_ui` **工具返回校验成功只意味着接受数据**，不是客户端已完成绘制；可用 `derived.changePercent` 等共享计算值引用数值事实。
 - 若没读到组件格式或工具不支持该类型，正常 Markdown 回答，不试探性提交凭空猜测的 JSON。

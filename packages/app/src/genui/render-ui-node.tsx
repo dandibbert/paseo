@@ -5,6 +5,7 @@ import { CartesianChartView } from "./components/cartesian-chart-view";
 import { MetricComparisonView, MetricView, ProgressView } from "./components/metric-views";
 import { PieChartView } from "./components/pie-chart-view";
 import { PriorityListView } from "./components/priority-list-view";
+import { StepsView } from "./components/steps-view";
 import { TableView } from "./components/table-view";
 import { withContentKeys } from "./keyed";
 import { genuiStyles } from "./styles";
@@ -35,6 +36,8 @@ function NodeContent({ node, colors, nested }: NodeProps) {
       return <TableView data={node.data} />;
     case "priorityList":
       return <PriorityListView data={node.data} colors={colors} framed={!nested} />;
+    case "steps":
+      return <StepsView data={node.data} colors={colors} />;
     case "card":
       return (
         <View style={genuiStyles.outlinedCard}>

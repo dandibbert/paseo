@@ -23,6 +23,7 @@ export const RENDER_UI_LEAF_TYPES = [
   "chart.pie",
   "table",
   "priorityList",
+  "steps",
 ] as const;
 
 export const RENDER_UI_TYPES = [...RENDER_UI_LEAF_TYPES, "card", "grid"] as const;
@@ -38,6 +39,15 @@ export type PriorityDecision = z.infer<typeof PriorityDecisionSchema>;
 
 export const PriorityLevelSchema = z.enum(["high", "medium", "low"]);
 export type PriorityLevel = z.infer<typeof PriorityLevelSchema>;
+
+export const StepStatusSchema = z.enum(["done", "current", "todo", "blocked"]);
+export type StepStatus = z.infer<typeof StepStatusSchema>;
+
+export const BarOrientationSchema = z.enum(["vertical", "horizontal"]);
+export type BarOrientation = z.infer<typeof BarOrientationSchema>;
+
+// A horizontal bar chart grows one band per row, so it takes fewer rows than a vertical one.
+export const HORIZONTAL_BAR_MAX_ROWS = 40;
 
 export const MetricComparisonItemSchema = z.strictObject({
   id: ShortTextSchema,
@@ -92,6 +102,13 @@ export const CartesianChartDataSchema = z.strictObject({
 });
 export type CartesianChartData = z.infer<typeof CartesianChartDataSchema>;
 
+// Omitted orientation lets the app pick: vertical, or horizontal when category labels
+// would not fit under vertical bars.
+export const BarChartDataSchema = CartesianChartDataSchema.extend({
+  orientation: BarOrientationSchema.optional(),
+});
+export type BarChartData = z.infer<typeof BarChartDataSchema>;
+
 export const PieChartDataSchema = z.strictObject({
   description: DetailTextSchema.optional(),
   labelField: ShortTextSchema,
@@ -121,6 +138,27 @@ export const PriorityListDataSchema = z.strictObject({
 });
 export type PriorityListData = z.infer<typeof PriorityListDataSchema>;
 
+export const StepItemSchema = z.strictObject({
+  title: ShortTextSchema,
+  body: z.string().min(1).max(1000).optional(),
+  meta: ShortTextSchema.optional(),
+  status: StepStatusSchema.optional(),
+});
+export type StepItem = z.infer<typeof StepItemSchema>;
+
+export const StepsDataSchema = z.strictObject({
+  items: z.array(StepItemSchema).min(1).max(20),
+});
+export type StepsData = z.infer<typeof StepsDataSchema>;
+
+// Follow-up buttons under a top-level card. Pressing one sends `prompt` to the agent that
+// drew the card, as the user, after the user confirms the exact text.
+export const RenderUiActionSchema = z.strictObject({
+  label: z.string().min(1).max(40),
+  prompt: z.string().min(1).max(2000),
+});
+export type RenderUiAction = z.infer<typeof RenderUiActionSchema>;
+
 function leafComponent<TType extends string, TData extends z.ZodType>(type: TType, data: TData) {
   return z.strictObject({
     type: z.literal(type),
@@ -133,11 +171,12 @@ export const RenderUiLeafSchema = z.discriminatedUnion("type", [
   leafComponent("metricComparison", MetricComparisonDataSchema),
   leafComponent("metric", MetricDataSchema),
   leafComponent("progress", ProgressDataSchema),
-  leafComponent("chart.bar", CartesianChartDataSchema),
+  leafComponent("chart.bar", BarChartDataSchema),
   leafComponent("chart.line", CartesianChartDataSchema),
   leafComponent("chart.pie", PieChartDataSchema),
   leafComponent("table", TableDataSchema),
   leafComponent("priorityList", PriorityListDataSchema),
+  leafComponent("steps", StepsDataSchema),
 ]);
 export type RenderUiLeaf = z.infer<typeof RenderUiLeafSchema>;
 
@@ -175,6 +214,7 @@ function topLevelComponent<TType extends string, TData extends z.ZodType>(
     title: ShortTextSchema.optional(),
     data,
     fallbackText: z.string().min(1).max(1000).optional(),
+    actions: z.array(RenderUiActionSchema).min(1).max(4).optional(),
     schemaVersion: z.literal(RENDER_UI_SCHEMA_VERSION).optional(),
   });
 }
@@ -183,11 +223,12 @@ export const RenderUiInputSchema = z.discriminatedUnion("type", [
   topLevelComponent("metricComparison", MetricComparisonDataSchema),
   topLevelComponent("metric", MetricDataSchema),
   topLevelComponent("progress", ProgressDataSchema),
-  topLevelComponent("chart.bar", CartesianChartDataSchema),
+  topLevelComponent("chart.bar", BarChartDataSchema),
   topLevelComponent("chart.line", CartesianChartDataSchema),
   topLevelComponent("chart.pie", PieChartDataSchema),
   topLevelComponent("table", TableDataSchema),
   topLevelComponent("priorityList", PriorityListDataSchema),
+  topLevelComponent("steps", StepsDataSchema),
   topLevelComponent("card", CardDataSchema),
   topLevelComponent("grid", GridDataSchema),
 ]);

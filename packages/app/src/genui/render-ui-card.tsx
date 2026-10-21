@@ -11,11 +11,26 @@ import {
 import { Text, View, type LayoutChangeEvent } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { useTranslation } from "react-i18next";
-import type { RenderUiInput, RenderUiType } from "@getpaseo/protocol/genui/render-ui-schema";
+import type {
+  RenderUiAction,
+  RenderUiInput,
+  RenderUiType,
+} from "@getpaseo/protocol/genui/render-ui-schema";
 import { Button } from "@/components/ui/button";
+import { dispatchComposerAgentMessage } from "@/composer/actions";
+import { createMessageSubmissionWriter } from "@/composer/submission/writer";
+import { useToast } from "@/contexts/toast-context";
+import { useHostRuntimeClient, useHostRuntimeIsConnected } from "@/runtime/host-runtime";
+import { selectAgentTurnPresentation, useSessionStore } from "@/stores/session-store";
 import type { Theme } from "@/styles/theme";
+import { confirmDialog } from "@/utils/confirm-dialog";
 import { copyToClipboard } from "@/utils/copy-to-clipboard";
 import { MetricTilePair } from "./components/metric-views";
+import {
+  isInCurrentTurn,
+  resolveFollowUpAvailability,
+  type RenderUiActionTarget,
+} from "./follow-up-actions";
 import {
   applyHeightFloorLayout,
   createHeightFloor,
@@ -36,11 +51,13 @@ const ESTIMATED_HEIGHT: Record<RenderUiType, number> = {
   metricComparison: 200,
   metric: 104,
   progress: 72,
-  "chart.bar": 320,
+  // A horizontal bar chart with one row is short; vertical bars grow past this.
+  "chart.bar": 140,
   "chart.line": 320,
   "chart.pie": 320,
   table: 150,
   priorityList: 200,
+  steps: 120,
   card: 200,
   grid: 120,
 };
@@ -105,6 +122,115 @@ function PreviewBody({ preview }: { preview: RenderUiPreview }) {
       ) : null}
       <View style={styles.loadingBlock} />
     </View>
+  );
+}
+
+// Model-authored follow-ups. Pressing one shows the exact prompt and sends it as the user's
+// next message only after the user confirms.
+function FollowUpButtons({
+  actions,
+  ...target
+}: RenderUiActionTarget & { actions: readonly RenderUiAction[] }) {
+  const { t } = useTranslation();
+  const toast = useToast();
+  const client = useHostRuntimeClient(target.serverId);
+  const connected = useHostRuntimeIsConnected(target.serverId);
+  const agentBusy = useSessionStore(
+    (state) =>
+      selectAgentTurnPresentation(state.sessions[target.serverId], target.agentId).isActive,
+  );
+  const isLatestTurn = useSessionStore((state) => {
+    const session = state.sessions[target.serverId];
+    return isInCurrentTurn({
+      tail: session?.agentStreamTail.get(target.agentId) ?? [],
+      head: session?.agentStreamHead.get(target.agentId) ?? [],
+      itemId: target.itemId,
+    });
+  });
+  const [sending, setSending] = useState(false);
+  const [sentLabel, setSentLabel] = useState<string | null>(null);
+  const availability = resolveFollowUpAvailability({
+    target: { ...target, isLatestTurn },
+    agentBusy,
+    connected: connected && client !== null,
+    sending,
+    sentLabel,
+  });
+  const handlePress = useCallback(
+    async (action: RenderUiAction) => {
+      if (!client) {
+        return;
+      }
+      const confirmed = await confirmDialog({
+        title: action.label,
+        message: action.prompt,
+        confirmLabel: t("genui.action.send"),
+        cancelLabel: t("genui.action.cancel"),
+      });
+      if (!confirmed) {
+        return;
+      }
+      setSending(true);
+      try {
+        await dispatchComposerAgentMessage({
+          client,
+          agentId: target.agentId,
+          text: action.prompt,
+          attachments: [],
+          encodeImages: async () => [],
+          submission: createMessageSubmissionWriter(target.serverId),
+        });
+        setSentLabel(action.label);
+      } catch (error) {
+        console.warn("[GenUI] Failed to send follow-up", error);
+        toast.show(t("genui.action.failed"), { variant: "error" });
+      } finally {
+        setSending(false);
+      }
+    },
+    [client, target.agentId, target.serverId, t, toast],
+  );
+  return (
+    <View style={styles.followUps}>
+      {actions.map((action) => (
+        <FollowUpButton
+          key={action.label}
+          action={action}
+          disabled={availability !== "enabled"}
+          sent={sentLabel === action.label}
+          onPress={handlePress}
+        />
+      ))}
+    </View>
+  );
+}
+
+function FollowUpButton({
+  action,
+  disabled,
+  sent,
+  onPress,
+}: {
+  action: RenderUiAction;
+  disabled: boolean;
+  sent: boolean;
+  onPress: (action: RenderUiAction) => Promise<void>;
+}) {
+  const { t } = useTranslation();
+  const handlePress = useCallback(() => {
+    void onPress(action);
+  }, [action, onPress]);
+  return (
+    <Button
+      variant="outline"
+      size="sm"
+      disabled={disabled}
+      onPress={handlePress}
+      accessibilityHint={action.prompt}
+      testID="genui-follow-up"
+    >
+      {sent ? `${action.label} · ${t("genui.action.sent")}` : action.label}
+    </Button>
   );
 }
 
@@ -187,7 +313,18 @@ function estimateHeight(state: RenderUiCardState): number {
 // One render_ui call in the timeline. The card body keeps a minimum height so the list does
 // not jump while it streams in (see height-floor.ts); a rejected call collapses to nothing.
 // The actions and the "View data" panel sit outside that floor so closing the panel shrinks.
-export function RenderUiCard({ state }: { state: RenderUiCardState }) {
+// followUpServerId is null in read-only timelines, where follow-up buttons are not drawn.
+export function RenderUiCard({
+  state,
+  followUpServerId = null,
+  agentId,
+  itemId,
+}: {
+  state: RenderUiCardState;
+  followUpServerId?: string | null;
+  agentId?: string;
+  itemId?: string;
+}) {
   const { t } = useTranslation();
   const estimate = estimateHeight(state);
   const generating = state.status === "generating";
@@ -234,6 +371,18 @@ export function RenderUiCard({ state }: { state: RenderUiCardState }) {
           <PreviewBody preview={state.preview} />
         )}
       </View>
+      {state.status === "accepted" &&
+      state.input.actions &&
+      followUpServerId &&
+      agentId &&
+      itemId ? (
+        <FollowUpButtons
+          actions={state.input.actions}
+          serverId={followUpServerId}
+          agentId={agentId}
+          itemId={itemId}
+        />
+      ) : null}
       {state.status === "accepted" ? <CardActions input={state.input} /> : null}
     </View>
   );
@@ -262,6 +411,11 @@ const styles = StyleSheet.create((theme) => {
       opacity: 0.6,
     },
     actionsStack: {
+      gap: GENUI_SPACE.sm,
+    },
+    followUps: {
+      flexDirection: "row",
+      flexWrap: "wrap",
       gap: GENUI_SPACE.sm,
     },
     actions: {

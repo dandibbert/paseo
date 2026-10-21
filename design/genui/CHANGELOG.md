@@ -1,3 +1,18 @@
+# 2026-10-21 — 设计包 v0.5
+
+在已实现的 v1 上增补一个组件、一个图表字段和后续按钮。
+
+| 文件                                           | 改动                                                                               |
+| ---------------------------------------------- | ---------------------------------------------------------------------------------- |
+| `docs/genui-rfc-v0.4.md`                       | §5.1 加 `steps` 与 `actions`；§12 增加“v0.5 增补”                                  |
+| `docs/genui-generation-guidelines.md`          | 选择矩阵加 `steps`，冲突裁决加第 6 条；G09–G14 改用 `steps` 和 `actions`           |
+| `skills/paseo-genui/SKILL.md` 及 `references/` | 触发表加 `steps`；最简格式表加 `steps` 和 `orientation`；新增 `actions` 规则与示例 |
+| `schemas/render-ui.v1.schema.json`             | `steps`（顶层与 `card`/`grid` 子项）、`chart.bar.orientation`、顶层 `actions`      |
+| `tests/fixtures/`                              | 新增 `steps.json`（带 `actions`）与 `bar-horizontal.json`                          |
+| `tests/verify.py`                              | 支持 `steps`；横向柱状图不超过 40 行；`actions` 的 `label` 不重复                  |
+
+---
+
 # 2026-10-20 — 设计包 v0.4
 
 合并 RFC v0.3.1 与上一版修订包，统一为同一套协议。

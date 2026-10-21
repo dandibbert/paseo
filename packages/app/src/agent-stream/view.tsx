@@ -772,6 +772,9 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
             return (
               <RenderUiCard
                 state={resolveRenderUiCardState({ status: data.status, detail: data.detail })}
+                followUpServerId={readOnly ? null : resolvedServerId}
+                agentId={agentId}
+                itemId={item.id}
               />
             );
           }
@@ -809,7 +812,15 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
           />
         );
       },
-      [context.cwd, setInlineDetailsExpanded, handleToolCallOpenFile, genuiCards],
+      [
+        context.cwd,
+        setInlineDetailsExpanded,
+        handleToolCallOpenFile,
+        genuiCards,
+        readOnly,
+        resolvedServerId,
+        agentId,
+      ],
     );
 
     // Read through a stable event so live group updates do not change the renderer identity

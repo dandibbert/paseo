@@ -93,6 +93,54 @@ const REFERENCE_INPUTS: Partial<Record<RenderUiType, unknown>> = {
     },
     fallbackText: "共 10 种组件；图表类最多，有 3 种。",
   },
+  card: {
+    type: "card",
+    title: "测试耗时",
+    data: {
+      children: [
+        { type: "metric", data: { label: "总耗时", value: 318, unit: "秒" } },
+        {
+          type: "chart.bar",
+          data: {
+            x: "dir",
+            series: [{ field: "seconds", label: "耗时" }],
+            rows: [
+              { dir: "packages/server/src/server/agent", seconds: 184 },
+              { dir: "packages/app/src/components", seconds: 96 },
+              { dir: "packages/protocol/src", seconds: 21 },
+              { dir: "packages/cli/src/commands", seconds: 17 },
+            ],
+            yUnit: "秒",
+            orientation: "horizontal",
+          },
+        },
+      ],
+    },
+    fallbackText: "测试共 318 秒，server/agent 占 184 秒。",
+  },
+  steps: {
+    type: "steps",
+    title: "发布流程",
+    data: {
+      items: [
+        { title: "合并上游", status: "done", meta: "周一" },
+        { title: "修复 CI", status: "done", meta: "周二" },
+        {
+          title: "真机测试",
+          status: "current",
+          meta: "今天",
+          body: "macOS 和 iOS 包已出，等待测试结果。",
+        },
+        { title: "签名证书过期", status: "blocked", body: "需要先续期开发者证书。" },
+        { title: "合并到 main", status: "todo" },
+      ],
+    },
+    fallbackText: "合并上游和修复 CI 已完成，正在真机测试，证书过期受阻，之后合并到 main。",
+    actions: [
+      { label: "继续下一步", prompt: "真机测试通过了，继续合并到 main 的准备工作。" },
+      { label: "先停一下", prompt: "先停在这里，等我续期证书后再继续。" },
+    ],
+  },
   priorityList: {
     type: "priorityList",
     data: {

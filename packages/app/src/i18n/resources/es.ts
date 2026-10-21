@@ -2088,6 +2088,19 @@ export const es: TranslationResources = {
       medium: "Prioridad media",
       low: "Prioridad baja",
     },
+    step: "Paso {{number}}",
+    stepStatus: {
+      done: "Hecho",
+      current: "En curso",
+      todo: "Pendiente",
+      blocked: "Bloqueado",
+    },
+    action: {
+      send: "Enviar",
+      cancel: "Cancelar",
+      sent: "Enviado",
+      failed: "No se pudo enviar el mensaje. Inténtalo de nuevo.",
+    },
   },
   contextWindow: {
     noData: "No hay datos de contexto",
