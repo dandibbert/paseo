@@ -344,6 +344,25 @@ describe("DaemonConfigStore", () => {
     });
   });
 
+  test("patch persists the genui system prompt switch and notifies listeners", () => {
+    const paseoHome = mkdtempSync(path.join(tmpdir(), "paseo-daemon-config-store-"));
+    tempDirs.push(paseoHome);
+
+    const persisted = loadPersistedConfig(paseoHome);
+    const store = new DaemonConfigStore(paseoHome, {
+      ...reloadableConfig(persisted),
+      genuiSystemPrompt: true,
+    });
+    const seen: unknown[] = [];
+    store.onFieldChange("genuiSystemPrompt", (value) => seen.push(value));
+
+    store.patch({ genuiSystemPrompt: false });
+
+    expect(store.get().genuiSystemPrompt).toBe(false);
+    expect(seen).toEqual([false]);
+    expect(loadPersistedConfig(paseoHome).daemon?.genuiSystemPrompt).toBe(false);
+  });
+
   test("patch persists provider enabled flags into config.json", () => {
     const paseoHome = mkdtempSync(path.join(tmpdir(), "paseo-daemon-config-store-"));
     tempDirs.push(paseoHome);

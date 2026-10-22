@@ -190,6 +190,26 @@ second line'`,
     expect(result).toBe('[paseo__create_agent] {"cwd":"/tmp/repo","initialPrompt":"do the thing"}');
   });
 
+  it("renders chat cards as their title and fallback text instead of JSON", () => {
+    const timeline: AgentTimelineItem[] = [
+      toolCallItem({
+        callId: "card-1",
+        name: "mcp__paseo__render_ui",
+        input: {
+          type: "chart.bar",
+          title: "Build time",
+          data: { x: "step", series: ["seconds"], rows: [{ step: "lint", seconds: 12 }] },
+          fallbackText: "Lint takes 12 s.",
+        },
+      }),
+    ];
+
+    const result = curateAgentActivity(timeline);
+
+    expect(result).toMatch(/^\[[^\]]+\] Build time — Lint takes 12 s\.$/);
+    expect(result).not.toContain("{");
+  });
+
   it("collapses repeated tool updates by callId", () => {
     const timeline: AgentTimelineItem[] = [
       toolCallItem({

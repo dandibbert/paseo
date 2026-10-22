@@ -1862,6 +1862,8 @@ export class VoiceAssistantWebSocketServer {
         workspaceTerminals: true,
         // COMPAT(secureAgentInput): added in personal v0.11.2, remove after 2027-04-13.
         terminalSecurePrompt: this.secureTerminalPromptBroker !== undefined,
+        // COMPAT(genuiSystemPrompt): added in personal v0.11.4, remove gate after 2027-04-21.
+        genuiSystemPrompt: true,
         // COMPAT(terminalSecureInput): added in v0.9.2-personal, remove after 2027-04-13.
         terminalSecureInput: true,
         // COMPAT(rewind): added in v0.1.X, drop the gate when floor >= v0.1.X.

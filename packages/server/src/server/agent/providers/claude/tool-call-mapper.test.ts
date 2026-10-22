@@ -468,6 +468,29 @@ describe("claude tool-call mapper", () => {
     });
   });
 
+  it("keeps render_ui input intact for the app to validate and render", () => {
+    const input = {
+      type: "metric",
+      data: { label: "任务完成率", value: 92.4, unit: "%" },
+      fallbackText: "任务完成率为 92.4%。",
+    };
+    const item = expectMapped(
+      mapClaudeCompletedToolCall({
+        callId: "claude-render-ui-1",
+        name: "mcp__paseo__render_ui",
+        input,
+        output: { ok: true, accepted: true, type: "metric", derived: {} },
+      }),
+    );
+
+    expect(item.name).toBe("mcp__paseo__render_ui");
+    expect(item.detail).toEqual({
+      type: "unknown",
+      input,
+      output: { ok: true, accepted: true, type: "metric", derived: {} },
+    });
+  });
+
   it("drops tool calls when callId is missing", () => {
     const item = mapClaudeCompletedToolCall({
       callId: null,

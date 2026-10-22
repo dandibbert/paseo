@@ -6235,6 +6235,118 @@ describe("speak MCP tool", () => {
   });
 });
 
+describe("render_ui MCP tool", () => {
+  const logger = createTestLogger();
+
+  async function connectRenderUiClient() {
+    const { agentManager, agentStorage } = createTestDeps();
+    const server = await createAgentMcpServer({
+      agentManager,
+      agentStorage,
+      providerSnapshotManager: createOpenCodeManager().manager,
+      callerAgentId: "genui-agent",
+      logger,
+    });
+    return connectInMemoryMcpClient(server);
+  }
+
+  it("advertises the minimal format table to the model", async () => {
+    const client = await connectRenderUiClient();
+    const { tools } = await client.listTools();
+    const tool = tools.find((candidate) => candidate.name === "render_ui");
+    expect(tool?.description).toContain("| `chart.pie` |");
+    expect(tool?.inputSchema.required).toEqual(["type", "data"]);
+  });
+
+  it("accepts valid input and returns derived values to the model", async () => {
+    const client = await connectRenderUiClient();
+    const result = await client.callTool({
+      name: "render_ui",
+      arguments: {
+        type: "progress",
+        data: { label: "已完成任务", current: 46, total: 50, unit: "项" },
+        fallbackText: "50 项任务已完成 46 项。",
+      },
+    });
+    expect(result.isError).toBeFalsy();
+    expect(result.structuredContent).toEqual({
+      ok: true,
+      accepted: true,
+      type: "progress",
+      derived: { percent: 92 },
+    });
+  });
+
+  it("returns the failing field and the correct format as a tool error", async () => {
+    const client = await connectRenderUiClient();
+    const result = await client.callTool({
+      name: "render_ui",
+      arguments: {
+        type: "metric",
+        data: { label: "完成率", value: 92, color: "red" },
+      },
+    });
+    expect(result.isError).toBe(true);
+    const text = z
+      .array(z.object({ type: z.literal("text"), text: z.string() }))
+      .parse(result.content)[0].text;
+    expect(text).toContain("render_ui rejected the input");
+    expect(text).toContain("- data: Unrecognized key");
+    expect(text).toContain("Minimal data for metric: `{label,value,unit?,detail?}`");
+  });
+
+  it("passes follow-up actions through to validation", async () => {
+    const client = await connectRenderUiClient();
+    const result = await client.callTool({
+      name: "render_ui",
+      arguments: {
+        type: "metric",
+        data: { label: "完成率", value: 92 },
+        actions: [
+          { label: "继续", prompt: "继续下一步。" },
+          { label: "继续", prompt: "先停一下。" },
+        ],
+      },
+    });
+    expect(result.isError).toBe(true);
+    const text = z
+      .array(z.object({ type: z.literal("text"), text: z.string() }))
+      .parse(result.content)[0].text;
+    expect(text).toContain("- actions: action labels must be unique");
+  });
+
+  it("reports unknown keys inside an action instead of dropping them", async () => {
+    const client = await connectRenderUiClient();
+    const result = await client.callTool({
+      name: "render_ui",
+      arguments: {
+        type: "metric",
+        data: { label: "完成率", value: 92 },
+        actions: [{ label: "继续", prompt: "继续下一步。", style: "primary" }],
+      },
+    });
+    expect(result.isError).toBe(true);
+    const text = z
+      .array(z.object({ type: z.literal("text"), text: z.string() }))
+      .parse(result.content)[0].text;
+    expect(text).toContain("- actions[0]: Unrecognized key");
+  });
+
+  it("is not offered to voice-only sessions", async () => {
+    const { agentManager, agentStorage } = createTestDeps();
+    const server = await createAgentMcpServer({
+      agentManager,
+      agentStorage,
+      providerSnapshotManager: createOpenCodeManager().manager,
+      callerAgentId: "voice-agent",
+      voiceOnly: true,
+      resolveSpeakHandler: () => null,
+      logger,
+    });
+    expect(lookupTool(server, "render_ui")).toBeUndefined();
+  });
+});
+
 describe("agent snapshot MCP serialization", () => {
   const logger = createTestLogger();
 

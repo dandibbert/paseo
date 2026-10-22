@@ -1,0 +1,17 @@
+{
+  "type": "chart.bar",
+  "title": "各目录测试耗时",
+  "data": {
+    "x": "dir",
+    "series": [{ "field": "seconds", "label": "耗时" }],
+    "rows": [
+      { "dir": "packages/server/src/server/agent", "seconds": 184 },
+      { "dir": "packages/app/src/components", "seconds": 96 },
+      { "dir": "packages/protocol/src", "seconds": 21 },
+      { "dir": "packages/cli/src/commands", "seconds": 17 }
+    ],
+    "yUnit": "秒",
+    "orientation": "horizontal"
+  },
+  "fallbackText": "server/agent 184 秒，app/components 96 秒，protocol 21 秒，cli 17 秒。"
+}

@@ -479,4 +479,20 @@ describe("tool call detail-level projection", () => {
     expect(result.groupsByHostId.get(singleCall.id)?.run.calls).toEqual([singleCall]);
     expect(result.groupsByHostId.size).toBe(1);
   });
+
+  it("keeps render_ui cards out of tool groups so they interleave with text", () => {
+    const before = toolCall("1", { type: "shell", command: "one" });
+    const card = toolCall(
+      "2",
+      { type: "unknown", input: { type: "metric", data: { label: "a", value: 1 } }, output: null },
+      { name: "mcp__paseo__render_ui" },
+    );
+    const after = toolCall("3", { type: "shell", command: "three" });
+
+    const result = project({ level: "overview", head: [before, card, after] });
+
+    expect(result.head).toEqual([before, card, after]);
+    expect(result.groupsByHostId.get(before.id)?.run.calls).toEqual([before]);
+    expect(result.groupsByHostId.get(after.id)?.run.calls).toEqual([after]);
+  });
 });

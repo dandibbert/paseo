@@ -2086,6 +2086,40 @@ export const en = {
   sidebarCallout: {
     dismiss: "Dismiss",
   },
+  genui: {
+    generating: "Generating card…",
+    changeLabel: "{{from}} → {{to}}",
+    zeroBaseline: "No percent change: baseline is 0",
+    unit: "Unit: {{unit}}",
+    copy: "Copy as text",
+    copied: "Copied",
+    viewData: "View data",
+    hideData: "Hide data",
+    renderError: "This card couldn't be displayed.",
+    decision: {
+      change: "Change",
+      adjust: "Adjust",
+      keep: "Keep",
+    },
+    priority: {
+      high: "High priority",
+      medium: "Medium priority",
+      low: "Low priority",
+    },
+    step: "Step {{number}}",
+    stepStatus: {
+      done: "Done",
+      current: "In progress",
+      todo: "To do",
+      blocked: "Blocked",
+    },
+    action: {
+      send: "Send",
+      cancel: "Cancel",
+      sent: "Sent",
+      failed: "Couldn't send the message. Try again.",
+    },
+  },
   contextWindow: {
     noData: "No context data",
     accessibilityNoData: "Context window: No context data",
@@ -2341,6 +2375,11 @@ export const en = {
         label: "Terminal scrollback",
         description: "Lines kept in the built-in terminal buffer",
         accessibilityLabel: "Terminal scrollback lines",
+      },
+      genuiCards: {
+        label: "Show chat cards",
+        description:
+          "Render charts, tables and comparisons from agents as cards instead of tool calls",
       },
       autoExpandReasoning: {
         label: "Always expand reasoning",
@@ -2710,6 +2749,11 @@ export const en = {
           title: "Enable Paseo tools",
           hint: "Agents will be able to manage worktrees, agents and schedules",
           accessibilityLabel: "Inject Paseo tools",
+        },
+        genuiPrompt: {
+          title: "Chat card instructions",
+          hint: "Tells agents when to draw charts, tables and comparisons as chat cards",
+          accessibilityLabel: "Chat card instructions",
         },
         systemPrompt: {
           title: "System prompt",

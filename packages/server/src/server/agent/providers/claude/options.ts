@@ -1,5 +1,6 @@
 import type { ProviderOptions, ToolPolicy } from "@getpaseo/protocol/agent-types";
 import { z } from "zod";
+import { AUTO_APPROVED_PASEO_TOOLS, PASEO_MCP_SERVER_NAME } from "../../runtime-mcp-config.js";
 
 const PermissionRulesSchema = z
   .object({
@@ -100,4 +101,19 @@ export function applyClaudeToolPolicy(
     : [];
   const grants = toolPolicy.preapproved.map((grant) => `mcp__${grant.server}__${grant.tool}`);
   return { ...options, allowedTools: [...new Set([...allowedTools, ...grants])] };
+}
+
+// Claude's allowedTools entries for Paseo tools that skip the permission prompt. Only
+// applies when the session has the Paseo MCP server.
+export function withAutoApprovedPaseoTools(
+  allowedTools: readonly string[] | undefined,
+  mcpServerNames: readonly string[],
+): string[] | undefined {
+  if (!mcpServerNames.includes(PASEO_MCP_SERVER_NAME)) {
+    return allowedTools ? [...allowedTools] : undefined;
+  }
+  const autoApproved = AUTO_APPROVED_PASEO_TOOLS.map(
+    (tool) => `mcp__${PASEO_MCP_SERVER_NAME}__${tool}`,
+  );
+  return [...new Set([...(allowedTools ?? []), ...autoApproved])];
 }

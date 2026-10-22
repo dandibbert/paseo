@@ -1,0 +1,26 @@
+{
+  "type": "card",
+  "title": "本周项目概览",
+  "data": {
+    "children": [
+      {
+        "type": "metric",
+        "data": {
+          "label": "成功任务",
+          "value": 46,
+          "unit": "项"
+        }
+      },
+      {
+        "type": "progress",
+        "data": {
+          "label": "任务完成进度",
+          "current": 46,
+          "total": 50,
+          "unit": "项"
+        }
+      }
+    ]
+  },
+  "fallbackText": "本周完成 46 项任务，目标 50 项，完成率 92%。"
+}

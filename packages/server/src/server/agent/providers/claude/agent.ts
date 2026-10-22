@@ -74,6 +74,7 @@ import {
 import { appendOrReplaceGrowingAssistantMessage, runProviderTurn } from "../provider-runner.js";
 import {
   applyClaudeToolPolicy,
+  withAutoApprovedPaseoTools,
   ClaudeProviderOptionsSchema,
   type ClaudeProviderOptions,
 } from "./options.js";
@@ -4208,6 +4209,10 @@ class ClaudeAgentSession implements AgentSession {
 
     if (this.config.mcpServers) {
       base.mcpServers = this.normalizeMcpServers(this.config.mcpServers);
+      base.allowedTools = withAutoApprovedPaseoTools(
+        base.allowedTools,
+        Object.keys(base.mcpServers),
+      );
     }
 
     if (this.config.model) {

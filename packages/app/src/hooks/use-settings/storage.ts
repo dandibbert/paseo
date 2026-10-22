@@ -101,6 +101,8 @@ export interface AppSettings {
   /** How usage reads and which windows the sidebar summary shows. */
   usage: UsagePreferences;
   autoExpandReasoning: boolean;
+  /** Render render_ui tool calls as GenUI cards; off shows them as plain tool calls. */
+  genuiCards: boolean;
   toolCallDetailLevel: ToolCallDetailLevel;
   chatOutlineEnabled: boolean;
   vimKeybindings: boolean;
@@ -157,6 +159,7 @@ export const DEFAULT_CLIENT_SETTINGS: AppSettings = {
   sidebarFooterItems: [],
   usage: DEFAULT_USAGE_PREFERENCES,
   autoExpandReasoning: false,
+  genuiCards: true,
   toolCallDetailLevel: "detailed",
   chatOutlineEnabled: true,
   vimKeybindings: false,
@@ -252,6 +255,7 @@ const StoredAppSettingsSchema = z
     sidebarFooterItems: z.array(z.object({ key: z.string(), visible: z.boolean() })).catch([]),
     usage: UsagePreferencesSchema,
     autoExpandReasoning: z.boolean().catch(false),
+    genuiCards: z.boolean().catch(true),
     toolCallDetailLevel: z
       .enum(["overview", "detailed"])
       .or(z.literal("concise").transform(() => "overview" as const))

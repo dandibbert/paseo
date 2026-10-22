@@ -2030,6 +2030,40 @@ export const ko: TranslationResources = {
   sidebarCallout: {
     dismiss: "닫기",
   },
+  genui: {
+    generating: "카드 생성 중…",
+    changeLabel: "{{from}} → {{to}}",
+    zeroBaseline: "기준값이 0이라 변화율을 계산할 수 없습니다",
+    unit: "단위: {{unit}}",
+    copy: "텍스트로 복사",
+    copied: "복사됨",
+    viewData: "데이터 보기",
+    hideData: "데이터 숨기기",
+    renderError: "이 카드를 표시할 수 없습니다.",
+    decision: {
+      change: "변경",
+      adjust: "조정",
+      keep: "유지",
+    },
+    priority: {
+      high: "높은 우선순위",
+      medium: "보통 우선순위",
+      low: "낮은 우선순위",
+    },
+    step: "{{number}}단계",
+    stepStatus: {
+      done: "완료",
+      current: "진행 중",
+      todo: "할 일",
+      blocked: "막힘",
+    },
+    action: {
+      send: "보내기",
+      cancel: "취소",
+      sent: "보냄",
+      failed: "메시지를 보내지 못했습니다. 다시 시도하세요.",
+    },
+  },
   contextWindow: {
     noData: "컨텍스트 데이터 없음",
     accessibilityNoData: "컨텍스트 창: 컨텍스트 데이터 없음",
@@ -2187,6 +2221,10 @@ export const ko: TranslationResources = {
         label: "터미널 스크롤백",
         description: "내장 터미널 버퍼에 보관되는 줄 수",
         accessibilityLabel: "터미널 스크롤백 줄 수",
+      },
+      genuiCards: {
+        label: "채팅 카드 표시",
+        description: "에이전트가 만든 차트, 표, 비교를 도구 호출 대신 카드로 표시합니다",
       },
       autoExpandReasoning: {
         label: "추론 항상 펼치기",
@@ -2553,6 +2591,11 @@ export const ko: TranslationResources = {
           title: "Paseo 도구 활성화",
           hint: "에이전트가 워크트리, 에이전트, 일정을 관리할 수 있습니다",
           accessibilityLabel: "Paseo 도구 주입",
+        },
+        genuiPrompt: {
+          title: "채팅 카드 지침",
+          hint: "차트, 표, 비교를 채팅 카드로 그릴 시점을 에이전트에 알려줍니다",
+          accessibilityLabel: "채팅 카드 지침",
         },
         systemPrompt: {
           title: "시스템 프롬프트",

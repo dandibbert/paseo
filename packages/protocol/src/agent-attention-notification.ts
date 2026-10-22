@@ -1,3 +1,6 @@
+import { summarizeRenderUiInput } from "./genui/render-ui-summary.js";
+import { isRenderUiToolName } from "./tool-name-normalization.js";
+
 const NOTIFICATION_PREVIEW_LIMIT = 220;
 
 export type AgentAttentionReason = "finished" | "error" | "permission";
@@ -123,6 +126,9 @@ const buildPermissionDetails = (
     return details.join(" - ");
   }
 
+  if (isRenderUiToolName(request.name)) {
+    return summarizeRenderUiInput(request.input) ?? request.name;
+  }
   const inputPreview = request.input ? safeStringify(request.input) : null;
   if (inputPreview) {
     return inputPreview;

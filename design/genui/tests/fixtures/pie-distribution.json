@@ -1,0 +1,29 @@
+{
+  "type": "chart.pie",
+  "title": "任务时间分布",
+  "data": {
+    "description": "示例数据：四类任务的时间占比",
+    "labelField": "stage",
+    "valueField": "percent",
+    "rows": [
+      {
+        "stage": "开发",
+        "percent": 46
+      },
+      {
+        "stage": "测试",
+        "percent": 27
+      },
+      {
+        "stage": "设计",
+        "percent": 17
+      },
+      {
+        "stage": "其他",
+        "percent": 10
+      }
+    ],
+    "unit": "%"
+  },
+  "fallbackText": "开发占 46%，测试占 27%，设计占 17%，其他占 10%。"
+}

@@ -513,6 +513,10 @@ function resolveAppendSystemPrompt(persisted: ReturnType<typeof loadPersistedCon
   return persisted.daemon?.appendSystemPrompt ?? "";
 }
 
+function resolveGenuiSystemPrompt(persisted: ReturnType<typeof loadPersistedConfig>): boolean {
+  return persisted.daemon?.genuiSystemPrompt !== false;
+}
+
 function resolveBrowserToolsEnabled(persisted: ReturnType<typeof loadPersistedConfig>): boolean {
   return persisted.daemon?.browserTools?.enabled ?? false;
 }
@@ -541,6 +545,7 @@ function resolveStaticLoadConfigSettings(
     browserToolsEnabled: resolveBrowserToolsEnabled(persisted),
     autoArchiveAfterMerge: persisted.daemon?.autoArchiveAfterMerge ?? false,
     appendSystemPrompt: resolveAppendSystemPrompt(persisted),
+    genuiSystemPrompt: resolveGenuiSystemPrompt(persisted),
     ...resolveProfileLists(persisted),
     hostnames: mergeHostnames([
       persisted.daemon?.hostnames,
@@ -576,6 +581,7 @@ export function resolveConfigFromPersisted(
     browserToolsEnabled,
     autoArchiveAfterMerge,
     appendSystemPrompt,
+    genuiSystemPrompt,
     terminalProfiles,
     agentProfiles,
     hostnames,
@@ -621,6 +627,7 @@ export function resolveConfigFromPersisted(
     autoArchiveAfterMerge,
     enableTerminalAgentHooks: persisted.daemon?.enableTerminalAgentHooks ?? false,
     appendSystemPrompt,
+    genuiSystemPrompt,
     terminalProfiles,
     agentProfiles,
     skillSelection: persisted.agents?.skills?.selection,

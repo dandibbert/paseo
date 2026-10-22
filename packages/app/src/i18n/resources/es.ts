@@ -2068,6 +2068,40 @@ export const es: TranslationResources = {
   sidebarCallout: {
     dismiss: "Despedir",
   },
+  genui: {
+    generating: "Generando tarjeta…",
+    changeLabel: "{{from}} → {{to}}",
+    zeroBaseline: "Sin cambio porcentual: el valor base es 0",
+    unit: "Unidad: {{unit}}",
+    copy: "Copiar como texto",
+    copied: "Copiado",
+    viewData: "Ver datos",
+    hideData: "Ocultar datos",
+    renderError: "No se pudo mostrar esta tarjeta.",
+    decision: {
+      change: "Cambiar",
+      adjust: "Ajustar",
+      keep: "Mantener",
+    },
+    priority: {
+      high: "Prioridad alta",
+      medium: "Prioridad media",
+      low: "Prioridad baja",
+    },
+    step: "Paso {{number}}",
+    stepStatus: {
+      done: "Hecho",
+      current: "En curso",
+      todo: "Pendiente",
+      blocked: "Bloqueado",
+    },
+    action: {
+      send: "Enviar",
+      cancel: "Cancelar",
+      sent: "Enviado",
+      failed: "No se pudo enviar el mensaje. Inténtalo de nuevo.",
+    },
+  },
   contextWindow: {
     noData: "No hay datos de contexto",
     accessibilityNoData: "Ventana de contexto: No hay datos de contexto",
@@ -2227,6 +2261,11 @@ export const es: TranslationResources = {
         label: "Historial de terminal",
         description: "Líneas mantenidas en el búfer de terminal incorporado",
         accessibilityLabel: "Líneas del historial de terminal",
+      },
+      genuiCards: {
+        label: "Mostrar tarjetas en el chat",
+        description:
+          "Muestra los gráficos, tablas y comparaciones de los agentes como tarjetas en lugar de llamadas a herramientas",
       },
       autoExpandReasoning: {
         label: "Siempre expandir razonamiento",
@@ -2598,6 +2637,11 @@ export const es: TranslationResources = {
           title: "Habilitar herramientasPaseo",
           hint: "Los agentes podrán gestionar árboles de trabajo, agentes y horarios.",
           accessibilityLabel: "Inyectar herramientasPaseo",
+        },
+        genuiPrompt: {
+          title: "Instrucciones de tarjetas de chat",
+          hint: "Indica a los agentes cuándo mostrar gráficos, tablas y comparaciones como tarjetas de chat",
+          accessibilityLabel: "Instrucciones de tarjetas de chat",
         },
         systemPrompt: {
           title: "Aviso del sistema",

@@ -31,6 +31,14 @@ import type {
   ToolCallTimelineItem,
 } from "../agent-sdk-types.js";
 import { importSessionFromPersistence } from "../provider-session-import.js";
+import type { RenderUiType } from "@getpaseo/protocol/genui/render-ui-schema";
+import {
+  buildMockGenuiScenario,
+  MOCK_GENUI_GENERATING_MS,
+  MOCK_GENUI_TOOL_NAME,
+  parseMockGenuiPrompt,
+  type MockGenuiStep,
+} from "./mock-genui-scenario.js";
 import { getAgentProviderDefinition } from "@getpaseo/protocol/provider-manifest";
 
 export const MOCK_LOAD_TEST_PROVIDER_ID = "mock";
@@ -869,9 +877,12 @@ export class MockLoadTestAgentSession implements AgentSession {
     const structuredBranchName = parseStructuredBranchNamePrompt(prompt);
     const settledAssistantImageMarkdown = parseSettledAssistantImageMarkdown(prompt);
     const steeringReplayShape = parseSteeringReplayShape(prompt);
+    const genuiTypes = parseMockGenuiPrompt(promptToText(prompt));
     const scheduleTurn = () => {
       if (shouldEmitTurnFailure(prompt)) {
         this.scheduleFailedTurn(turn);
+      } else if (genuiTypes) {
+        this.scheduleGenuiTurn(turn, genuiTypes);
       } else if (steeringReplayShape) {
         this.scheduleSteeringReplayTurn(turn, steeringReplayShape);
       } else if (this.streamingAssistantResponse !== null) {
@@ -1225,6 +1236,60 @@ export class MockLoadTestAgentSession implements AgentSession {
       turn.timer.unref?.();
     }, 0);
     turn.timer.unref?.();
+  }
+
+  private scheduleGenuiTurn(turn: ActiveTurn, types: readonly RenderUiType[]): void {
+    const scenario = buildMockGenuiScenario(turn.turnId, types);
+    const playStep = (index: number) => {
+      if (this.activeTurn !== turn) return;
+      this.clearTurnTimer(turn);
+      this.emitTurnStarted(turn);
+      const step = scenario.steps[index];
+      if (!step) {
+        this.finishTurnWithText(turn, scenario.finalText);
+        return;
+      }
+      this.emitGenuiStep(turn, step);
+      const delayMs = step.kind === "render_ui_running" ? MOCK_GENUI_GENERATING_MS : 30;
+      turn.timer = setTimeout(() => playStep(index + 1), delayMs);
+      turn.timer.unref?.();
+    };
+    turn.timer = setTimeout(() => playStep(0), 0);
+    turn.timer.unref?.();
+  }
+
+  private emitGenuiStep(turn: ActiveTurn, step: MockGenuiStep): void {
+    switch (step.kind) {
+      case "text":
+        this.emitTimeline(turn.turnId, {
+          type: "assistant_message",
+          text: step.text,
+          messageId: turn.assistantMessageId,
+        });
+        return;
+      case "render_ui_running":
+      case "render_ui_completed":
+        this.emitTimeline(
+          turn.turnId,
+          createToolCall({
+            callId: step.callId,
+            name: MOCK_GENUI_TOOL_NAME,
+            status: step.kind === "render_ui_running" ? "running" : "completed",
+            detail: { type: "unknown", input: step.input, output: null },
+          }),
+        );
+        return;
+      case "render_ui_failed":
+        this.emitTimeline(turn.turnId, {
+          type: "tool_call",
+          callId: step.callId,
+          name: MOCK_GENUI_TOOL_NAME,
+          status: "failed",
+          error: { message: step.message },
+          detail: { type: "unknown", input: step.input, output: null },
+        });
+        return;
+    }
   }
 
   private scheduleStressTurn(turn: ActiveTurn, stress: AgentStreamStressRequest): void {

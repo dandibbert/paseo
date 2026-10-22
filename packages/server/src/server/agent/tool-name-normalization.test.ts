@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { getPaseoToolLeafName, isPaseoToolName } from "@getpaseo/protocol/tool-name-normalization";
+import {
+  getPaseoToolLeafName,
+  isPaseoToolName,
+  isRenderUiToolName,
+} from "@getpaseo/protocol/tool-name-normalization";
 
 describe("isPaseoToolName", () => {
   it("detects Claude Code format", () => {
@@ -42,5 +46,20 @@ describe("getPaseoToolLeafName", () => {
 
   it("returns null for non-paseo tools", () => {
     expect(getPaseoToolLeafName("Bash")).toBeNull();
+  });
+});
+
+describe("isRenderUiToolName", () => {
+  it("detects render_ui across provider naming styles", () => {
+    expect(isRenderUiToolName("render_ui")).toBe(true);
+    expect(isRenderUiToolName("paseo_render_ui")).toBe(true);
+    expect(isRenderUiToolName("mcp__paseo__render_ui")).toBe(true);
+    expect(isRenderUiToolName("paseo.render_ui")).toBe(true);
+  });
+
+  it("rejects other servers' render_ui and similar names", () => {
+    expect(isRenderUiToolName("mcp__other__render_ui")).toBe(false);
+    expect(isRenderUiToolName("other.render_ui")).toBe(false);
+    expect(isRenderUiToolName("render_ui_v2")).toBe(false);
   });
 });

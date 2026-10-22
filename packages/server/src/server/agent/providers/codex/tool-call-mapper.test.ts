@@ -866,6 +866,46 @@ describe("codex tool-call mapper", () => {
     });
   });
 
+  it("keeps render_ui arguments intact for the app to validate and render", () => {
+    const args = {
+      type: "progress",
+      data: { label: "已完成任务", current: 46, total: 50 },
+      fallbackText: "50 项任务已完成 46 项。",
+    };
+    const item = expectMapped(
+      mapCodexToolCallFromThreadItem({
+        type: "mcpToolCall",
+        id: "codex-render-ui-1",
+        status: "completed",
+        server: "paseo",
+        tool: "render_ui",
+        arguments: args,
+        result: { structuredContent: { ok: true } },
+      }),
+    );
+
+    expect(item.name).toBe("paseo.render_ui");
+    expect(item.status).toBe("completed");
+    expect(item.detail).toMatchObject({ type: "unknown", input: args });
+  });
+
+  it("marks a rejected render_ui call as failed", () => {
+    const item = expectMapped(
+      mapCodexToolCallFromThreadItem({
+        type: "mcpToolCall",
+        id: "codex-render-ui-2",
+        status: "failed",
+        server: "paseo",
+        tool: "render_ui",
+        arguments: { type: "metric", data: { label: "x" } },
+        result: null,
+        error: { message: "render_ui rejected the input." },
+      }),
+    );
+
+    expect(item.status).toBe("failed");
+  });
+
   it("replaces mcp image result blocks with placeholder text in tool output", () => {
     const item = expectMapped(
       mapCodexToolCallFromThreadItem({

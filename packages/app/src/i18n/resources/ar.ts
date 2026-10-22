@@ -2020,6 +2020,40 @@ export const ar: TranslationResources = {
   sidebarCallout: {
     dismiss: "رفض",
   },
+  genui: {
+    generating: "جارٍ إنشاء البطاقة…",
+    changeLabel: "{{from}} ← {{to}}",
+    zeroBaseline: "لا توجد نسبة تغيّر: القيمة الأساسية 0",
+    unit: "الوحدة: {{unit}}",
+    copy: "نسخ كنص",
+    copied: "تم النسخ",
+    viewData: "عرض البيانات",
+    hideData: "إخفاء البيانات",
+    renderError: "تعذّر عرض هذه البطاقة.",
+    decision: {
+      change: "تغيير",
+      adjust: "تعديل",
+      keep: "إبقاء",
+    },
+    priority: {
+      high: "أولوية عالية",
+      medium: "أولوية متوسطة",
+      low: "أولوية منخفضة",
+    },
+    step: "الخطوة {{number}}",
+    stepStatus: {
+      done: "مكتمل",
+      current: "قيد التنفيذ",
+      todo: "للتنفيذ",
+      blocked: "متوقف",
+    },
+    action: {
+      send: "إرسال",
+      cancel: "إلغاء",
+      sent: "تم الإرسال",
+      failed: "تعذر إرسال الرسالة. حاول مرة أخرى.",
+    },
+  },
   contextWindow: {
     noData: "لا توجد بيانات للسياق",
     accessibilityNoData: "نافذة السياق: لا توجد بيانات للسياق",
@@ -2176,6 +2210,10 @@ export const ar: TranslationResources = {
         label: "التمرير Terminal",
         description: "يتم الاحتفاظ بالخطوط في المخزن المؤقت الطرفي المدمج",
         accessibilityLabel: "خطوط التمرير Terminal",
+      },
+      genuiCards: {
+        label: "عرض بطاقات الدردشة",
+        description: "عرض المخططات والجداول والمقارنات من الوكلاء كبطاقات بدلًا من استدعاءات الأدوات",
       },
       autoExpandReasoning: {
         label: "عرض التفكير دائماً",
@@ -2542,6 +2580,11 @@ export const ar: TranslationResources = {
           title: "تمكين أدوات Paseo",
           hint: "سيتمكن الوكلاء من إدارة أشجار العمل والوكلاء والجداول الزمنية",
           accessibilityLabel: "حقن أدوات Paseo",
+        },
+        genuiPrompt: {
+          title: "تعليمات بطاقات الدردشة",
+          hint: "يخبر الوكلاء متى يرسمون المخططات والجداول والمقارنات كبطاقات دردشة",
+          accessibilityLabel: "تعليمات بطاقات الدردشة",
         },
         systemPrompt: {
           title: "موجه النظام",

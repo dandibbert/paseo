@@ -84,7 +84,8 @@ import { isStaleProviderSessionError } from "./stale-provider-session-error.js";
 import { stripInternalPaseoMcpServer, withRuntimePaseoMcpServer } from "./runtime-mcp-config.js";
 import { resolveCreateAgentTitles } from "./create-agent-title.js";
 import type { PaseoToolCatalogFactory } from "./tools/types.js";
-import { isPaseoToolPolicyEnabled } from "./paseo-tool-policy.js";
+import { isPaseoToolEnabled, isPaseoToolPolicyEnabled } from "./paseo-tool-policy.js";
+import { RENDER_UI_SYSTEM_PROMPT } from "./tools/render-ui/render-ui-prompt.js";
 import {
   ProviderSubagentStore,
   type ProviderSubagentDescriptor,
@@ -334,6 +335,8 @@ export interface AgentManagerOptions {
   paseoToolCatalogFactory?: PaseoToolCatalogFactory;
   resolvePaseoToolPolicy?: (provider: AgentProvider) => ProviderPaseoToolsPolicy | undefined;
   appendSystemPrompt?: string;
+  // Appends the render_ui card policy for agents that can call render_ui. Defaults to true.
+  genuiSystemPrompt?: boolean;
   agentStreamCoalesceWindowMs?: number;
   rescueTimeouts?: AgentManagerRescueTimeouts;
   beforeSteerUnavailableFallback?: (input: {
@@ -768,6 +771,7 @@ export class AgentManager {
     provider: AgentProvider,
   ) => ProviderPaseoToolsPolicy | undefined;
   private appendSystemPrompt: string;
+  private genuiSystemPrompt: boolean;
   private onAgentAttention?: AgentAttentionCallback;
   private onAgentArchived?: AgentArchivedCallback;
   private onWorkspaceStateMayHaveChanged?: (params: { cwd: string }) => void;
@@ -788,6 +792,7 @@ export class AgentManager {
     this.configurePaseoTools(options);
     this.resolvePaseoToolPolicy = options.resolvePaseoToolPolicy ?? (() => undefined);
     this.appendSystemPrompt = options.appendSystemPrompt ?? "";
+    this.genuiSystemPrompt = options.genuiSystemPrompt !== false;
     this.logger = options.logger.child({ module: "agent", component: "agent-manager" });
     this.rescueTimeouts = {
       reloadSessionCloseMs:
@@ -897,6 +902,10 @@ export class AgentManager {
 
   setAppendSystemPrompt(prompt: string | null | undefined): void {
     this.appendSystemPrompt = prompt ?? "";
+  }
+
+  setGenuiSystemPrompt(enabled: boolean): void {
+    this.genuiSystemPrompt = enabled;
   }
 
   public getMetricsSnapshot(): AgentMetricsSnapshot {
@@ -5304,22 +5313,38 @@ export class AgentManager {
     const paseoToolPolicy = this.paseoToolsEnabled
       ? this.resolvePaseoToolPolicy(storedConfig.provider)
       : { enabled: false };
+    const paseoToolsReachable =
+      this.paseoToolsEnabled &&
+      isPaseoToolPolicyEnabled(paseoToolPolicy) &&
+      Boolean(this.mcpBaseUrl);
     const launchConfig = this.applyDaemonAppendSystemPrompt(
       withRuntimePaseoMcpServer({
         config: storedConfig,
         agentId,
-        mcpBaseUrl:
-          this.paseoToolsEnabled && isPaseoToolPolicyEnabled(paseoToolPolicy)
-            ? this.mcpBaseUrl
-            : null,
+        mcpBaseUrl: paseoToolsReachable ? this.mcpBaseUrl : null,
         mcpAuthToken: this.mcpAuthToken,
       }),
+      {
+        renderUi:
+          this.genuiSystemPrompt &&
+          paseoToolsReachable &&
+          isPaseoToolEnabled(paseoToolPolicy, "render_ui") &&
+          storedConfig.internal !== true,
+      },
     );
     return { storedConfig, launchConfig, paseoToolPolicy };
   }
 
-  private applyDaemonAppendSystemPrompt(config: AgentSessionConfig): AgentSessionConfig {
-    const daemonAppendSystemPrompt = this.appendSystemPrompt.trim();
+  private applyDaemonAppendSystemPrompt(
+    config: AgentSessionConfig,
+    options: { renderUi: boolean },
+  ): AgentSessionConfig {
+    const daemonAppendSystemPrompt = [
+      this.appendSystemPrompt.trim(),
+      options.renderUi ? RENDER_UI_SYSTEM_PROMPT : "",
+    ]
+      .filter((part) => part.length > 0)
+      .join("\n\n");
     const next = { ...config };
     delete next.daemonAppendSystemPrompt;
 

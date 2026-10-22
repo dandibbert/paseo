@@ -1,0 +1,148 @@
+{
+  "name": "paseo-genui-generation-v0.4",
+  "description": "Cross-provider GenUI composition behavior fixtures, aligned to RFC v0.4 and its ten v1 types; not screenshot fixtures.",
+  "source": "Paseo GenUI RFC v0.4 (design proposal; unimplemented)",
+  "cases": [
+    {
+      "id": "T01",
+      "prompt": "你好",
+      "expected": "text",
+      "preferred_type": null,
+      "assertion": "普通招呼，不使用 GenUI"
+    },
+    {
+      "id": "T02",
+      "prompt": "`otool -L` 是什么？",
+      "expected": "text",
+      "preferred_type": null,
+      "assertion": "概念与命令解释不需要数据卡"
+    },
+    {
+      "id": "T03",
+      "prompt": "旧套餐 7500 HC，新套餐 1071 HC，按30天理论额度降了多少？",
+      "expected": "genui",
+      "preferred_type": "metricComparison",
+      "assertion": "两项原始数值可比较且有意义的变化。额度减少对用户不利：compare.changeIntent 应为 \"bad\"。工具成功返回 derived.changePercent 才作为工具计算值引用，负数表示降低；accepted 不等于客户端已显示。"
+    },
+    {
+      "id": "T04",
+      "prompt": "DS 和 GLM 在旧/新套餐分别是 7.8/1.1 与 9.5/1.4 十亿 Token，画成同单位的对比图",
+      "expected": "genui",
+      "preferred_type": "chart.bar",
+      "assertion": "离散类别与双系列比较"
+    },
+    {
+      "id": "T05",
+      "prompt": "最近 7 天响应耗时依次为 2.4、2.1、2.6、1.9、1.8、1.6、1.4 秒，请展示变化",
+      "expected": "genui",
+      "preferred_type": "chart.line",
+      "assertion": "有序时间数据、趋势明显"
+    },
+    {
+      "id": "T06",
+      "prompt": "比较五个虚构方案的价格、项目额度和限制：A=50元/3项/仅网页；B=35元/2项/仅手机；C=78元/6项/支持多端；D=60元/4项/仅国内；E=90元/8项/需年付。请列出精确的对照。",
+      "expected": "genui",
+      "preferred_type": "table",
+      "assertion": "五个方案的价格、额度与限制已齐备：直接输出准确 table；不要要求用户再次提供已经给出的数据，也不应虚构优劣。"
+    },
+    {
+      "id": "T07",
+      "prompt": "请把三条剧本修改意见分为优先修改、其次调整、建议保留：①凯因醒来后绝望表达与阶段衔接不连贯；②公墓环境细节和治疗邀请衔接稍生硬；③她对局长的讥讽及对其他人的担忧很好。尽量保留现稿。",
+      "expected": "genui",
+      "preferred_type": "priorityList",
+      "assertion": "具有明确的改动决定：优先/其次/保留，应生成 priorityList，items 使用 decision=change/adjust/keep；priority 是独立字段，禁止旧 level。"
+    },
+    {
+      "id": "T08",
+      "prompt": "总结本周两个项目的完成率与处理量：项目A 80%/40件，项目B 60%/30件",
+      "expected": "genui",
+      "preferred_type": "grid",
+      "assertion": "适合并列数据视图；可与 metric/progress 组合"
+    },
+    {
+      "id": "T09",
+      "prompt": "这两段 Swift 代码为什么崩溃？请给修复思路",
+      "expected": "text",
+      "preferred_type": null,
+      "assertion": "自然语言和代码块优先"
+    },
+    {
+      "id": "T10",
+      "prompt": "只回答一句结论，不要画图。",
+      "expected": "text",
+      "preferred_type": null,
+      "assertion": "尊重用户禁用可视化"
+    },
+    {
+      "id": "T11",
+      "prompt": "用可拖动滑块模拟资源占用率",
+      "expected": "unsupported",
+      "preferred_type": null,
+      "assertion": "v1 没有 slider；解释边界"
+    },
+    {
+      "id": "T12",
+      "prompt": "做一个饼图展示开发46%、测试27%、设计17%、其他10%",
+      "expected": "genui",
+      "preferred_type": "chart.pie",
+      "assertion": "四类非负占比 46/27/17/10 合计100%，应调用 chart.pie；类别和值须完整，图例/百分比由 App 渲染，不能编造扇区。"
+    },
+    {
+      "id": "T13",
+      "prompt": "只有昨天的耗时是 72ms，其他日期都未知，画 7 天趋势",
+      "expected": "text",
+      "preferred_type": null,
+      "assertion": "不能编造6天数据"
+    },
+    {
+      "id": "T14",
+      "prompt": "成本从100元降到70元，评估变化",
+      "expected": "genui",
+      "preferred_type": "metricComparison",
+      "assertion": "成本下降对用户有利：compare.changeIntent 应为 \"good\"，或在含义不明时省略（中性）；不得填 \"bad\"，不能按数值正负自动判为负面。工具成功返回 derived.changePercent 才作为工具计算值引用，负数表示降低；accepted 不等于客户端已显示。"
+    },
+    {
+      "id": "T15",
+      "prompt": "把耗时毫秒和成本美元放在一个共享纵轴的柱状图里",
+      "expected": "text",
+      "preferred_type": null,
+      "assertion": "不同单位不能错误放同一轴"
+    },
+    {
+      "id": "T16",
+      "prompt": "这份意见有三个等级：优先修复角色之间的视角误判；其次改进「よこにい 18 Pro・完全版」这个名称所在段落的说明；保留目前长达数行的自然中文心理描写。请给完整分级建议。",
+      "expected": "genui",
+      "preferred_type": "priorityList",
+      "assertion": "长文本自然换行且不得砍掉原文名称"
+    },
+    {
+      "id": "T17",
+      "prompt": "上下文：正在对旧7500 HC、新1071 HC 的 metricComparison 使用 render_ui；工具返回 data.items[1].value 应为数字而不是字符串，请修复这次调用。",
+      "expected": "retry",
+      "preferred_type": null,
+      "assertion": "只改 Schema 错误，最多两次重试"
+    },
+    {
+      "id": "T18",
+      "prompt": "GenUI 已禁用。比较旧 7500 HC 和新 1071 HC",
+      "expected": "text",
+      "preferred_type": null,
+      "assertion": "禁用时不得调用 render_ui"
+    },
+    {
+      "id": "T19",
+      "prompt": "比较 0、未知、-1、1000000000000 这几个值",
+      "expected": "text",
+      "preferred_type": null,
+      "assertion": "确认含义与单位，区分零与缺失"
+    },
+    {
+      "id": "T20",
+      "prompt": "做一份评估：模型A最近4周耗时为2.4、2.1、1.9、1.5秒；模型B为3.0、3.2、2.9、2.7秒；旧套餐7500HC、新1071HC。基于这些指标告诉我，最优先需要留意什么，并保留重要限制条件。",
+      "expected": "mixed",
+      "preferred_type": null,
+      "assertion": "模型A/B四周序列和新旧套餐数据都在问题中：用 chart.line + metricComparison 或承担不同认知目标的少量视图，给出限制与关注点；不得要求不存在的附件，不得推断套餐变化导致模型耗时变化。",
+      "preferred_types": ["chart.line", "metricComparison"]
+    }
+  ]
+}

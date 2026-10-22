@@ -243,6 +243,8 @@ Identity badges — the project icon, the sidebar host badge, and the PR-panel p
 
 New status pills use `<StatusBadge>`. Identity, shortcut, and interactive link badges remain separate because color does not encode status there.
 
+GenUI cards — the charts, tables and comparisons an agent draws with `render_ui` — do not use the theme palette either. They read `theme.genui`, a light and a dark set measured from ChatGPT's web UI (`packages/app/src/genui/tokens.ts`), so a card looks the same whichever Paseo theme is active. The set is closed: change it from the measured spec in `design/genui/docs/genui-visual-spec.md`, never by eye, and never use it outside `packages/app/src/genui`. See [genui.md](genui.md).
+
 ---
 
 ## 14. Forbidden
@@ -253,7 +255,7 @@ New status pills use `<StatusBadge>`. Identity, shortcut, and interactive link b
 - A muted paragraph between a section header and its card. Section-level explanation is the header's `info` tooltip (§7).
 - A "Settings" CTA on a detail page. Detail pages are settings; settings is reached from the sidebar, the host entry, or a row's kebab menu.
 - The word "checkout" in UI strings or identifiers. The term is "workspace".
-- New color tokens or hardcoded hex outside the palette. The identity color table is the documented exception (§13), not a license.
+- New color tokens or hardcoded hex outside the palette. The identity color table and the GenUI card palette are the documented exceptions (§13), not a license.
 - Placeholder text dimmed beyond `foregroundMuted`. No extra opacity, no italics, no ghost-text.
 - `onPointerEnter` and `onPointerLeave`. They do not fire on native iOS. Hover uses Pressable's `onHoverIn`/`onHoverOut` gated with `isHovered || isCompact || isNative`.
 - Raw DOM APIs without an `isWeb` guard.

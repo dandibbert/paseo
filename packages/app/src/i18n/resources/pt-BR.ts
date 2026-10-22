@@ -2053,6 +2053,40 @@ export const ptBR: TranslationResources = {
   sidebarCallout: {
     dismiss: "Dispensar",
   },
+  genui: {
+    generating: "Gerando cartão…",
+    changeLabel: "{{from}} → {{to}}",
+    zeroBaseline: "Sem variação percentual: a base é 0",
+    unit: "Unidade: {{unit}}",
+    copy: "Copiar como texto",
+    copied: "Copiado",
+    viewData: "Ver dados",
+    hideData: "Ocultar dados",
+    renderError: "Não foi possível exibir este cartão.",
+    decision: {
+      change: "Alterar",
+      adjust: "Ajustar",
+      keep: "Manter",
+    },
+    priority: {
+      high: "Prioridade alta",
+      medium: "Prioridade média",
+      low: "Prioridade baixa",
+    },
+    step: "Etapa {{number}}",
+    stepStatus: {
+      done: "Concluído",
+      current: "Em andamento",
+      todo: "A fazer",
+      blocked: "Bloqueado",
+    },
+    action: {
+      send: "Enviar",
+      cancel: "Cancelar",
+      sent: "Enviado",
+      failed: "Não foi possível enviar a mensagem. Tente novamente.",
+    },
+  },
   contextWindow: {
     noData: "Sem dados de contexto",
     accessibilityNoData: "Janela de contexto: sem dados de contexto",
@@ -2210,6 +2244,11 @@ export const ptBR: TranslationResources = {
         label: "Scrollback do terminal",
         description: "Linhas mantidas no buffer do terminal integrado",
         accessibilityLabel: "Linhas do scrollback do terminal",
+      },
+      genuiCards: {
+        label: "Mostrar cartões no chat",
+        description:
+          "Exibe gráficos, tabelas e comparações dos agentes como cartões em vez de chamadas de ferramenta",
       },
       autoExpandReasoning: {
         label: "Sempre expandir raciocínio",
@@ -2580,6 +2619,11 @@ export const ptBR: TranslationResources = {
           title: "Ativar ferramentas do Paseo",
           hint: "Agentes poderão gerenciar worktrees, agentes e agendamentos",
           accessibilityLabel: "Injetar ferramentas do Paseo",
+        },
+        genuiPrompt: {
+          title: "Instruções de cartões de chat",
+          hint: "Diz aos agentes quando mostrar gráficos, tabelas e comparações como cartões de chat",
+          accessibilityLabel: "Instruções de cartões de chat",
         },
         systemPrompt: {
           title: "Prompt do sistema",

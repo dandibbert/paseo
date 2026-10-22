@@ -1,4 +1,5 @@
 import { DaemonConnectionError } from "@getpaseo/client/internal/daemon-client";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { afterEach, describe, expect, test } from "vitest";
 import type { ProviderSubagentDescriptorPayload } from "@getpaseo/protocol/messages";
 import {
@@ -207,6 +208,35 @@ describe("provider subagent client store", () => {
     });
 
     expect(useProviderSubagentStore.getState().hiddenFromTrack.has(key)).toBe(false);
+  });
+
+  test("remembers archived finished children across app restarts", async () => {
+    const store = useProviderSubagentStore.getState();
+    const failed = {
+      id: SUBAGENT_ID,
+      parentAgentId: PARENT_ID,
+      provider: "claude" as const,
+      title: "Failed child",
+      description: null,
+      status: "failed" as const,
+      createdAt: "2026-07-12T10:00:00.000Z",
+      updatedAt: "2026-07-12T10:00:02.000Z",
+      toolCallId: "call-1",
+    };
+    store.applyUpdate(SERVER_ID, { kind: "upsert", subagent: failed });
+    store.hideFromTrack(SERVER_ID, PARENT_ID, [SUBAGENT_ID]);
+    const key = providerSubagentKey(SERVER_ID, PARENT_ID, SUBAGENT_ID);
+
+    const persisted = await AsyncStorage.getItem("provider-subagents-hidden");
+    expect(persisted).toContain(SUBAGENT_ID);
+
+    // A restart starts from an empty store and rehydrates from storage.
+    useProviderSubagentStore.setState({ descriptors: new Map(), hiddenFromTrack: new Set() });
+    await AsyncStorage.setItem("provider-subagents-hidden", persisted ?? "");
+    await useProviderSubagentStore.persist.rehydrate();
+    store.replaceList(SERVER_ID, PARENT_ID, [failed]);
+
+    expect(useProviderSubagentStore.getState().hiddenFromTrack.has(key)).toBe(true);
   });
 
   test("keeps hidden state when a child temporarily disappears from the provider list", () => {

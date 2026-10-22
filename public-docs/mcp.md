@@ -194,6 +194,12 @@ Omit absent optional settings. If no profile fits, use provider discovery to cho
 
 Browser automation is opt-in and adds tools for opening tabs, reading pages, clicking, typing, and taking screenshots. See the [Browser tools reference](/docs/browser-tools).
 
+### Chat cards
+
+| Tool        | Function                                                                                                                                                                                                                   |
+| ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `render_ui` | Show a native card in the chat: comparison, metric, progress, bar/line/pie chart, table, prioritized actions, or steps, with optional follow-up buttons the user can press to reply. Pair it with the `paseo-genui` skill. |
+
 ### Voice
 
 | Tool    | Function                                                                                  |

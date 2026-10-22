@@ -2053,6 +2053,40 @@ export const ru: TranslationResources = {
   sidebarCallout: {
     dismiss: "Закрыть",
   },
+  genui: {
+    generating: "Создание карточки…",
+    changeLabel: "{{from}} → {{to}}",
+    zeroBaseline: "Нет процента изменения: базовое значение 0",
+    unit: "Единица: {{unit}}",
+    copy: "Копировать как текст",
+    copied: "Скопировано",
+    viewData: "Показать данные",
+    hideData: "Скрыть данные",
+    renderError: "Не удалось показать эту карточку.",
+    decision: {
+      change: "Изменить",
+      adjust: "Скорректировать",
+      keep: "Оставить",
+    },
+    priority: {
+      high: "Высокий приоритет",
+      medium: "Средний приоритет",
+      low: "Низкий приоритет",
+    },
+    step: "Шаг {{number}}",
+    stepStatus: {
+      done: "Готово",
+      current: "В работе",
+      todo: "К выполнению",
+      blocked: "Заблокировано",
+    },
+    action: {
+      send: "Отправить",
+      cancel: "Отмена",
+      sent: "Отправлено",
+      failed: "Не удалось отправить сообщение. Попробуйте ещё раз.",
+    },
+  },
   contextWindow: {
     noData: "Нет данных о контексте",
     accessibilityNoData: "Контекстное окно: нет данных о контексте",
@@ -2211,6 +2245,11 @@ export const ru: TranslationResources = {
         label: "Буфер прокрутки терминала",
         description: "Количество строк, сохраняемых во встроенном буфере терминала",
         accessibilityLabel: "Количество строк в буфере прокрутки терминала",
+      },
+      genuiCards: {
+        label: "Показывать карточки в чате",
+        description:
+          "Показывать графики, таблицы и сравнения от агентов карточками, а не вызовами инструментов",
       },
       autoExpandReasoning: {
         label: "Всегда разворачивать размышления",
@@ -2588,6 +2627,11 @@ export const ru: TranslationResources = {
           title: "Включить инструменты Paseo",
           hint: "Агенты смогут управлять worktree, агентами и расписаниями.",
           accessibilityLabel: "Добавить инструменты Paseo",
+        },
+        genuiPrompt: {
+          title: "Инструкции для карточек чата",
+          hint: "Сообщает агентам, когда показывать графики, таблицы и сравнения карточками в чате",
+          accessibilityLabel: "Инструкции для карточек чата",
         },
         systemPrompt: {
           title: "Системный промпт",

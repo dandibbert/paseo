@@ -1,0 +1,30 @@
+{
+  "type": "metricComparison",
+  "title": "按 30 天折算的理论最高额度",
+  "data": {
+    "items": [
+      {
+        "id": "old",
+        "label": "旧套餐",
+        "value": 7500,
+        "unit": "HC",
+        "detail": "名义推理价值 $375"
+      },
+      {
+        "id": "new",
+        "label": "新套餐",
+        "value": 1071,
+        "unit": "HC",
+        "detail": "名义推理价值约 $53.57"
+      }
+    ],
+    "compare": {
+      "from": "old",
+      "to": "new",
+      "metric": "changePercent",
+      "precision": 1,
+      "changeIntent": "bad"
+    }
+  },
+  "fallbackText": "旧套餐 7,500 HC，新套餐约 1,071 HC；按相同口径，理论额度减少约 85.7%。"
+}

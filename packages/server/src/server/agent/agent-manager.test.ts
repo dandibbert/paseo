@@ -18,6 +18,7 @@ import {
   type AgentManagerEvent,
   type ManagedAgent,
 } from "./agent-manager.js";
+import { RENDER_UI_SYSTEM_PROMPT } from "./tools/render-ui/render-ui-prompt.js";
 import { AgentStorage } from "./agent-storage.js";
 import { InMemoryAgentTimelineStore } from "./agent-timeline-store.js";
 import { toAgentPayload } from "./agent-projections.js";
@@ -2286,6 +2287,44 @@ test("daemon append system prompt is injected into Pi configs", async () => {
   );
 
   expect(client.createdConfigs[0]?.daemonAppendSystemPrompt).toBe("Daemon instructions.");
+});
+
+test("appends the render_ui card policy only when the agent can call render_ui", async () => {
+  const workdir = mkdtempSync(join(tmpdir(), "agent-manager-test-"));
+  const storage = new AgentStorage(join(workdir, "agents"), logger);
+  const client = new TestAgentClient();
+  let paseoToolPolicy: { disabledTools?: string[] } = {};
+  let nextId = 0;
+  const manager = new AgentManager({
+    clients: { codex: client },
+    registry: storage,
+    logger,
+    appendSystemPrompt: "Daemon instructions.",
+    mcpBaseUrl: "http://127.0.0.1:6767/mcp/agents",
+    resolvePaseoToolPolicy: () => paseoToolPolicy,
+    idFactory: () => `00000000-0000-4000-8000-00000000020${nextId++}`,
+  });
+  const create = (internal?: boolean) =>
+    manager.createAgent({ provider: "codex", cwd: workdir, internal }, undefined, {
+      workspaceId: undefined,
+    });
+
+  await create();
+  expect(client.createdConfigs[0]?.daemonAppendSystemPrompt).toBe(
+    `Daemon instructions.\n\n${RENDER_UI_SYSTEM_PROMPT}`,
+  );
+
+  await create(true);
+  expect(client.createdConfigs[1]?.daemonAppendSystemPrompt).toBe("Daemon instructions.");
+
+  paseoToolPolicy = { disabledTools: ["render_ui"] };
+  await create();
+  expect(client.createdConfigs[2]?.daemonAppendSystemPrompt).toBe("Daemon instructions.");
+
+  paseoToolPolicy = {};
+  manager.setGenuiSystemPrompt(false);
+  await create();
+  expect(client.createdConfigs[3]?.daemonAppendSystemPrompt).toBe("Daemon instructions.");
 });
 
 test("setAgentMode persists the selected mode across session reload", async () => {
