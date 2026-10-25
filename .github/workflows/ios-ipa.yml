@@ -26,6 +26,21 @@ jobs:
           node-version: "22"
           cache: "npm"
 
+      # Expo's Swift packages need Swift tools 6.2 (Xcode 26+); the image's default
+      # Xcode is older, so pick the newest stable one installed.
+      - name: Select the newest stable Xcode
+        shell: bash
+        run: |
+          set -euo pipefail
+          xcode="$(ls -d /Applications/Xcode_*.app | grep -vi beta | sort -V | tail -1)"
+          sudo xcode-select -s "$xcode/Contents/Developer"
+          xcodebuild -version
+          swift_version="$(swift --version 2>&1 | sed -nE 's/.*Swift version ([0-9]+\.[0-9]+).*/\1/p' | head -1)"
+          if [ "$(printf '%s\n6.2\n' "$swift_version" | sort -V | head -1)" != "6.2" ]; then
+            echo "Swift $swift_version is older than 6.2; no suitable Xcode on this runner" >&2
+            exit 1
+          fi
+
       - name: Install dependencies
         run: node scripts/npm-retry.mjs ci
 
