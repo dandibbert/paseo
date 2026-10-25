@@ -1435,7 +1435,9 @@ test(
         expect.objectContaining({ id: remote.agentId, title: "B child", cwd: b.staticDir }),
       ]),
     });
-    expect(await call("list_agents", {})).toMatchObject({
+    // The unrelated agent is outside the caller's collaboration tree, which agent-scoped
+    // list_agents calls default to in this fork; list the working directory instead.
+    expect(await call("list_agents", { scope: "cwd" })).toMatchObject({
       serverId: directory.self.serverId,
       agents: expect.arrayContaining([
         expect.objectContaining({

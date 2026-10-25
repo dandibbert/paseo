@@ -339,6 +339,12 @@ export const PASEO_TOOL_CATALOG = {
   browser_resize: browser("Resize browser", viewportContext()),
   browser_logs: browser("Read browser logs"),
   browser_evaluate: browser("Run JavaScript", field("function")),
+  // Drawn as a GenUI card; this label shows when "Show chat cards" is off.
+  render_ui: {
+    label: "Show card",
+    context: field("title", "type"),
+    detail: { inputOrder: ["type", "title", "fallbackText"] },
+  },
 } satisfies Record<string, PaseoToolEntry>;
 
 export type PaseoToolName = keyof typeof PASEO_TOOL_CATALOG;
