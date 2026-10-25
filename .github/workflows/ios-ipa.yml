@@ -32,9 +32,6 @@ jobs:
       - name: Build app workspace dependencies
         run: npm run build:app-deps
 
-      - name: Prepare native terminal renderer
-        run: npm --workspace=@getpaseo/app run build:terminal-webview
-
       - name: Generate iOS project
         working-directory: packages/app
         run: npx expo prebuild --platform ios --clean --non-interactive
