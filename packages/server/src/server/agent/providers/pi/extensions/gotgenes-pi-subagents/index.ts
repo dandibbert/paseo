@@ -199,10 +199,15 @@ export const gotgenesPiSubagents: PiExtension = {
         };
       }
       if (!details.success) {
-        const failed = call.status === "failed" ? transition(call.callId, "failed") : undefined;
-        return failed
-          ? { detail, subagents: [{ type: "upsert" as const, id: call.callId, status: failed }] }
-          : { detail };
+        if (call.status === "failed") {
+          const failed = transition(call.callId, "failed");
+          return failed
+            ? { detail, subagents: [{ type: "upsert" as const, id: call.callId, status: failed }] }
+            : { detail };
+        }
+        // gotgenes refused the spawn, so no agent started: drop the running row.
+        runs.delete(call.callId);
+        return { detail, subagents: [{ type: "remove" as const, id: call.callId }] };
       }
       callsByAgent.set(details.data.agentId, call.callId);
       transition(call.callId, status(details.data.status));
