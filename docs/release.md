@@ -27,6 +27,16 @@ The personal macOS workflow retains its original file ID and artifact names so
 `verify_build_run_id` can reuse existing builds. Select it by its display name in
 Actions. Its publish step still requires green CI for the exact installer source.
 
+Personal macOS builds are signed with one self-signed certificate held in the
+`PASEO_MAC_SIGNING_P12_BASE64` and `PASEO_MAC_SIGNING_P12_PASSWORD` secrets
+([create it once](../packages/desktop/scripts/create-personal-signing-cert.sh)).
+Squirrel.Mac installs an in-app update only when the new app satisfies the running
+app's designated requirement. An ad-hoc requirement is the build's own hash, so
+never go back to ad-hoc signing, and keep the certificate: a new one costs every
+install one manual reinstall. Publishing points the app's update feed, the
+`latest-mac.yml` and `beta-mac.yml` assets of the `personal-updates` release, at
+the new `personal-v*` release.
+
 Use [the Linux headless guide](personal-headless-linux.md) for VPS installation,
 release promotion, and rollback.
 
