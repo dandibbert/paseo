@@ -13,6 +13,11 @@ on:
         required: false
         default: false
         type: boolean
+      test_release:
+        description: "Publish as a test build for the app's Beta channel only (any branch, no CI wait)."
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -143,12 +148,15 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       SOURCE_REVISION: ${{ needs.source.outputs.revision }}
       BUILD_RUN_ID: ${{ needs.source.outputs.artifact_run_id }}
+      TEST_RELEASE: ${{ inputs.test_release }}
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
+      # Test builds still pass the validate and installed jobs; only Stable waits on CI.
       - name: Require green CI for the installer source
+        if: ${{ !inputs.test_release }}
         shell: bash
         run: |
           set -euo pipefail
@@ -188,8 +196,15 @@ jobs:
           [[ "$build_number" =~ ^[0-9]+$ ]]
           root_version=$(gh api "repos/$GITHUB_REPOSITORY/contents/package.json?ref=$SOURCE_REVISION" --jq .content | base64 --decode | jq -r .version)
           [[ "$root_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          # Test and stable builds share the run number, so the newer build always has the higher version.
           version="$root_version-personal.$build_number"
-          tag="personal-v$version"
+          if [ "$TEST_RELEASE" = true ]; then
+            tag="personal-test-v$version"
+            title="Paseo $version（macOS 测试版）"
+          else
+            tag="personal-v$version"
+            title="Paseo $version（macOS 个人版）"
+          fi
           mkdir release-assets
           for arch in arm64 x64; do
             installer="installers/Paseo-combined-macos-$arch"
@@ -210,7 +225,11 @@ jobs:
           (cd release-assets && sha256sum -c SHA256SUMS.txt)
           printf '%s\n' "$SOURCE_REVISION" > release-assets/SOURCE_REVISION.txt
           cp installers/Paseo-combined-macos-arm64/BUILD_NOTES.txt release-assets/
-          cp "docs/releases/$root_version-personal.md" release-notes.md
+          if [ "$TEST_RELEASE" = true ]; then
+            printf '测试版，只推送给 App 发布通道为 Beta 的安装。分支：`%s`。\n' "$(jq -r .head_branch <<< "$metadata")" > release-notes.md
+          else
+            cp "docs/releases/$root_version-personal.md" release-notes.md
+          fi
           printf '\n版本：`%s`。源码：`%s`。\n\n构建：%s\n\n独立安装验证：https://github.com/%s/actions/runs/%s\n' \
             "$version" "$SOURCE_REVISION" "$(jq -r .html_url <<< "$metadata")" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID" >> release-notes.md
           releases=$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100")
@@ -218,10 +237,10 @@ jobs:
           if [ -n "$existing" ]; then
             test "$(jq -r .draft <<< "$existing")" = true
             test "$(jq -r .target_commitish <<< "$existing")" = "$SOURCE_REVISION"
-            gh release edit "$tag" --repo "$GITHUB_REPOSITORY" --title "Paseo $version（macOS 个人版）" --notes-file release-notes.md --prerelease
+            gh release edit "$tag" --repo "$GITHUB_REPOSITORY" --title "$title" --notes-file release-notes.md --prerelease
           else
             gh release create "$tag" --repo "$GITHUB_REPOSITORY" --draft --prerelease --target "$SOURCE_REVISION" \
-              --title "Paseo $version（macOS 个人版）" --notes-file release-notes.md
+              --title "$title" --notes-file release-notes.md
           fi
           gh release upload "$tag" release-assets/* --repo "$GITHUB_REPOSITORY" --clobber
           gh release edit "$tag" --repo "$GITHUB_REPOSITORY" --draft=false --prerelease
@@ -240,17 +259,37 @@ jobs:
             echo "path: $download/Paseo-$version-x64.zip"
             echo "sha512: $(openssl dgst -sha512 -binary "release-assets/Paseo-$version-x64.zip" | base64 -w0)"
             echo "releaseDate: '$(date -u +%Y-%m-%dT%H:%M:%S.000Z)'"
-          } > latest-mac.yml
-          # The app reads beta-mac.yml when its update channel is set to beta.
-          cp latest-mac.yml beta-mac.yml
-          cat latest-mac.yml
+          } > update-manifest.yml
+          cat update-manifest.yml
+          # Stable app installs read latest-mac.yml; Beta reads beta-mac.yml. A stable
+          # release also reaches Beta unless Beta already has a newer test build.
+          feeds=()
+          if [ "$TEST_RELEASE" != true ]; then
+            cp update-manifest.yml latest-mac.yml
+            feeds+=(latest-mac.yml)
+          fi
+          beta_version=$(curl -fsSL "$PERSONAL_UPDATE_FEED/beta-mac.yml" | sed -n 's/^version: //p' || true)
+          if [ -z "$beta_version" ] || [ "$(printf '%s\n%s\n' "$beta_version" "$version" | sort -V | tail -1)" = "$version" ]; then
+            cp update-manifest.yml beta-mac.yml
+            feeds+=(beta-mac.yml)
+          else
+            echo "Beta keeps the newer $beta_version"
+          fi
           feed_tag="${PERSONAL_UPDATE_FEED##*/}"
           if ! gh release view "$feed_tag" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
             gh release create "$feed_tag" --repo "$GITHUB_REPOSITORY" --prerelease --target "$SOURCE_REVISION" \
               --title "macOS 个人版更新源" \
-              --notes "Paseo 桌面 App 从这里检查更新，不用手动下载。安装包在对应的 personal-v* 发布里。"
+              --notes "Paseo 桌面 App 从这里检查更新，不用手动下载。正式版在 personal-v* 发布里，测试版在 personal-test-v* 发布里。"
           fi
-          gh release upload "$feed_tag" latest-mac.yml beta-mac.yml --repo "$GITHUB_REPOSITORY" --clobber
+          if [ "${#feeds[@]}" -gt 0 ]; then
+            gh release upload "$feed_tag" "${feeds[@]}" --repo "$GITHUB_REPOSITORY" --clobber
+          fi
+          # Keep the three newest test builds; older ones only clutter Releases.
+          if [ "$TEST_RELEASE" = true ]; then
+            gh api --paginate "repos/$GITHUB_REPOSITORY/releases?per_page=100" --jq '.[].tag_name' \
+              | grep '^personal-test-v' | sort -V -r | tail -n +4 \
+              | while read -r old; do gh release delete "$old" --repo "$GITHUB_REPOSITORY" --cleanup-tag --yes; done
+          fi
 
   macos:
     needs: [source, validate]
