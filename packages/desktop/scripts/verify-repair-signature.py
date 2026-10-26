@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-"""Verify personal ad-hoc packages without modifying any signature or OS policy."""
+"""Verify personal packages without modifying any signature or OS policy.
+
+Personal builds are signed with one self-signed certificate. macOS installs an
+in-app update only when the new app satisfies the running app's designated
+requirement, so that requirement must name the certificate, never a build hash.
+"""
 
 import argparse
 import json
@@ -16,9 +21,28 @@ REQUIRED = (
 )
 
 
+SIGNER = "Paseo Personal Signing"
+
+
 def validate_identity(label, metadata):
-    if not re.search(r"^Signature=adhoc$", metadata, re.MULTILINE):
-        raise ValueError(f"{label}: expected the personal ad-hoc signature")
+    authorities = re.findall(r"^Authority=(.*)$", metadata, re.MULTILINE)
+    if authorities != [SIGNER] or re.search(r"^Signature=adhoc", metadata, re.MULTILINE):
+        raise ValueError(f"{label}: expected the {SIGNER} certificate signature")
+
+
+def validate_requirement(label, requirement, cert_sha1):
+    # Squirrel.Mac rejects an update whose signature fails this requirement.
+    # A cdhash requirement changes with every build, so updates would never install.
+    fingerprint = cert_sha1.replace(":", "").lower()
+    if not re.fullmatch(r"[0-9a-f]{40}", fingerprint):
+        raise ValueError("Expected a SHA-1 certificate fingerprint")
+    match = re.search(r"^designated => (.+)$", requirement, re.MULTILINE)
+    if not match:
+        raise ValueError(f"{label}: no designated requirement")
+    designated = match.group(1).strip()
+    if "cdhash" in designated or f'h"{fingerprint}"' not in designated.lower():
+        raise ValueError(f"{label}: designated requirement must pin the signing certificate")
+    return designated
 
 
 def validate_metadata(label, metadata, entitlements):
@@ -33,13 +57,15 @@ def validate_metadata(label, metadata, entitlements):
 
 def self_test():
     valid = dict.fromkeys(REQUIRED, True)
-    metadata = "Signature=adhoc\nCodeDirectory flags=0x10002(adhoc,runtime)"
+    signed = f"Authority={SIGNER}\nTeamIdentifier=not set"
+    metadata = f"{signed}\nCodeDirectory flags=0x10000(runtime)"
     validate_metadata("valid", metadata, valid)
     # Frameworks need the same signing identity as the outer app, but executable
     # entitlements and Hardened Runtime are checked only on app/helper processes.
-    validate_identity("Electron Framework", "Signature=adhoc\nflags=0x2(adhoc)")
+    validate_identity("Electron Framework", f"{signed}\nflags=0x0(none)")
     for bad in ("Authority=Developer ID Application: Electron\nTeamIdentifier=ELECTRON",
-                "Signature=adhoc-invalid", ""):
+                f"Authority={SIGNER}\nAuthority=Apple Root CA",
+                "Signature=adhoc\nflags=0x2(adhoc)", ""):
         try:
             validate_identity("Electron Framework", bad)
         except ValueError:
@@ -55,13 +81,24 @@ def self_test():
             pass
         else:
             raise AssertionError(f"Accepted missing entitlement: {key}")
-    for bad in ("Signature=adhoc\nflags=0x2(adhoc)", "Signature=Developer ID\nflags=0x10000(runtime)"):
+    for bad in (f"{signed}\nflags=0x0(none)", "Signature=adhoc\nflags=0x10002(adhoc,runtime)"):
         try:
             validate_metadata("wrong policy", bad, valid)
         except ValueError:
             pass
         else:
             raise AssertionError("Accepted wrong signing policy")
+    fingerprint = "EF:61:CD:CF:05:8F:8F:8A:7D:50:61:54:49:5B:B5:92:A7:5C:34:84"
+    pinned = 'designated => identifier "sh.paseo.desktop" and certificate leaf = H"ef61cdcf058f8f8a7d506154495bb592a75c3484"'
+    validate_requirement("pinned", pinned, fingerprint)
+    for bad in ('designated => cdhash H"0123456789abcdef0123456789abcdef01234567"',
+                pinned.replace("ef61", "aa61"), ""):
+        try:
+            validate_requirement("unpinned", bad, fingerprint)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError("Accepted a requirement that blocks in-app updates")
     build = Path(__file__).resolve().parents[1] / "build"
     with (build / "entitlements.mac.repair.plist").open("rb") as file:
         repair = plistlib.load(file)
@@ -79,10 +116,10 @@ def self_test():
                 raise
         else:
             raise AssertionError("Baseline no longer reproduces the missing entitlement")
-    print("Signature policy regression checks passed (old policy rejected, repair accepted).")
+    print("Signature policy regression checks passed (ad-hoc and unpinned signatures rejected).")
 
 
-def verify(app_path):
+def verify(app_path, cert_sha1):
     if sys.platform != "darwin":
         raise ValueError("Signed bundle verification requires macOS")
     app = app_path.resolve(strict=True)
@@ -92,6 +129,15 @@ def verify(app_path):
     if not framework.is_file() or not framework.resolve().is_relative_to(app):
         raise ValueError("Embedded Electron Framework is missing or escapes the app")
     subprocess.run(["codesign", "--verify", "--deep", "--strict", "--verbose=2", str(app)], check=True)
+    requirement = subprocess.run(
+        ["codesign", "--display", "--requirements", "-", str(app)],
+        check=True, capture_output=True, text=True,
+    )
+    designated = validate_requirement(app.name, requirement.stdout + requirement.stderr, cert_sha1)
+    # The same check Squirrel.Mac runs before it replaces the installed app.
+    subprocess.run(
+        ["codesign", "--verify", "--deep", "--strict", f"-R={designated}", str(app)], check=True,
+    )
     framework_metadata = subprocess.run(
         ["codesign", "--display", "--verbose=4", str(framework)],
         check=True, capture_output=True, text=True,
@@ -124,6 +170,7 @@ def verify(app_path):
         reports.append({"bundle": label, "entitlements": entitlements, "signature": details})
     print(json.dumps({
         "app": str(app),
+        "designatedRequirement": designated,
         "verifiedBundles": reports,
         "verifiedFrameworks": [{"framework": framework_label, "signature": framework_details}],
     }, indent=2))
@@ -134,11 +181,14 @@ def main():
     target = parser.add_mutually_exclusive_group(required=True)
     target.add_argument("--self-test", action="store_true")
     target.add_argument("--app", type=Path)
+    parser.add_argument("--cert-sha1", help="SHA-1 fingerprint of the personal signing certificate")
     args = parser.parse_args()
     if args.self_test:
         self_test()
+    elif not args.cert_sha1:
+        parser.error("--app requires --cert-sha1")
     else:
-        verify(args.app)
+        verify(args.app, args.cert_sha1)
 
 
 if __name__ == "__main__":

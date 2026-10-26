@@ -25,7 +25,23 @@ an explicit release. Ordinary pushes never deploy a service or publish installer
 
 The personal macOS workflow retains its original file ID and artifact names so
 `verify_build_run_id` can reuse existing builds. Select it by its display name in
-Actions. Its publish step still requires green CI for the exact installer source.
+Actions. A stable publish still requires green CI for the exact installer source.
+
+Personal macOS builds are signed with one self-signed certificate held in the
+`PASEO_MAC_SIGNING_P12_BASE64` and `PASEO_MAC_SIGNING_P12_PASSWORD` secrets
+([create it once](../packages/desktop/scripts/create-personal-signing-cert.sh)).
+Squirrel.Mac installs an in-app update only when the new app satisfies the running
+app's designated requirement. An ad-hoc requirement is the build's own hash, so
+never go back to ad-hoc signing, and keep the certificate: a new one costs every
+install one manual reinstall.
+
+Publishing writes the app's update feed: the `latest-mac.yml` (Stable) and
+`beta-mac.yml` (Beta) assets of the `personal-updates` release, written after the
+new release is live. Dispatch with `test_release` to publish a `personal-test-v*`
+build from any branch to Beta only; it skips the CI wait, and only the three newest
+test builds are kept. A stable release also moves Beta unless Beta already offers a
+newer test build. The app never downgrades, so switching back to Stable waits for
+the next stable release.
 
 Use [the Linux headless guide](personal-headless-linux.md) for VPS installation,
 release promotion, and rollback.

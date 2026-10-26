@@ -13,6 +13,11 @@ on:
         required: false
         default: false
         type: boolean
+      test_release:
+        description: "Publish as a test build for the app's Beta channel only (any branch, no CI wait)."
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -23,6 +28,8 @@ concurrency:
 
 env:
   LEFTHOOK: "0"
+  SIGNER: Paseo Personal Signing
+  PERSONAL_UPDATE_FEED: https://github.com/dandibbert/paseo/releases/download/personal-updates
 
 jobs:
   source:
@@ -141,12 +148,15 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       SOURCE_REVISION: ${{ needs.source.outputs.revision }}
       BUILD_RUN_ID: ${{ needs.source.outputs.artifact_run_id }}
+      TEST_RELEASE: ${{ inputs.test_release }}
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
+      # Test builds still pass the validate and installed jobs; only Stable waits on CI.
       - name: Require green CI for the installer source
+        if: ${{ !inputs.test_release }}
         shell: bash
         run: |
           set -euo pipefail
@@ -186,8 +196,15 @@ jobs:
           [[ "$build_number" =~ ^[0-9]+$ ]]
           root_version=$(gh api "repos/$GITHUB_REPOSITORY/contents/package.json?ref=$SOURCE_REVISION" --jq .content | base64 --decode | jq -r .version)
           [[ "$root_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          # Test and stable builds share the run number, so the newer build always has the higher version.
           version="$root_version-personal.$build_number"
-          tag="personal-v$version"
+          if [ "$TEST_RELEASE" = true ]; then
+            tag="personal-test-v$version"
+            title="Paseo $version（macOS 测试版）"
+          else
+            tag="personal-v$version"
+            title="Paseo $version（macOS 个人版）"
+          fi
           mkdir release-assets
           for arch in arm64 x64; do
             installer="installers/Paseo-combined-macos-$arch"
@@ -208,7 +225,11 @@ jobs:
           (cd release-assets && sha256sum -c SHA256SUMS.txt)
           printf '%s\n' "$SOURCE_REVISION" > release-assets/SOURCE_REVISION.txt
           cp installers/Paseo-combined-macos-arm64/BUILD_NOTES.txt release-assets/
-          cp "docs/releases/$root_version-personal.md" release-notes.md
+          if [ "$TEST_RELEASE" = true ]; then
+            printf '测试版，只推送给 App 发布通道为 Beta 的安装。分支：`%s`。\n' "$(jq -r .head_branch <<< "$metadata")" > release-notes.md
+          else
+            cp "docs/releases/$root_version-personal.md" release-notes.md
+          fi
           printf '\n版本：`%s`。源码：`%s`。\n\n构建：%s\n\n独立安装验证：https://github.com/%s/actions/runs/%s\n' \
             "$version" "$SOURCE_REVISION" "$(jq -r .html_url <<< "$metadata")" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID" >> release-notes.md
           releases=$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100")
@@ -216,14 +237,59 @@ jobs:
           if [ -n "$existing" ]; then
             test "$(jq -r .draft <<< "$existing")" = true
             test "$(jq -r .target_commitish <<< "$existing")" = "$SOURCE_REVISION"
-            gh release edit "$tag" --repo "$GITHUB_REPOSITORY" --title "Paseo $version（macOS 个人版）" --notes-file release-notes.md --prerelease
+            gh release edit "$tag" --repo "$GITHUB_REPOSITORY" --title "$title" --notes-file release-notes.md --prerelease
           else
             gh release create "$tag" --repo "$GITHUB_REPOSITORY" --draft --prerelease --target "$SOURCE_REVISION" \
-              --title "Paseo $version（macOS 个人版）" --notes-file release-notes.md
+              --title "$title" --notes-file release-notes.md
           fi
           gh release upload "$tag" release-assets/* --repo "$GITHUB_REPOSITORY" --clobber
           gh release edit "$tag" --repo "$GITHUB_REPOSITORY" --draft=false --prerelease
           gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json url,isDraft,assets
+          # Point the in-app update feed at this release only after its assets are live.
+          download="https://github.com/$GITHUB_REPOSITORY/releases/download/$tag"
+          {
+            echo "version: $version"
+            echo "files:"
+            for arch in arm64 x64; do
+              zip="release-assets/Paseo-$version-$arch.zip"
+              echo "  - url: $download/Paseo-$version-$arch.zip"
+              echo "    sha512: $(openssl dgst -sha512 -binary "$zip" | base64 -w0)"
+              echo "    size: $(stat -c %s "$zip")"
+            done
+            echo "path: $download/Paseo-$version-x64.zip"
+            echo "sha512: $(openssl dgst -sha512 -binary "release-assets/Paseo-$version-x64.zip" | base64 -w0)"
+            echo "releaseDate: '$(date -u +%Y-%m-%dT%H:%M:%S.000Z)'"
+          } > update-manifest.yml
+          cat update-manifest.yml
+          # Stable app installs read latest-mac.yml; Beta reads beta-mac.yml. A stable
+          # release also reaches Beta unless Beta already has a newer test build.
+          feeds=()
+          if [ "$TEST_RELEASE" != true ]; then
+            cp update-manifest.yml latest-mac.yml
+            feeds+=(latest-mac.yml)
+          fi
+          beta_version=$(curl -fsSL "$PERSONAL_UPDATE_FEED/beta-mac.yml" | sed -n 's/^version: //p' || true)
+          if [ -z "$beta_version" ] || [ "$(printf '%s\n%s\n' "$beta_version" "$version" | sort -V | tail -1)" = "$version" ]; then
+            cp update-manifest.yml beta-mac.yml
+            feeds+=(beta-mac.yml)
+          else
+            echo "Beta keeps the newer $beta_version"
+          fi
+          feed_tag="${PERSONAL_UPDATE_FEED##*/}"
+          if ! gh release view "$feed_tag" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            gh release create "$feed_tag" --repo "$GITHUB_REPOSITORY" --prerelease --target "$SOURCE_REVISION" \
+              --title "macOS 个人版更新源" \
+              --notes "Paseo 桌面 App 从这里检查更新，不用手动下载。正式版在 personal-v* 发布里，测试版在 personal-test-v* 发布里。"
+          fi
+          if [ "${#feeds[@]}" -gt 0 ]; then
+            gh release upload "$feed_tag" "${feeds[@]}" --repo "$GITHUB_REPOSITORY" --clobber
+          fi
+          # Keep the three newest test builds; older ones only clutter Releases.
+          if [ "$TEST_RELEASE" = true ]; then
+            gh api --paginate "repos/$GITHUB_REPOSITORY/releases?per_page=100" --jq '.[].tag_name' \
+              | grep '^personal-test-v' | sort -V -r | tail -n +4 \
+              | while read -r old; do gh release delete "$old" --repo "$GITHUB_REPOSITORY" --cleanup-tag --yes; done
+          fi
 
   macos:
     needs: [source, validate]
@@ -268,16 +334,51 @@ jobs:
           const rootPkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
           pkg.version = `${rootPkg.version}-personal.${process.env.GITHUB_RUN_NUMBER}`;
           fs.writeFileSync(p, JSON.stringify(pkg, null, 2) + '\n');
+          // In-app updates read the feed that the release job keeps current.
+          const configPath = 'packages/desktop/electron-builder.yml';
+          const upstreamFeed = 'publish:\n  provider: github\n  owner: getpaseo\n  repo: paseo\n';
+          const config = fs.readFileSync(configPath, 'utf8');
+          if (!config.includes(upstreamFeed)) throw new Error('electron-builder publish block changed');
+          fs.writeFileSync(configPath, config.replace(upstreamFeed,
+            `publish:\n  provider: generic\n  url: ${process.env.PERSONAL_UPDATE_FEED}\n`));
           NODE
-      - name: Build ad-hoc signed macOS app without publishing
+      - name: Import the personal signing certificate
+        env:
+          P12_BASE64: ${{ secrets.PASEO_MAC_SIGNING_P12_BASE64 }}
+          P12_PASSWORD: ${{ secrets.PASEO_MAC_SIGNING_P12_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "$P12_BASE64" ] || [ -z "$P12_PASSWORD" ]; then
+            echo "Missing PASEO_MAC_SIGNING_P12_* secrets; create them with packages/desktop/scripts/create-personal-signing-cert.sh" >&2
+            exit 1
+          fi
+          keychain="$RUNNER_TEMP/paseo-signing.keychain-db"
+          keychain_password="$(uuidgen)"
+          printf '%s' "$P12_BASE64" | base64 --decode > "$RUNNER_TEMP/signing.p12"
+          security create-keychain -p "$keychain_password" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$keychain_password" "$keychain"
+          security import "$RUNNER_TEMP/signing.p12" -k "$keychain" -P "$P12_PASSWORD" -T /usr/bin/codesign
+          rm -f "$RUNNER_TEMP/signing.p12"
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$keychain_password" "$keychain" > /dev/null
+          security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
+          security find-certificate -c "$SIGNER" -p "$keychain" > "$RUNNER_TEMP/signing-cert.pem"
+          # electron-builder only offers identities that this runner trusts for code signing.
+          # Installed Macs never need this trust; the installed job verifies without it.
+          sudo security add-trusted-cert -d -r trustRoot -p codeSign -k /Library/Keychains/System.keychain "$RUNNER_TEMP/signing-cert.pem"
+          security find-identity -v -p codesigning | grep -F "\"$SIGNER\""
+          fingerprint=$(/usr/bin/openssl x509 -in "$RUNNER_TEMP/signing-cert.pem" -noout -fingerprint -sha1 | cut -d= -f2)
+          echo "CERT_SHA1=$fingerprint" >> "$GITHUB_ENV"
+          echo "Signing certificate SHA-1: $fingerprint"
+      - name: Build the certificate-signed macOS app without publishing
         env:
           NODE_OPTIONS: --max-old-space-size=${{ matrix.node_heap_mb }}
         run: |
           npm run build:desktop -- --publish never --mac --${{ matrix.arch }} \
-            -c.mac.identity=- -c.mac.notarize=false \
+            "-c.mac.identity=$SIGNER" -c.forceCodeSigning=true -c.mac.timestamp=none -c.mac.notarize=false \
             -c.mac.entitlements=build/entitlements.mac.repair.plist \
-            -c.mac.entitlementsInherit=build/entitlements.mac.repair.plist \
-            -c.publish.owner=dandibbert -c.publish.repo=paseo -c.publish.channel=repair
+            -c.mac.entitlementsInherit=build/entitlements.mac.repair.plist
       - name: Test daemon and configured-model recovery paths on macOS
         working-directory: packages/server
         run: |
@@ -294,7 +395,9 @@ jobs:
           set -euo pipefail
           app=$(find packages/desktop/release -maxdepth 3 -name Paseo.app -type d | head -1)
           test -n "$app"
-          python3 packages/desktop/scripts/verify-repair-signature.py --app "$app" > packages/desktop/release/SIGNATURE_REPORT.json
+          python3 packages/desktop/scripts/verify-repair-signature.py --app "$app" --cert-sha1 "$CERT_SHA1" > packages/desktop/release/SIGNATURE_REPORT.json
+          grep -Fx 'provider: generic' "$app/Contents/Resources/app-update.yml"
+          grep -Fx "url: $PERSONAL_UPDATE_FEED" "$app/Contents/Resources/app-update.yml"
           node packages/desktop/e2e/packaged-app-smoke.js --app "$app"
       - name: Record source and installer checksums
         shell: bash
@@ -303,7 +406,7 @@ jobs:
           git rev-parse HEAD > SOURCE_REVISION.txt
           shasum -a 256 Paseo-*.dmg Paseo-*.zip > SHA256SUMS.txt
           printf '%s\n' \
-            'Personal fork build; ad-hoc signed, not Apple notarized.' \
+            'Personal fork build; signed with the personal self-signed certificate, not Apple notarized.' \
             'Includes daemon/relay recovery fixes and the advanced Provider model editor.' \
             'Hardened Runtime retained; personal main and helper signatures include the library-validation exception.' \
             'Wait until all agent tasks finish before replacing the installed desktop app.' > BUILD_NOTES.txt
@@ -382,6 +485,21 @@ jobs:
           path: install-artifacts
           github-token: ${{ github.token }}
           run-id: ${{ needs.source.outputs.artifact_run_id }}
+      - name: Read the personal signing certificate fingerprint
+        env:
+          P12_BASE64: ${{ secrets.PASEO_MAC_SIGNING_P12_BASE64 }}
+          P12_PASSWORD: ${{ secrets.PASEO_MAC_SIGNING_P12_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '%s' "$P12_BASE64" | base64 --decode > "$RUNNER_TEMP/signing.p12"
+          fingerprint=$(/usr/bin/openssl pkcs12 -in "$RUNNER_TEMP/signing.p12" -passin env:P12_PASSWORD -nokeys \
+            | /usr/bin/openssl x509 -noout -fingerprint -sha1 | cut -d= -f2)
+          rm -f "$RUNNER_TEMP/signing.p12"
+          test -n "$fingerprint"
+          echo "CERT_SHA1=$fingerprint" >> "$GITHUB_ENV"
+      # This runner never trusts the certificate, like an installed Mac. The requirement
+      # check below is the one Squirrel.Mac runs before an in-app update replaces the app.
       - name: Validate final ZIP and DMG on a separate macOS 15 runner
         shell: bash
         run: |
@@ -403,14 +521,14 @@ jobs:
           test -n "$zip" && test -n "$dmg"
           mkdir -p "$base/zip" "$base/dmg" "$base/mount"
           ditto -x -k "$zip" "$base/zip"
-          python3 packages/desktop/scripts/verify-repair-signature.py --app "$base/zip/Paseo.app" > install-evidence/zip-signatures.json
+          python3 packages/desktop/scripts/verify-repair-signature.py --app "$base/zip/Paseo.app" --cert-sha1 "$CERT_SHA1" > install-evidence/zip-signatures.json
           node packages/desktop/e2e/packaged-app-smoke.js --app "$base/zip/Paseo.app" 2>&1 | tee install-evidence/zip-smoke.log
           hdiutil attach "$dmg" -readonly -nobrowse -mountpoint "$base/mount"
           mounted=1
           ditto "$base/mount/Paseo.app" "$base/dmg/Paseo.app"
           hdiutil detach "$base/mount"
           mounted=0
-          python3 packages/desktop/scripts/verify-repair-signature.py --app "$base/dmg/Paseo.app" > install-evidence/dmg-signatures.json
+          python3 packages/desktop/scripts/verify-repair-signature.py --app "$base/dmg/Paseo.app" --cert-sha1 "$CERT_SHA1" > install-evidence/dmg-signatures.json
           node packages/desktop/e2e/packaged-app-smoke.js --app "$base/dmg/Paseo.app" 2>&1 | tee install-evidence/dmg-smoke.log
           git rev-parse HEAD > install-evidence/SOURCE_REVISION.txt
       - uses: actions/upload-artifact@v4
