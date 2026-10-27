@@ -24,7 +24,10 @@ const gatedCiJobs = new Map([
     "server-integration-windows",
     { name: "server-integration (windows-latest)", contract: "server" },
   ],
-  ["server-tests-macos", { name: "server-tests (macos-14, file observation)", contract: "server" }],
+  [
+    "server-tests-macos",
+    { name: "server-tests (macos-15-intel, file observation)", contract: "server" },
+  ],
   ["desktop-tests-ubuntu", { name: "desktop-tests (ubuntu-latest)", contract: "desktop" }],
   ["desktop-tests-windows", { name: "desktop-tests (windows-latest)", contract: "desktop" }],
   ["app-tests", { name: "app-tests", contract: "app" }],
@@ -199,6 +202,18 @@ test("focused contracts stay inside existing required checks", () => {
   assert.match(desktop, /npm run test --workspace=@getpaseo\/desktop/);
   assert.ok(!jobs.has("desktop-browser-bridge"));
   assert.ok(!jobs.has("playwright-desktop"));
+});
+
+test("macOS file observation runs on the release Intel runner without dropping watcher coverage", () => {
+  const jobs = jobBlocks(readFileSync(ciWorkflowPath, "utf8"));
+  const macos = jobs.get("server-tests-macos")?.join("\n") ?? "";
+  assert.match(macos, /^    runs-on: macos-15-intel$/m);
+  assert.match(macos, /npm run build:server-deps/);
+  assert.match(macos, /npm run test:unit --workspace=@getpaseo\/server/);
+  assert.match(macos, /src\/server\/file-observer/);
+  assert.match(macos, /src\/server\/workspace-git-service\.observation\.test\.ts/);
+  assert.match(macos, /src\/server\/workspace-git-service\.observation\.integration\.test\.ts/);
+  assert.doesNotMatch(macos, /continue-on-error|--passWithNoTests/);
 });
 
 test("server builds exclude test utilities at every domain depth", () => {
