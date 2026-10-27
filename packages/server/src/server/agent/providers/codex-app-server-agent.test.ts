@@ -113,7 +113,7 @@ interface CodexSessionTestAccess {
   };
   ensureThreadLoaded(): Promise<void>;
   handleToolApprovalRequest(params: unknown): Promise<unknown>;
-  handleNotification(method: string, params: unknown): void;
+  handleNotification(method: string, params: unknown): Promise<void>;
   loadPersistedHistory(client: CodexClientLike | null): Promise<void>;
   refreshResolvedCollaborationMode(): void;
   serviceTier: "fast" | null;
@@ -265,6 +265,7 @@ async function startPublicSteeringSession(
   const started = await session.startTurn("first");
   await appServer.waitForTurnStart();
   appServer.startsTurn({ threadId: "thread-1", turnId: "native-A" });
+  await new Promise<void>((resolve) => setImmediate(resolve));
   await new Promise((resolve) => setTimeout(resolve, 0));
   return { session, paseoTurnId: started.turnId };
 }
@@ -407,9 +408,11 @@ describe("Codex active-turn steering admission", () => {
     });
     await resolverEntered.promise;
     appServer.completeTurn({ threadId: "thread-1" });
+    await new Promise<void>((resolve) => setImmediate(resolve));
     await new Promise((resolve) => setTimeout(resolve, 0));
     const startedB = await session.startTurn("second");
     appServer.startsTurn({ threadId: "thread-1", turnId: "native-B" });
+    await new Promise<void>((resolve) => setImmediate(resolve));
     await new Promise((resolve) => setTimeout(resolve, 0));
     commandResolution.resolve(null);
 
@@ -531,6 +534,7 @@ async function startCompactionTurnTest(): Promise<{
 
   await session.startTurn("exercise compaction lifecycle");
   appServer.startsTurn({ threadId: "thread-1", turnId: "codex-turn-1" });
+  await new Promise<void>((resolve) => setImmediate(resolve));
   return { appServer, session, events, terminalEvent };
 }
 
@@ -1495,7 +1499,9 @@ describe("Codex app-server provider", () => {
         command: "gh pr merge 2030 --squash",
         cwd: "/workspace/project",
       });
+      await new Promise<void>((resolve) => setImmediate(resolve));
       appServer.says({ threadId: "thread-1", text: "Merged." });
+      await new Promise<void>((resolve) => setImmediate(resolve));
 
       await expect(nextTimelineItem).resolves.toEqual({
         type: "timeline",
@@ -1539,6 +1545,7 @@ describe("Codex app-server provider", () => {
         command: "gh pr merge 2030 --squash",
         cwd: "/workspace/project",
       });
+      await new Promise<void>((resolve) => setImmediate(resolve));
 
       await expect(nextTimelineItem).resolves.toEqual({
         type: "timeline",
@@ -1583,6 +1590,7 @@ describe("Codex app-server provider", () => {
         processId: "4242",
         text: "gh pr merge 2030 --squash\n",
       });
+      await new Promise<void>((resolve) => setImmediate(resolve));
 
       await expect(nextTimelineItem).resolves.toEqual({
         type: "timeline",
@@ -1611,6 +1619,7 @@ describe("Codex app-server provider", () => {
         command: "sleep 30",
         output: "Process running with session id 4242",
       });
+      await new Promise<void>((resolve) => setImmediate(resolve));
 
       await expect(relabeledTerminal).resolves.toEqual({
         type: "timeline",
@@ -1658,6 +1667,7 @@ describe("Codex app-server provider", () => {
           processId: "73",
           command,
         });
+        await new Promise<void>((resolve) => setImmediate(resolve));
 
         const terminalWrite = waitForTimelineToolCall(session, "terminal-session-73-1");
         appServer.typesIntoTerminal({
@@ -1667,6 +1677,7 @@ describe("Codex app-server provider", () => {
           processId: "73",
           text: "print(1)\n",
         });
+        await new Promise<void>((resolve) => setImmediate(resolve));
 
         await expect(terminalWrite).resolves.toMatchObject({
           item: {
@@ -1703,7 +1714,9 @@ describe("Codex app-server provider", () => {
         processId: "4242",
         text: "git status\n",
       });
+      await new Promise<void>((resolve) => setImmediate(resolve));
 
+      await firstTimelineItem;
       const secondTimelineItem = waitForNextTimelineItem(session);
       appServer.typesIntoTerminal({
         threadId: "thread-1",
@@ -1712,6 +1725,7 @@ describe("Codex app-server provider", () => {
         processId: "4242",
         text: "git push\n",
       });
+      await new Promise<void>((resolve) => setImmediate(resolve));
 
       const [first, second] = await Promise.all([firstTimelineItem, secondTimelineItem]);
       expect(first.item).toMatchObject({
@@ -2110,9 +2124,13 @@ describe("Codex app-server provider", () => {
     await session.startTurn("remember first");
     emitCodexUserMessage(appServer, { id: "codex-first", text: "remember first" });
     appServer.completeTurn();
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    await new Promise<void>((resolve) => setImmediate(resolve));
     await session.startTurn("remember second");
     emitCodexUserMessage(appServer, { id: "codex-second", text: "remember second" });
     appServer.completeTurn();
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    await new Promise<void>((resolve) => setImmediate(resolve));
 
     await session.revertConversation({ messageId: "codex-first" });
 
@@ -2151,6 +2169,8 @@ describe("Codex app-server provider", () => {
       turnId: "turn-first",
     });
     appServer.completeTurn();
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    await new Promise<void>((resolve) => setImmediate(resolve));
     await session.startTurn("remember second");
     emitCodexUserMessage(appServer, {
       id: "codex-second",
@@ -2158,6 +2178,8 @@ describe("Codex app-server provider", () => {
       turnId: "turn-second",
     });
     appServer.completeTurn();
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    await new Promise<void>((resolve) => setImmediate(resolve));
 
     await session.revertConversation({ messageId: "codex-second" });
 
@@ -2207,6 +2229,8 @@ describe("Codex app-server provider", () => {
       turnId: "turn-first",
     });
     appServer.completeTurn();
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    await new Promise<void>((resolve) => setImmediate(resolve));
     await session.startTurn("remember second");
     emitCodexUserMessage(appServer, {
       id: "codex-second",
@@ -2214,6 +2238,8 @@ describe("Codex app-server provider", () => {
       turnId: "turn-second",
     });
     appServer.completeTurn();
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    await new Promise<void>((resolve) => setImmediate(resolve));
 
     await session.revertConversation({ messageId: "codex-first" });
 
@@ -2284,6 +2310,8 @@ describe("Codex app-server provider", () => {
         turnId: "turn-first",
       });
       appServer.completeTurn();
+      await new Promise<void>((resolve) => setImmediate(resolve));
+      await new Promise<void>((resolve) => setImmediate(resolve));
       await session.startTurn("remember second");
       emitCodexUserMessage(appServer, {
         id: "codex-second",
@@ -2291,6 +2319,8 @@ describe("Codex app-server provider", () => {
         turnId: "turn-second",
       });
       appServer.completeTurn();
+      await new Promise<void>((resolve) => setImmediate(resolve));
+      await new Promise<void>((resolve) => setImmediate(resolve));
 
       await session.revertConversation({ messageId: "codex-first" });
 
@@ -2325,7 +2355,7 @@ describe("Codex app-server provider", () => {
     const events: AgentStreamEvent[] = [];
     session.subscribe((event) => events.push(event));
     await session.startTurn("remember this", { clientMessageId: "client-message" });
-    asInternals(session).handleNotification("turn/started", {
+    await asInternals(session).handleNotification("turn/started", {
       threadId: "thread-1",
       turn: { id: "turn-1" },
     });
@@ -2341,6 +2371,8 @@ describe("Codex app-server provider", () => {
     });
     expect(events.slice(0, 2).map((event) => event.type)).toEqual(["turn_started", "timeline"]);
     appServer.completeTurn();
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    await new Promise<void>((resolve) => setImmediate(resolve));
     await session.close();
   });
 
@@ -3346,12 +3378,12 @@ describe("Codex app-server provider", () => {
     ]);
   });
 
-  test("converts Codex collab agent notifications through the normal timeline path", () => {
+  test("converts Codex collab agent notifications through the normal timeline path", async () => {
     const session = createSession();
     const events: AgentStreamEvent[] = [];
     session.subscribe((event) => events.push(event));
 
-    asInternals(session).handleNotification("item/started", {
+    await asInternals(session).handleNotification("item/started", {
       threadId: "test-thread",
       item: {
         type: "collabAgentToolCall",
@@ -3387,12 +3419,12 @@ describe("Codex app-server provider", () => {
     ]);
   });
 
-  test("folds child-thread Codex activity into the parent sub-agent tool call", () => {
+  test("folds child-thread Codex activity into the parent sub-agent tool call", async () => {
     const session = createSession();
     const events: AgentStreamEvent[] = [];
     session.subscribe((event) => events.push(event));
 
-    asInternals(session).handleNotification("item/completed", {
+    await asInternals(session).handleNotification("item/completed", {
       threadId: "test-thread",
       item: {
         type: "collabAgentToolCall",
@@ -3406,12 +3438,12 @@ describe("Codex app-server provider", () => {
         },
       },
     });
-    asInternals(session).handleNotification("item/agentMessage/delta", {
+    await asInternals(session).handleNotification("item/agentMessage/delta", {
       threadId: "child-thread-1",
       itemId: "child-message-1",
       delta: "Found",
     });
-    asInternals(session).handleNotification("item/completed", {
+    await asInternals(session).handleNotification("item/completed", {
       threadId: "child-thread-1",
       item: {
         type: "agentMessage",
@@ -3419,7 +3451,7 @@ describe("Codex app-server provider", () => {
         text: "Found the path.",
       },
     });
-    asInternals(session).handleNotification("turn/completed", {
+    await asInternals(session).handleNotification("turn/completed", {
       threadId: "child-thread-1",
       turn: { status: "completed" },
     });
@@ -3497,12 +3529,15 @@ describe("Codex app-server provider", () => {
         threadId: "settled-child-thread",
         agentPath: "/root/settled-child",
       });
+      await new Promise<void>((resolve) => setImmediate(resolve));
       appServer.completeTurn({ threadId: "settled-child-thread" });
+      await new Promise<void>((resolve) => setImmediate(resolve));
       appServer.says({
         threadId: "settled-child-thread",
         itemId: "late-child-message",
         text: "Late trailing output.",
       });
+      await new Promise<void>((resolve) => setImmediate(resolve));
 
       const providerUpserts = events.flatMap((event) =>
         event.type === "provider_subagent" && event.event.type === "upsert" ? [event.event] : [],
@@ -3526,6 +3561,7 @@ describe("Codex app-server provider", () => {
         agentPath: "/root/settled-child",
         kind: "interacted",
       });
+      await new Promise<void>((resolve) => setImmediate(resolve));
       expect(
         events.findLast(
           (event) => event.type === "provider_subagent" && event.event.type === "upsert",
@@ -3536,6 +3572,7 @@ describe("Codex app-server provider", () => {
         threadId: "settled-child-thread",
         turnId: "next-child-turn",
       });
+      await new Promise<void>((resolve) => setImmediate(resolve));
       expect(
         events.findLast(
           (event) => event.type === "provider_subagent" && event.event.type === "upsert",
@@ -3543,7 +3580,9 @@ describe("Codex app-server provider", () => {
       ).toMatchObject({ event: { id: "settled-child-thread", status: "running" } });
 
       appServer.completeTurn({ threadId: "settled-child-thread" });
+      await new Promise<void>((resolve) => setImmediate(resolve));
       appServer.completeTurn();
+      await new Promise<void>((resolve) => setImmediate(resolve));
       await resultPromise;
       appServer.assertNoErrors();
     } finally {
@@ -3551,12 +3590,12 @@ describe("Codex app-server provider", () => {
     }
   });
 
-  test("updates a registered child with its later native activity name", () => {
+  test("updates a registered child with its later native activity name", async () => {
     const session = createSession();
     const events: AgentStreamEvent[] = [];
     session.subscribe((event) => events.push(event));
 
-    asInternals(session).handleNotification("item/completed", {
+    await asInternals(session).handleNotification("item/completed", {
       threadId: "test-thread",
       item: {
         type: "collabAgentToolCall",
@@ -3570,7 +3609,7 @@ describe("Codex app-server provider", () => {
         },
       },
     });
-    asInternals(session).handleNotification("item/started", {
+    await asInternals(session).handleNotification("item/started", {
       threadId: "test-thread",
       item: {
         type: "subAgentActivity",
@@ -3605,11 +3644,11 @@ describe("Codex app-server provider", () => {
     });
   });
 
-  test("renders child MCP image results in the provider subagent timeline", () => {
+  test("renders child MCP image results in the provider subagent timeline", async () => {
     const session = createSession();
     const events: AgentStreamEvent[] = [];
     session.subscribe((event) => events.push(event));
-    asInternals(session).handleNotification("item/completed", {
+    await asInternals(session).handleNotification("item/completed", {
       threadId: "test-thread",
       item: {
         type: "subAgentActivity",
@@ -3620,7 +3659,7 @@ describe("Codex app-server provider", () => {
       },
     });
 
-    asInternals(session).handleNotification("item/completed", {
+    await asInternals(session).handleNotification("item/completed", {
       threadId: "image-child-thread",
       item: {
         id: "child-mcp-image",
@@ -3653,11 +3692,11 @@ describe("Codex app-server provider", () => {
     rmSync(source, { force: true });
   });
 
-  test("renders a child user message once across lifecycle notifications", () => {
+  test("renders a child user message once across lifecycle notifications", async () => {
     const session = createSession();
     const events: AgentStreamEvent[] = [];
     session.subscribe((event) => events.push(event));
-    asInternals(session).handleNotification("item/completed", {
+    await asInternals(session).handleNotification("item/completed", {
       threadId: "test-thread",
       item: {
         type: "subAgentActivity",
@@ -3673,11 +3712,11 @@ describe("Codex app-server provider", () => {
       content: [{ type: "text", text: "Inspect this path." }],
     };
 
-    asInternals(session).handleNotification("item/started", {
+    await asInternals(session).handleNotification("item/started", {
       threadId: "user-child-thread",
       item: childUserMessage,
     });
-    asInternals(session).handleNotification("item/completed", {
+    await asInternals(session).handleNotification("item/completed", {
       threadId: "user-child-thread",
       item: childUserMessage,
     });
@@ -3711,19 +3750,24 @@ describe("Codex app-server provider", () => {
         threadId: "child-thread-1",
         agentPath: "/root/child",
       });
+      await new Promise<void>((resolve) => setImmediate(resolve));
       appServer.says({
         threadId: "child-thread-1",
         itemId: "child-message-1",
         text: "Child findings.",
       });
+      await new Promise<void>((resolve) => setImmediate(resolve));
       appServer.completeTurn({ threadId: "child-thread-1" });
+      await new Promise<void>((resolve) => setImmediate(resolve));
       appServer.says({
         threadId: "thread-1",
         itemId: "parent-message-1",
         text: "Parent report.",
         chunks: ["Parent ", "report."],
       });
+      await new Promise<void>((resolve) => setImmediate(resolve));
       appServer.completeTurn();
+      await new Promise<void>((resolve) => setImmediate(resolve));
 
       const result = await resultPromise;
       expect(result.finalText).toBe("Parent report.");
@@ -3757,13 +3801,16 @@ describe("Codex app-server provider", () => {
         itemId: "first-parent-message",
         text: "First report.",
       });
+      await new Promise<void>((resolve) => setImmediate(resolve));
       appServer.says({
         threadId: "thread-1",
         itemId: "second-parent-message",
         text: "Second report.",
         chunks: ["", "Second report."],
       });
+      await new Promise<void>((resolve) => setImmediate(resolve));
       appServer.completeTurn();
+      await new Promise<void>((resolve) => setImmediate(resolve));
 
       const result = await resultPromise;
       expect(result.finalText).toBe("Second report.");
@@ -3788,8 +3835,11 @@ describe("Codex app-server provider", () => {
       await appServer.waitForTurnStart();
 
       appServer.says({ threadId: "thread-1", text: "First report." });
+      await new Promise<void>((resolve) => setImmediate(resolve));
       appServer.says({ threadId: "thread-1", text: "Second report." });
+      await new Promise<void>((resolve) => setImmediate(resolve));
       appServer.completeTurn();
+      await new Promise<void>((resolve) => setImmediate(resolve));
 
       const result = await resultPromise;
       expect(result.finalText).toBe("Second report.");
@@ -3813,23 +3863,29 @@ describe("Codex app-server provider", () => {
       await appServer.waitForTurnStart();
 
       appServer.startsTurn({ threadId: "child-thread-early" });
+      await new Promise<void>((resolve) => setImmediate(resolve));
       appServer.says({
         threadId: "child-thread-early",
         itemId: "child-message-early",
         text: "Early child findings.",
       });
+      await new Promise<void>((resolve) => setImmediate(resolve));
       appServer.completeTurn({ threadId: "child-thread-early" });
+      await new Promise<void>((resolve) => setImmediate(resolve));
       appServer.startsSubAgent({
         callId: "spawn-child-early",
         threadId: "child-thread-early",
         agentPath: "/root/early-child",
       });
+      await new Promise<void>((resolve) => setImmediate(resolve));
       appServer.says({
         threadId: "thread-1",
         itemId: "parent-message-after-early-child",
         text: "Parent report after replay.",
       });
+      await new Promise<void>((resolve) => setImmediate(resolve));
       appServer.completeTurn();
+      await new Promise<void>((resolve) => setImmediate(resolve));
 
       const result = await resultPromise;
       expect(result.finalText).toBe("Parent report after replay.");
@@ -3873,36 +3929,43 @@ describe("Codex app-server provider", () => {
         threadId: "child-thread-stable",
         agentPath: "/root/stable-child",
       });
+      await new Promise<void>((resolve) => setImmediate(resolve));
       appServer.beginsSubAgentActivity({
         callId: "message-child-stable",
         threadId: "child-thread-stable",
         agentPath: "/root/stable-child",
         kind: "interacted",
       });
+      await new Promise<void>((resolve) => setImmediate(resolve));
       appServer.completesSubAgentActivity({
         callId: "message-child-stable",
         threadId: "child-thread-stable",
         agentPath: "/root/stable-child",
         kind: "interacted",
       });
+      await new Promise<void>((resolve) => setImmediate(resolve));
       appServer.says({
         threadId: "child-thread-stable",
         itemId: "stable-child-message",
         text: "Still on the same card.",
       });
+      await new Promise<void>((resolve) => setImmediate(resolve));
       appServer.beginsSubAgentActivity({
         callId: "interrupt-child-stable",
         threadId: "child-thread-stable",
         agentPath: "/root/stable-child",
         kind: "interrupted",
       });
+      await new Promise<void>((resolve) => setImmediate(resolve));
       appServer.completesSubAgentActivity({
         callId: "interrupt-child-stable",
         threadId: "child-thread-stable",
         agentPath: "/root/stable-child",
         kind: "interrupted",
       });
+      await new Promise<void>((resolve) => setImmediate(resolve));
       appServer.completeTurn();
+      await new Promise<void>((resolve) => setImmediate(resolve));
 
       const result = await resultPromise;
       const toolCalls = result.timeline.filter((item) => item.type === "tool_call");
@@ -3937,6 +4000,7 @@ describe("Codex app-server provider", () => {
       await appServer.waitForTurnStart();
 
       appServer.completeTurn({ threadId: "child-thread-fast" });
+      await new Promise<void>((resolve) => setImmediate(resolve));
       const activity = {
         callId: "spawn-child-fast",
         threadId: "child-thread-fast",
@@ -3944,8 +4008,11 @@ describe("Codex app-server provider", () => {
         kind: "started" as const,
       };
       appServer.beginsSubAgentActivity(activity);
+      await new Promise<void>((resolve) => setImmediate(resolve));
       appServer.completesSubAgentActivity(activity);
+      await new Promise<void>((resolve) => setImmediate(resolve));
       appServer.completeTurn();
+      await new Promise<void>((resolve) => setImmediate(resolve));
 
       const result = await resultPromise;
       const toolCalls = result.timeline.filter((item) => item.type === "tool_call");
@@ -3974,16 +4041,20 @@ describe("Codex app-server provider", () => {
       await appServer.waitForTurnStart();
 
       appServer.completeTurn({ threadId: "child-late-compaction" });
+      await new Promise<void>((resolve) => setImmediate(resolve));
       appServer.completesCompaction({
         threadId: "child-late-compaction",
         itemId: "late-child-compaction",
       });
+      await new Promise<void>((resolve) => setImmediate(resolve));
       appServer.startsSubAgent({
         callId: "spawn-child-late-compaction",
         threadId: "child-late-compaction",
         agentPath: "/root/late-compaction",
       });
+      await new Promise<void>((resolve) => setImmediate(resolve));
       appServer.completeTurn();
+      await new Promise<void>((resolve) => setImmediate(resolve));
 
       const result = await resultPromise;
       const toolCalls = result.timeline.filter((item) => item.type === "tool_call");
@@ -4017,6 +4088,7 @@ describe("Codex app-server provider", () => {
         threadId: "legacy-tool-child",
         agentPath: "/root/legacy-tool-child",
       });
+      await new Promise<void>((resolve) => setImmediate(resolve));
       const command = {
         threadId: "legacy-tool-child",
         callId: "legacy-child-command",
@@ -4024,15 +4096,20 @@ describe("Codex app-server provider", () => {
         output: "child output",
       };
       appServer.runsLegacyCommand(command);
+      await new Promise<void>((resolve) => setImmediate(resolve));
       appServer.completesCommand(command);
+      await new Promise<void>((resolve) => setImmediate(resolve));
       appServer.appliesLegacyPatch({
         threadId: "legacy-tool-child",
         callId: "legacy-child-patch",
         path: "/workspace/project/src/child.ts",
         diff: "@@\n-old\n+new\n",
       });
+      await new Promise<void>((resolve) => setImmediate(resolve));
       appServer.completeTurn({ threadId: "legacy-tool-child" });
+      await new Promise<void>((resolve) => setImmediate(resolve));
       appServer.completeTurn();
+      await new Promise<void>((resolve) => setImmediate(resolve));
 
       const result = await resultPromise;
       const toolCalls = result.timeline.filter((item) => item.type === "tool_call");
@@ -4055,12 +4132,12 @@ describe("Codex app-server provider", () => {
     }
   });
 
-  test("keeps nested MultiAgentV2 output inside the root sub-agent card", () => {
+  test("keeps nested MultiAgentV2 output inside the root sub-agent card", async () => {
     const session = createSession();
     const events: AgentStreamEvent[] = [];
     session.subscribe((event) => events.push(event));
 
-    asInternals(session).handleNotification("item/completed", {
+    await asInternals(session).handleNotification("item/completed", {
       threadId: "test-thread",
       item: {
         type: "subAgentActivity",
@@ -4070,7 +4147,7 @@ describe("Codex app-server provider", () => {
         agentPath: "/root/child",
       },
     });
-    asInternals(session).handleNotification("item/completed", {
+    await asInternals(session).handleNotification("item/completed", {
       threadId: "child-thread-root",
       item: {
         type: "subAgentActivity",
@@ -4080,12 +4157,12 @@ describe("Codex app-server provider", () => {
         agentPath: "/root/child/grandchild",
       },
     });
-    asInternals(session).handleNotification("item/agentMessage/delta", {
+    await asInternals(session).handleNotification("item/agentMessage/delta", {
       threadId: "grandchild-thread",
       itemId: "grandchild-message",
       delta: "Grandchild findings.",
     });
-    asInternals(session).handleNotification("turn/completed", {
+    await asInternals(session).handleNotification("turn/completed", {
       threadId: "grandchild-thread",
       turn: { status: "completed" },
     });
@@ -4118,7 +4195,7 @@ describe("Codex app-server provider", () => {
       detail: { type: "sub_agent", log: expect.stringContaining("Grandchild findings.") },
     });
 
-    asInternals(session).handleNotification("turn/completed", {
+    await asInternals(session).handleNotification("turn/completed", {
       threadId: "child-thread-root",
       turn: { status: "completed" },
     });
@@ -4128,12 +4205,12 @@ describe("Codex app-server provider", () => {
     });
   });
 
-  test("keeps a nested child under its spawning parent after a root interaction", () => {
+  test("keeps a nested child under its spawning parent after a root interaction", async () => {
     const session = createSession();
     const events: AgentStreamEvent[] = [];
     session.subscribe((event) => events.push(event));
 
-    asInternals(session).handleNotification("item/completed", {
+    await asInternals(session).handleNotification("item/completed", {
       threadId: "test-thread",
       item: {
         type: "subAgentActivity",
@@ -4143,7 +4220,7 @@ describe("Codex app-server provider", () => {
         agentPath: "/root/child",
       },
     });
-    asInternals(session).handleNotification("item/completed", {
+    await asInternals(session).handleNotification("item/completed", {
       threadId: "child-thread-root",
       item: {
         type: "subAgentActivity",
@@ -4153,7 +4230,7 @@ describe("Codex app-server provider", () => {
         agentPath: "/root/child/grandchild",
       },
     });
-    asInternals(session).handleNotification("item/completed", {
+    await asInternals(session).handleNotification("item/completed", {
       threadId: "test-thread",
       item: {
         type: "collabAgentToolCall",
@@ -4166,7 +4243,7 @@ describe("Codex app-server provider", () => {
         },
       },
     });
-    asInternals(session).handleNotification("item/agentMessage/delta", {
+    await asInternals(session).handleNotification("item/agentMessage/delta", {
       threadId: "grandchild-thread",
       itemId: "grandchild-after-wait",
       delta: "Still nested.",
@@ -4192,28 +4269,28 @@ describe("Codex app-server provider", () => {
     });
   });
 
-  test("never treats an unmapped foreign terminal as the root terminal", () => {
+  test("never treats an unmapped foreign terminal as the root terminal", async () => {
     const session = createSession();
     const events: AgentStreamEvent[] = [];
     session.subscribe((event) => events.push(event));
 
-    asInternals(session).handleNotification("turn/completed", {
+    await asInternals(session).handleNotification("turn/completed", {
       threadId: "unmapped-child-thread",
       turn: { status: "completed" },
     });
     expect(events).toEqual([]);
 
-    asInternals(session).handleNotification("turn/completed", {
+    await asInternals(session).handleNotification("turn/completed", {
       threadId: "test-thread",
       turn: { status: "completed" },
     });
     expect(events.filter((event) => event.type === "turn_completed")).toHaveLength(1);
 
-    asInternals(session).handleNotification("turn/started", {
+    await asInternals(session).handleNotification("turn/started", {
       threadId: "test-thread",
       turn: { id: "next-root-turn" },
     });
-    asInternals(session).handleNotification("item/completed", {
+    await asInternals(session).handleNotification("item/completed", {
       threadId: "test-thread",
       item: {
         type: "subAgentActivity",
@@ -4229,12 +4306,12 @@ describe("Codex app-server provider", () => {
     });
   });
 
-  test("routes msg-scoped legacy Codex events to their child thread", () => {
+  test("routes msg-scoped legacy Codex events to their child thread", async () => {
     const session = createSession();
     const events: AgentStreamEvent[] = [];
     session.subscribe((event) => events.push(event));
 
-    asInternals(session).handleNotification("item/completed", {
+    await asInternals(session).handleNotification("item/completed", {
       threadId: "test-thread",
       item: {
         type: "subAgentActivity",
@@ -4244,7 +4321,7 @@ describe("Codex app-server provider", () => {
         agentPath: "/root/legacy-envelope-child",
       },
     });
-    asInternals(session).handleNotification("codex/event/exec_command_begin", {
+    await asInternals(session).handleNotification("codex/event/exec_command_begin", {
       msg: {
         type: "exec_command_begin",
         threadId: "legacy-envelope-child",
@@ -4252,7 +4329,7 @@ describe("Codex app-server provider", () => {
         command: "pwd",
       },
     });
-    asInternals(session).handleNotification("codex/event/task_complete", {
+    await asInternals(session).handleNotification("codex/event/task_complete", {
       msg: {
         type: "task_complete",
         thread_id: "legacy-envelope-child",
@@ -4290,7 +4367,7 @@ describe("Codex app-server provider", () => {
       },
     });
 
-    asInternals(session).handleNotification("codex/event/task_complete", {
+    await asInternals(session).handleNotification("codex/event/task_complete", {
       msg: { type: "task_complete" },
     });
     expect(events.filter((event) => event.type === "turn_completed")).toHaveLength(1);
@@ -4312,11 +4389,13 @@ describe("Codex app-server provider", () => {
       const spawn = waitForTimelineToolCall(session, "spawn-legacy-only-child");
 
       appServer.startsTurn({ threadId: "thread-1", turnId: "turn-with-legacy-only-child" });
+      await new Promise<void>((resolve) => setImmediate(resolve));
       appServer.startsLegacyOnlySubAgent({
         callId: "spawn-legacy-only-child",
         threadId: "legacy-only-child-thread",
         agentPath: "/root/legacy-only-child",
       });
+      await new Promise<void>((resolve) => setImmediate(resolve));
 
       await expect(child).resolves.toMatchObject({
         type: "provider_subagent",
@@ -4344,6 +4423,7 @@ describe("Codex app-server provider", () => {
       });
 
       appServer.completeTurn();
+      await new Promise<void>((resolve) => setImmediate(resolve));
       await resultPromise;
       appServer.assertNoErrors();
     } finally {
@@ -4368,10 +4448,12 @@ describe("Codex app-server provider", () => {
       const resultPromise = session.run("Wait for the child.");
       await appServer.waitForTurnStart();
       appServer.startsTurn({ threadId: "thread-1", turnId: "turn-waiting-for-child" });
+      await new Promise<void>((resolve) => setImmediate(resolve));
 
       await expect(session.interrupt()).rejects.toThrow("A foreground turn is already active");
 
       appServer.completeTurn();
+      await new Promise<void>((resolve) => setImmediate(resolve));
       await resultPromise;
       appServer.assertNoErrors();
     } finally {
@@ -4396,10 +4478,12 @@ describe("Codex app-server provider", () => {
       const resultPromise = session.run("Wait for the child.");
       await appServer.waitForTurnStart();
       appServer.startsTurn({ threadId: "thread-1", turnId: "turn-already-idle" });
+      await new Promise<void>((resolve) => setImmediate(resolve));
 
       await expect(session.interrupt()).resolves.toBeUndefined();
 
       appServer.completeTurn();
+      await new Promise<void>((resolve) => setImmediate(resolve));
       await resultPromise;
       appServer.assertNoErrors();
     } finally {
@@ -4428,10 +4512,12 @@ describe("Codex app-server provider", () => {
 
       const interruptPromise = session.interrupt();
       appServer.startsTurn({ threadId: "thread-1", turnId: "turn-identified-late" });
+      await new Promise<void>((resolve) => setImmediate(resolve));
       await interruptPromise;
 
       expect(interruptedTurns).toEqual([{ threadId: "thread-1", turnId: "turn-identified-late" }]);
       appServer.completeTurn();
+      await new Promise<void>((resolve) => setImmediate(resolve));
       await resultPromise;
       appServer.assertNoErrors();
     } finally {
@@ -4459,6 +4545,7 @@ describe("Codex app-server provider", () => {
       await appServer.waitForTurnStart();
       const interruptPromise = session.interrupt();
       appServer.completeTurn();
+      await new Promise<void>((resolve) => setImmediate(resolve));
 
       await expect(interruptPromise).resolves.toBeUndefined();
       await resultPromise;
@@ -4518,7 +4605,9 @@ describe("Codex app-server provider", () => {
       const nativeStart = await appServer.waitForTurnStart().catch(() => null);
       if (nativeStart) {
         appServer.startsTurn({ threadId: "thread-1", turnId: "cleanup-turn" });
+        await new Promise<void>((resolve) => setImmediate(resolve));
         appServer.completeTurn();
+        await new Promise<void>((resolve) => setImmediate(resolve));
       }
       await resultPromise.catch(() => undefined);
       await session.close();
@@ -4536,7 +4625,7 @@ describe("Codex app-server provider", () => {
       },
     };
 
-    asInternals(session).handleNotification("turn/started", {
+    await asInternals(session).handleNotification("turn/started", {
       threadId: "test-thread",
       turn: { id: "autonomous-turn" },
     });
@@ -4552,13 +4641,13 @@ describe("Codex app-server provider", () => {
     });
   });
 
-  test("never replaces the root identity with an early child thread start", () => {
+  test("never replaces the root identity with an early child thread start", async () => {
     const session = createSession();
 
-    asInternals(session).handleNotification("thread/started", {
+    await asInternals(session).handleNotification("thread/started", {
       thread: { id: "child-thread-started-early" },
     });
-    asInternals(session).handleNotification("item/completed", {
+    await asInternals(session).handleNotification("item/completed", {
       threadId: "test-thread",
       item: {
         type: "subAgentActivity",
@@ -4572,12 +4661,12 @@ describe("Codex app-server provider", () => {
     expect(session.currentThreadId).toBe("test-thread");
   });
 
-  test("does not leak aggregate child telemetry into the root timeline", () => {
+  test("does not leak aggregate child telemetry into the root timeline", async () => {
     const session = createSession();
     const events: AgentStreamEvent[] = [];
     session.subscribe((event) => events.push(event));
 
-    asInternals(session).handleNotification("item/completed", {
+    await asInternals(session).handleNotification("item/completed", {
       threadId: "test-thread",
       item: {
         type: "subAgentActivity",
@@ -4589,7 +4678,7 @@ describe("Codex app-server provider", () => {
     });
     const eventCountAfterSpawn = events.length;
 
-    asInternals(session).handleNotification("turn/plan/updated", {
+    await asInternals(session).handleNotification("turn/plan/updated", {
       threadId: "child-thread-telemetry",
       plan: [{ step: "Child-only plan", status: "inProgress" }],
     });
@@ -4597,12 +4686,12 @@ describe("Codex app-server provider", () => {
     expect(events).toHaveLength(eventCountAfterSpawn);
   });
 
-  test("keeps child context compaction inside the child card", () => {
+  test("keeps child context compaction inside the child card", async () => {
     const session = createSession();
     const events: AgentStreamEvent[] = [];
     session.subscribe((event) => events.push(event));
 
-    asInternals(session).handleNotification("item/completed", {
+    await asInternals(session).handleNotification("item/completed", {
       threadId: "test-thread",
       item: {
         type: "subAgentActivity",
@@ -4612,11 +4701,11 @@ describe("Codex app-server provider", () => {
         agentPath: "/root/compacting-child",
       },
     });
-    asInternals(session).handleNotification("item/started", {
+    await asInternals(session).handleNotification("item/started", {
       threadId: "child-thread-compaction",
       item: { type: "contextCompaction", id: "child-compaction" },
     });
-    asInternals(session).handleNotification("item/completed", {
+    await asInternals(session).handleNotification("item/completed", {
       threadId: "child-thread-compaction",
       item: { type: "contextCompaction", id: "child-compaction" },
     });
@@ -4636,12 +4725,12 @@ describe("Codex app-server provider", () => {
     });
   });
 
-  test("keeps the parent sub-agent running when a child command fails during the child turn", () => {
+  test("keeps the parent sub-agent running when a child command fails during the child turn", async () => {
     const session = createSession();
     const events: AgentStreamEvent[] = [];
     session.subscribe((event) => events.push(event));
 
-    asInternals(session).handleNotification("item/completed", {
+    await asInternals(session).handleNotification("item/completed", {
       threadId: "test-thread",
       item: {
         type: "collabAgentToolCall",
@@ -4655,7 +4744,7 @@ describe("Codex app-server provider", () => {
         },
       },
     });
-    asInternals(session).handleNotification("item/completed", {
+    await asInternals(session).handleNotification("item/completed", {
       threadId: "child-thread-1",
       item: {
         type: "commandExecution",
@@ -4682,12 +4771,12 @@ describe("Codex app-server provider", () => {
     });
   });
 
-  test("does not synthesize a parent sub-agent failure from child error state alone", () => {
+  test("does not synthesize a parent sub-agent failure from child error state alone", async () => {
     const session = createSession();
     const events: AgentStreamEvent[] = [];
     session.subscribe((event) => events.push(event));
 
-    asInternals(session).handleNotification("item/completed", {
+    await asInternals(session).handleNotification("item/completed", {
       threadId: "test-thread",
       item: {
         type: "collabAgentToolCall",
@@ -4938,11 +5027,11 @@ describe("Codex app-server provider", () => {
 
     const liveEvents: AgentStreamEvent[] = [];
     session.subscribe((event) => liveEvents.push(event));
-    asInternals(session).handleNotification("turn/started", {
+    await asInternals(session).handleNotification("turn/started", {
       threadId: "v2-child-thread",
       turn: { id: "v2-child-turn-after-resume" },
     });
-    asInternals(session).handleNotification("item/completed", {
+    await asInternals(session).handleNotification("item/completed", {
       threadId: "test-thread",
       item: {
         type: "subAgentActivity",
@@ -4952,7 +5041,7 @@ describe("Codex app-server provider", () => {
         agentPath: "/root/v2-child",
       },
     });
-    asInternals(session).handleNotification("item/agentMessage/delta", {
+    await asInternals(session).handleNotification("item/agentMessage/delta", {
       threadId: "v2-child-thread",
       itemId: "v2-child-message-after-resume",
       delta: "More findings after resume.",
@@ -4970,11 +5059,11 @@ describe("Codex app-server provider", () => {
     });
 
     liveEvents.length = 0;
-    asInternals(session).handleNotification("turn/started", {
+    await asInternals(session).handleNotification("turn/started", {
       threadId: "legacy-child-thread",
       turn: { id: "legacy-child-turn-after-resume" },
     });
-    asInternals(session).handleNotification("item/agentMessage/delta", {
+    await asInternals(session).handleNotification("item/agentMessage/delta", {
       threadId: "legacy-child-thread",
       itemId: "legacy-child-message-after-resume",
       delta: "Legacy findings after resume.",
@@ -5223,6 +5312,7 @@ describe("Codex app-server provider", () => {
         threadId: "child-thread",
         agentPath: "/root/child",
       });
+      await new Promise<void>((resolve) => setImmediate(resolve));
       await child;
       appServer.beginsSubAgentActivity({
         callId: "parent-interacted",
@@ -5231,7 +5321,9 @@ describe("Codex app-server provider", () => {
         kind: "interacted",
         agentPath: "/root",
       });
+      await new Promise<void>((resolve) => setImmediate(resolve));
       appServer.completeTurn();
+      await new Promise<void>((resolve) => setImmediate(resolve));
       await resultPromise;
 
       expect(providerSubagentIds).toEqual(new Set(["child-thread"]));
@@ -5363,7 +5455,7 @@ describe("Codex app-server provider", () => {
     ]);
   });
 
-  test("captures live Codex user message ids from item events", () => {
+  test("captures live Codex user message ids from item events", async () => {
     const session = createSession();
     const events: AgentStreamEvent[] = [];
     session.subscribe((event) => events.push(event));
@@ -5374,11 +5466,11 @@ describe("Codex app-server provider", () => {
       content: [{ type: "text", text: "Use the native Codex id." }],
     };
 
-    asInternals(session).handleNotification("item/started", {
+    await asInternals(session).handleNotification("item/started", {
       threadId: "test-thread",
       item: userMessageItem,
     });
-    asInternals(session).handleNotification("item/completed", {
+    await asInternals(session).handleNotification("item/completed", {
       threadId: "test-thread",
       item: userMessageItem,
     });
@@ -5397,19 +5489,19 @@ describe("Codex app-server provider", () => {
     ]);
   });
 
-  test("emits Codex context compaction markers from live thread items", () => {
+  test("emits Codex context compaction markers from live thread items", async () => {
     const session = createSession();
     const events: AgentStreamEvent[] = [];
     session.subscribe((event) => events.push(event));
 
-    asInternals(session).handleNotification("item/started", {
+    await asInternals(session).handleNotification("item/started", {
       threadId: "test-thread",
       item: {
         type: "contextCompaction",
         id: "compact-live",
       },
     });
-    asInternals(session).handleNotification("item/completed", {
+    await asInternals(session).handleNotification("item/completed", {
       threadId: "test-thread",
       item: {
         type: "contextCompaction",
@@ -5447,7 +5539,9 @@ describe("Codex app-server provider", () => {
         threadId: "thread-1",
         itemId: "compact-without-completion",
       });
+      await new Promise<void>((resolve) => setImmediate(resolve));
       appServer.completeTurn();
+      await new Promise<void>((resolve) => setImmediate(resolve));
       await terminalEvent;
 
       expect(
@@ -5469,11 +5563,14 @@ describe("Codex app-server provider", () => {
         threadId: "thread-1",
         itemId: "compact-completed-normally",
       });
+      await new Promise<void>((resolve) => setImmediate(resolve));
       appServer.completesCompaction({
         threadId: "thread-1",
         itemId: "compact-completed-normally",
       });
+      await new Promise<void>((resolve) => setImmediate(resolve));
       appServer.completeTurn();
+      await new Promise<void>((resolve) => setImmediate(resolve));
       await terminalEvent;
 
       expect(
@@ -5492,8 +5589,11 @@ describe("Codex app-server provider", () => {
 
     try {
       appServer.startsCompaction({ threadId: "thread-1", itemId: "current-compaction" });
+      await new Promise<void>((resolve) => setImmediate(resolve));
       appServer.completesCompaction({ threadId: "thread-1", itemId: "older-compaction" });
+      await new Promise<void>((resolve) => setImmediate(resolve));
       appServer.completeTurn();
+      await new Promise<void>((resolve) => setImmediate(resolve));
       await terminalEvent;
 
       expect(
@@ -5515,10 +5615,12 @@ describe("Codex app-server provider", () => {
 
     try {
       appServer.startsCompaction({ threadId: "thread-1", itemId: `compact-${status}` });
+      await new Promise<void>((resolve) => setImmediate(resolve));
       appServer.completeTurn({
         status,
         error: status === "failed" ? { message: "Compaction failed" } : null,
       });
+      await new Promise<void>((resolve) => setImmediate(resolve));
       await terminalEvent;
 
       expect(
@@ -5532,17 +5634,17 @@ describe("Codex app-server provider", () => {
     }
   });
 
-  test("emits and dedupes Codex thread/compacted notifications", () => {
+  test("emits and dedupes Codex thread/compacted notifications", async () => {
     const session = createSession();
     session.activeForegroundTurnId = null;
     const events: AgentStreamEvent[] = [];
     session.subscribe((event) => events.push(event));
 
-    asInternals(session).handleNotification("thread/compacted", {
+    await asInternals(session).handleNotification("thread/compacted", {
       threadId: "test-thread",
       turnId: "legacy-compact-turn",
     });
-    asInternals(session).handleNotification("item/completed", {
+    await asInternals(session).handleNotification("item/completed", {
       threadId: "test-thread",
       item: {
         type: "contextCompaction",
@@ -5563,17 +5665,17 @@ describe("Codex app-server provider", () => {
     ]);
   });
 
-  test("emits consecutive Codex thread/compacted notifications", () => {
+  test("emits consecutive Codex thread/compacted notifications", async () => {
     const session = createSession();
     session.activeForegroundTurnId = null;
     const events: AgentStreamEvent[] = [];
     session.subscribe((event) => events.push(event));
 
-    asInternals(session).handleNotification("thread/compacted", {
+    await asInternals(session).handleNotification("thread/compacted", {
       threadId: "test-thread",
       turnId: "legacy-compact-turn-1",
     });
-    asInternals(session).handleNotification("thread/compacted", {
+    await asInternals(session).handleNotification("thread/compacted", {
       threadId: "test-thread",
       turnId: "legacy-compact-turn-2",
     });
@@ -5699,14 +5801,14 @@ describe("Codex app-server provider", () => {
     const events: AgentStreamEvent[] = [];
     session.subscribe((event) => events.push(event));
     await handler?.run({ emit: (event) => events.push(event) });
-    asInternals(session).handleNotification("item/started", {
+    await asInternals(session).handleNotification("item/started", {
       threadId: "test-thread",
       item: {
         type: "contextCompaction",
         id: "manual-compact",
       },
     });
-    asInternals(session).handleNotification("item/completed", {
+    await asInternals(session).handleNotification("item/completed", {
       threadId: "test-thread",
       item: {
         type: "contextCompaction",
@@ -5821,23 +5923,23 @@ describe("Codex app-server provider", () => {
     });
   });
 
-  test("emits a synthetic plan approval permission after a successful Codex plan turn", () => {
+  test("emits a synthetic plan approval permission after a successful Codex plan turn", async () => {
     const session = createSession({
       featureValues: { plan_mode: true, fast_mode: true },
     });
     const events: AgentStreamEvent[] = [];
     session.subscribe((event) => events.push(event));
 
-    asInternals(session).handleNotification("turn/started", {
+    await asInternals(session).handleNotification("turn/started", {
       turn: { id: "turn-plan-1" },
     });
-    asInternals(session).handleNotification("turn/plan/updated", {
+    await asInternals(session).handleNotification("turn/plan/updated", {
       plan: [
         { step: "Inspect the existing auth flow", status: "completed" },
         { step: "Implement the button behavior", status: "pending" },
       ],
     });
-    asInternals(session).handleNotification("turn/completed", {
+    await asInternals(session).handleNotification("turn/completed", {
       turn: { status: "completed", error: null },
     });
 
@@ -5891,24 +5993,24 @@ describe("Codex app-server provider", () => {
     });
   });
 
-  test("does not complete Codex plan timeline cards while plan approval is pending", () => {
+  test("does not complete Codex plan timeline cards while plan approval is pending", async () => {
     const session = createSession({
       featureValues: { plan_mode: true, fast_mode: true },
     });
     const events: AgentStreamEvent[] = [];
     session.subscribe((event) => events.push(event));
 
-    asInternals(session).handleNotification("turn/started", {
+    await asInternals(session).handleNotification("turn/started", {
       turn: { id: "turn-plan-thread-item" },
     });
-    asInternals(session).handleNotification("item/completed", {
+    await asInternals(session).handleNotification("item/completed", {
       item: {
         id: "plan-item-1",
         type: "plan",
         text: "- Inspect README\n- Add a short note",
       },
     });
-    asInternals(session).handleNotification("turn/completed", {
+    await asInternals(session).handleNotification("turn/completed", {
       turn: { status: "completed", error: null },
     });
 
@@ -5937,28 +6039,28 @@ describe("Codex app-server provider", () => {
     });
   });
 
-  test("replaces a pending synthetic plan approval when a later plan completes", () => {
+  test("replaces a pending synthetic plan approval when a later plan completes", async () => {
     const session = createSession({
       featureValues: { plan_mode: true },
     });
 
-    asInternals(session).handleNotification("turn/started", {
+    await asInternals(session).handleNotification("turn/started", {
       turn: { id: "turn-plan-first" },
     });
-    asInternals(session).handleNotification("turn/plan/updated", {
+    await asInternals(session).handleNotification("turn/plan/updated", {
       plan: [{ step: "Implement the first plan", status: "pending" }],
     });
-    asInternals(session).handleNotification("turn/completed", {
+    await asInternals(session).handleNotification("turn/completed", {
       turn: { status: "completed", error: null },
     });
 
-    asInternals(session).handleNotification("turn/started", {
+    await asInternals(session).handleNotification("turn/started", {
       turn: { id: "turn-plan-second" },
     });
-    asInternals(session).handleNotification("turn/plan/updated", {
+    await asInternals(session).handleNotification("turn/plan/updated", {
       plan: [{ step: "Implement the revised plan", status: "pending" }],
     });
-    asInternals(session).handleNotification("turn/completed", {
+    await asInternals(session).handleNotification("turn/completed", {
       turn: { status: "completed", error: null },
     });
 
@@ -5977,13 +6079,13 @@ describe("Codex app-server provider", () => {
     const events: AgentStreamEvent[] = [];
     session.subscribe((event) => events.push(event));
 
-    asInternals(session).handleNotification("turn/started", {
+    await asInternals(session).handleNotification("turn/started", {
       turn: { id: "turn-plan-pending" },
     });
-    asInternals(session).handleNotification("turn/plan/updated", {
+    await asInternals(session).handleNotification("turn/plan/updated", {
       plan: [{ step: "Implement the original plan", status: "pending" }],
     });
-    asInternals(session).handleNotification("turn/completed", {
+    await asInternals(session).handleNotification("turn/completed", {
       turn: { status: "completed", error: null },
     });
     const pendingPlan = session.getPendingPermissions()[0];
@@ -6017,13 +6119,13 @@ describe("Codex app-server provider", () => {
       featureValues: { plan_mode: true },
     });
 
-    asInternals(session).handleNotification("turn/started", {
+    await asInternals(session).handleNotification("turn/started", {
       turn: { id: "turn-plan-pending" },
     });
-    asInternals(session).handleNotification("turn/plan/updated", {
+    await asInternals(session).handleNotification("turn/plan/updated", {
       plan: [{ step: "Implement the original plan", status: "pending" }],
     });
-    asInternals(session).handleNotification("turn/completed", {
+    await asInternals(session).handleNotification("turn/completed", {
       turn: { status: "completed", error: null },
     });
     const pendingPlan = session.getPendingPermissions()[0];
@@ -6071,13 +6173,13 @@ describe("Codex app-server provider", () => {
       featureValues: { plan_mode: true },
     });
 
-    asInternals(session).handleNotification("turn/started", {
+    await asInternals(session).handleNotification("turn/started", {
       turn: { id: "turn-plan-pending" },
     });
-    asInternals(session).handleNotification("turn/plan/updated", {
+    await asInternals(session).handleNotification("turn/plan/updated", {
       plan: [{ step: "Implement the original plan", status: "pending" }],
     });
-    asInternals(session).handleNotification("turn/completed", {
+    await asInternals(session).handleNotification("turn/completed", {
       turn: { status: "completed", error: null },
     });
 
@@ -6102,10 +6204,10 @@ describe("Codex app-server provider", () => {
 
     const startTurn = session.startTurn("Revise the plan");
     await promptRequested;
-    asInternals(session).handleNotification("turn/plan/updated", {
+    await asInternals(session).handleNotification("turn/plan/updated", {
       plan: [{ step: "Implement the newer plan", status: "pending" }],
     });
-    asInternals(session).handleNotification("turn/completed", {
+    await asInternals(session).handleNotification("turn/completed", {
       turn: { status: "completed", error: null },
     });
     acceptPrompt?.();
@@ -6121,13 +6223,13 @@ describe("Codex app-server provider", () => {
       featureValues: { plan_mode: true },
     });
 
-    asInternals(session).handleNotification("turn/started", {
+    await asInternals(session).handleNotification("turn/started", {
       turn: { id: "turn-plan-pending" },
     });
-    asInternals(session).handleNotification("turn/plan/updated", {
+    await asInternals(session).handleNotification("turn/plan/updated", {
       plan: [{ step: "Implement the original plan", status: "pending" }],
     });
-    asInternals(session).handleNotification("turn/completed", {
+    await asInternals(session).handleNotification("turn/completed", {
       turn: { status: "completed", error: null },
     });
     const pendingPlan = session.getPendingPermissions()[0];
@@ -6147,12 +6249,12 @@ describe("Codex app-server provider", () => {
     expect(session.getPendingPermissions()).toEqual([]);
   });
 
-  test("emits imageView paths with spaces as valid assistant markdown images", () => {
+  test("emits imageView paths with spaces as valid assistant markdown images", async () => {
     const session = createSession();
     const events: AgentStreamEvent[] = [];
     session.subscribe((event) => events.push(event));
 
-    asInternals(session).handleNotification("item/completed", {
+    await asInternals(session).handleNotification("item/completed", {
       item: {
         id: "image-view-1",
         type: "imageView",
@@ -6178,12 +6280,12 @@ describe("Codex app-server provider", () => {
     ["saved_path", { saved_path: "/tmp/generated-snake.png" }, "file:///tmp/generated-snake.png"],
   ])(
     "emits imageGeneration thread items with %s as assistant markdown images",
-    (_fieldName, imageFields, expectedPath) => {
+    async (_fieldName, imageFields, expectedPath) => {
       const session = createSession();
       const events: AgentStreamEvent[] = [];
       session.subscribe((event) => events.push(event));
 
-      asInternals(session).handleNotification("item/completed", {
+      await asInternals(session).handleNotification("item/completed", {
         item: {
           id: `image-generation-${_fieldName}`,
           type: "imageGeneration",
@@ -6206,12 +6308,12 @@ describe("Codex app-server provider", () => {
     },
   );
 
-  test("materializes imageGeneration base64 results before rendering markdown", () => {
+  test("materializes imageGeneration base64 results before rendering markdown", async () => {
     const session = createSession();
     const events: AgentStreamEvent[] = [];
     session.subscribe((event) => events.push(event));
 
-    asInternals(session).handleNotification("item/completed", {
+    await asInternals(session).handleNotification("item/completed", {
       item: {
         id: "image-generation-base64",
         type: "imageGeneration",
@@ -6359,21 +6461,22 @@ describe("Codex app-server provider", () => {
     }
   });
 
-  test("ignores incomplete imageGeneration thread items without failing the turn", () => {
+  test("ignores incomplete imageGeneration thread items without failing the turn", async () => {
     const session = createSession();
     const events: AgentStreamEvent[] = [];
     session.subscribe((event) => events.push(event));
 
-    expect(() =>
-      asInternals(session).handleNotification("item/completed", {
-        item: {
-          id: "image-generation-incomplete",
-          type: "imageGeneration",
-          status: "in_progress",
-        },
-      }),
+    expect(
+      async () =>
+        await asInternals(session).handleNotification("item/completed", {
+          item: {
+            id: "image-generation-incomplete",
+            type: "imageGeneration",
+            status: "in_progress",
+          },
+        }),
     ).not.toThrow();
-    asInternals(session).handleNotification("turn/completed", {
+    await asInternals(session).handleNotification("turn/completed", {
       turn: { status: "completed", error: null },
     });
 
@@ -6396,12 +6499,12 @@ describe("Codex app-server provider", () => {
     ["no failure details", null, { message: "Image generation failed" }],
   ])(
     "emits failed imageGeneration items with %s as failed tool calls",
-    (_label, failure, expectedError) => {
+    async (_label, failure, expectedError) => {
       const session = createSession();
       const events: AgentStreamEvent[] = [];
       session.subscribe((event) => events.push(event));
 
-      asInternals(session).handleNotification("item/completed", {
+      await asInternals(session).handleNotification("item/completed", {
         item: {
           id: "image-generation-failed",
           type: "imageGeneration",
@@ -6488,12 +6591,12 @@ describe("Codex app-server provider", () => {
     ]);
   });
 
-  test("emits usage_updated on token usage updates and keeps usage on turn completion", () => {
+  test("emits usage_updated on token usage updates and keeps usage on turn completion", async () => {
     const session = createSession();
     const events: AgentStreamEvent[] = [];
     session.subscribe((event) => events.push(event));
 
-    asInternals(session).handleNotification("thread/tokenUsage/updated", {
+    await asInternals(session).handleNotification("thread/tokenUsage/updated", {
       tokenUsage: {
         model_context_window: 200000,
         last: {
@@ -6504,7 +6607,7 @@ describe("Codex app-server provider", () => {
         },
       },
     });
-    asInternals(session).handleNotification("turn/completed", {
+    await asInternals(session).handleNotification("turn/completed", {
       turn: { status: "completed", error: null },
     });
 
@@ -6534,20 +6637,20 @@ describe("Codex app-server provider", () => {
     });
   });
 
-  test("streams Codex assistant message deltas and does not replay completed text", () => {
+  test("streams Codex assistant message deltas and does not replay completed text", async () => {
     const session = createSession();
     const events: AgentStreamEvent[] = [];
     session.subscribe((event) => events.push(event));
 
-    asInternals(session).handleNotification("item/agentMessage/delta", {
+    await asInternals(session).handleNotification("item/agentMessage/delta", {
       itemId: "assistant-item-1",
       delta: "Hel",
     });
-    asInternals(session).handleNotification("item/agentMessage/delta", {
+    await asInternals(session).handleNotification("item/agentMessage/delta", {
       itemId: "assistant-item-1",
       delta: "lo",
     });
-    asInternals(session).handleNotification("item/completed", {
+    await asInternals(session).handleNotification("item/completed", {
       item: {
         id: "assistant-item-1",
         type: "agentMessage",
@@ -6571,20 +6674,20 @@ describe("Codex app-server provider", () => {
     ]);
   });
 
-  test("emits only the missing assistant suffix when completed text extends streamed deltas", () => {
+  test("emits only the missing assistant suffix when completed text extends streamed deltas", async () => {
     const session = createSession();
     const events: AgentStreamEvent[] = [];
     session.subscribe((event) => events.push(event));
 
-    asInternals(session).handleNotification("item/agentMessage/delta", {
+    await asInternals(session).handleNotification("item/agentMessage/delta", {
       itemId: "assistant-item-2",
       delta: "Hel",
     });
-    asInternals(session).handleNotification("item/agentMessage/delta", {
+    await asInternals(session).handleNotification("item/agentMessage/delta", {
       itemId: "assistant-item-2",
       delta: "lo",
     });
-    asInternals(session).handleNotification("item/completed", {
+    await asInternals(session).handleNotification("item/completed", {
       item: {
         id: "assistant-item-2",
         type: "agentMessage",
@@ -6614,24 +6717,24 @@ describe("Codex app-server provider", () => {
     ]);
   });
 
-  test("emits a markdown divider when a new Codex assistant item starts after the previous one completed", () => {
+  test("emits a markdown divider when a new Codex assistant item starts after the previous one completed", async () => {
     const session = createSession();
     const events: AgentStreamEvent[] = [];
     session.subscribe((event) => events.push(event));
 
-    asInternals(session).handleNotification("item/agentMessage/delta", {
+    await asInternals(session).handleNotification("item/agentMessage/delta", {
       itemId: "assistant-item-3",
       delta:
         "I’m in the waiting phase now. The next read is intentionally delayed so we get meaningful CI state instead of churn.",
     });
-    asInternals(session).handleNotification("item/completed", {
+    await asInternals(session).handleNotification("item/completed", {
       item: {
         id: "assistant-item-3",
         type: "agentMessage",
         text: "I’m in the waiting phase now. The next read is intentionally delayed so we get meaningful CI state instead of churn.",
       },
     });
-    asInternals(session).handleNotification("item/agentMessage/delta", {
+    await asInternals(session).handleNotification("item/agentMessage/delta", {
       itemId: "assistant-item-4",
       delta:
         "CI is still cooking. I’m staying on the current run rather than jumping around, because the first red job will tell us exactly whether anything else needs work.",
@@ -6661,20 +6764,20 @@ describe("Codex app-server provider", () => {
     ]);
   });
 
-  test("streams Codex reasoning deltas and does not replay completed reasoning", () => {
+  test("streams Codex reasoning deltas and does not replay completed reasoning", async () => {
     const session = createSession();
     const events: AgentStreamEvent[] = [];
     session.subscribe((event) => events.push(event));
 
-    asInternals(session).handleNotification("item/reasoning/summaryTextDelta", {
+    await asInternals(session).handleNotification("item/reasoning/summaryTextDelta", {
       itemId: "reasoning-item-1",
       delta: "Think",
     });
-    asInternals(session).handleNotification("item/reasoning/summaryTextDelta", {
+    await asInternals(session).handleNotification("item/reasoning/summaryTextDelta", {
       itemId: "reasoning-item-1",
       delta: "ing",
     });
-    asInternals(session).handleNotification("item/completed", {
+    await asInternals(session).handleNotification("item/completed", {
       item: {
         id: "reasoning-item-1",
         type: "reasoning",
@@ -6698,20 +6801,20 @@ describe("Codex app-server provider", () => {
     ]);
   });
 
-  test("emits only the missing reasoning suffix when completed reasoning extends streamed deltas", () => {
+  test("emits only the missing reasoning suffix when completed reasoning extends streamed deltas", async () => {
     const session = createSession();
     const events: AgentStreamEvent[] = [];
     session.subscribe((event) => events.push(event));
 
-    asInternals(session).handleNotification("item/reasoning/summaryTextDelta", {
+    await asInternals(session).handleNotification("item/reasoning/summaryTextDelta", {
       itemId: "reasoning-item-2",
       delta: "Think",
     });
-    asInternals(session).handleNotification("item/reasoning/summaryTextDelta", {
+    await asInternals(session).handleNotification("item/reasoning/summaryTextDelta", {
       itemId: "reasoning-item-2",
       delta: "ing",
     });
-    asInternals(session).handleNotification("item/completed", {
+    await asInternals(session).handleNotification("item/completed", {
       item: {
         id: "reasoning-item-2",
         type: "reasoning",
@@ -6748,13 +6851,13 @@ describe("Codex app-server provider", () => {
     const events: AgentStreamEvent[] = [];
     session.subscribe((event) => events.push(event));
 
-    asInternals(session).handleNotification("turn/started", {
+    await asInternals(session).handleNotification("turn/started", {
       turn: { id: "turn-plan-2" },
     });
-    asInternals(session).handleNotification("turn/plan/updated", {
+    await asInternals(session).handleNotification("turn/plan/updated", {
       plan: [{ step: "Implement the new flow", status: "pending" }],
     });
-    asInternals(session).handleNotification("turn/completed", {
+    await asInternals(session).handleNotification("turn/completed", {
       turn: { status: "completed", error: null },
     });
 
@@ -6802,13 +6905,13 @@ describe("Codex app-server provider", () => {
     const events: AgentStreamEvent[] = [];
     session.subscribe((event) => events.push(event));
 
-    asInternals(session).handleNotification("turn/started", {
+    await asInternals(session).handleNotification("turn/started", {
       turn: { id: "turn-plan-3" },
     });
-    asInternals(session).handleNotification("turn/plan/updated", {
+    await asInternals(session).handleNotification("turn/plan/updated", {
       plan: [{ step: "Implement the safe flow", status: "pending" }],
     });
-    asInternals(session).handleNotification("turn/completed", {
+    await asInternals(session).handleNotification("turn/completed", {
       turn: { status: "completed", error: null },
     });
 
@@ -6870,13 +6973,13 @@ describe("Codex app-server provider", () => {
     const events: AgentStreamEvent[] = [];
     session.subscribe((event) => events.push(event));
 
-    asInternals(session).handleNotification("turn/started", {
+    await asInternals(session).handleNotification("turn/started", {
       turn: { id: "turn-plan-4" },
     });
-    asInternals(session).handleNotification("turn/plan/updated", {
+    await asInternals(session).handleNotification("turn/plan/updated", {
       plan: [{ step: "Implement the fast flow", status: "pending" }],
     });
-    asInternals(session).handleNotification("turn/completed", {
+    await asInternals(session).handleNotification("turn/completed", {
       turn: { status: "completed", error: null },
     });
 
@@ -7347,6 +7450,7 @@ test("Codex runtime safety queries live terminals and retains unsupported app se
     await appServer.waitForTurnStart();
     expect(await session.canStopRuntime()).toBe(false);
     appServer.completeTurn({ threadId: "thread-1" });
+    await new Promise<void>((resolve) => setImmediate(resolve));
     await expect.poll(() => session.canStopRuntime()).toBe(true);
     response = { data: [{ processId: "shell-1" }], nextCursor: null };
     expect(await session.canStopRuntime()).toBe(false);
@@ -7360,6 +7464,63 @@ test("Codex runtime safety queries live terminals and retains unsupported app se
         .findLast((request) => request.method === "thread/backgroundTerminals/list"),
     ).toMatchObject({ params: { threadId: "thread-1" } });
     appServer.assertNoErrors();
+  } finally {
+    await session.close();
+  }
+});
+
+test("publishes a materialized image before dispatching the following turn completion", async () => {
+  const appServer = createFakeCodexAppServer();
+  const session = new CodexAppServerAgentSession(
+    createConfig(),
+    null,
+    createTestLogger(),
+    async () => appServer.child,
+  );
+  const events: AgentStreamEvent[] = [];
+  session.subscribe((event) => events.push(event));
+  try {
+    await session.startTurn("generate an image");
+    const data = Buffer.alloc(1024 * 1024, 47).toString("base64");
+    const imageFrame =
+      JSON.stringify({
+        method: "item/completed",
+        params: {
+          item: {
+            id: "ordered-image",
+            type: "imageGeneration",
+            status: "completed",
+            result: { data, mimeType: "image/png" },
+          },
+        },
+      }) + "\n";
+    const completed = new Promise<void>((resolve) =>
+      session.subscribe((event) => {
+        if (event.type === "turn_completed") resolve();
+      }),
+    );
+    appServer.child.stdout.write(imageFrame);
+    appServer.child.stdout.write(
+      JSON.stringify({
+        method: "turn/completed",
+        params: { turn: { status: "completed", error: null } },
+      }) + "\n",
+    );
+    await completed;
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    const imageIndex = events.findIndex(
+      (event) =>
+        event.type === "timeline" &&
+        event.item.type === "assistant_message" &&
+        event.item.text.includes("![Image]"),
+    );
+    const completedIndex = events.findIndex((event) => event.type === "turn_completed");
+    expect(imageIndex).toBeGreaterThanOrEqual(0);
+    expect(imageIndex).toBeLessThan(completedIndex);
+    const imageEvent = events[imageIndex];
+    if (imageEvent.type !== "timeline" || imageEvent.item.type !== "assistant_message")
+      throw new Error("Expected image");
+    expect(existsSync(markdownImageSource(imageEvent.item.text))).toBe(true);
   } finally {
     await session.close();
   }

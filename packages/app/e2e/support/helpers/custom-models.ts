@@ -17,6 +17,9 @@ export async function addCustomModel(page: Page, id: string): Promise<void> {
   await editor.getByPlaceholder("e.g. openai/gpt-5").fill(id);
   await editor.getByRole("button", { name: "Save", exact: true }).click();
   await expect(page.getByRole("button", { name: `Remove ${id}`, exact: true })).toHaveCount(1);
+  // Config updates before provider refresh finishes and dismisses the add sheet.
+  // Resizing or interacting with the model list must wait for that save to finish.
+  await expect(page.getByTestId("add-custom-model-sheet")).toBeHidden();
 }
 
 export async function removeCustomModel(page: Page, id: string): Promise<void> {

@@ -1,6 +1,7 @@
 import { isRenderUiToolName } from "@getpaseo/protocol/tool-name-normalization";
+import { isTurnTrigger, isTurnBoundary } from "@/agent-stream/turn-membership";
 import type { ToolCallDetail } from "@getpaseo/protocol/agent-types";
-import type { StreamItem, ToolCallItem } from "@/types/stream";
+import type { StreamItem, ToolCallItem, ThoughtItem } from "@/types/stream";
 
 export interface ToolCallDescriptor {
   detail: ToolCallDetail;
@@ -10,17 +11,19 @@ export interface ToolCallDescriptor {
   metadata?: Record<string, unknown>;
 }
 
+export type GroupableItem = ToolCallItem | ThoughtItem;
+
 export interface ToolCallRun {
   id: string;
-  calls: readonly ToolCallItem[];
-  latest: ToolCallItem;
+  calls: readonly GroupableItem[];
+  latest: GroupableItem;
   isSealed: boolean;
 }
 
 export interface GroupedHistory<TGroup> {
   tail: StreamItem[];
   groupsByHostId: Map<string, TGroup>;
-  pendingCalls: readonly ToolCallItem[];
+  pendingCalls: readonly GroupableItem[];
 }
 
 export interface GroupedToolCalls<TGroup> {
@@ -63,8 +66,12 @@ export function describeToolCall(item: ToolCallItem): ToolCallDescriptor {
   };
 }
 
-export function isGroupableToolCall(item: StreamItem): item is ToolCallItem {
-  if (item.kind !== "tool_call") {
+export function isGroupableToolCall(
+  item: StreamItem,
+  autoExpandReasoning = false,
+): item is GroupableItem {
+  if (item.kind === "thought") return !autoExpandReasoning;
+  if (item.kind !== "tool_call" || isTurnTrigger(item)) {
     return false;
   }
   const descriptor = describeToolCall(item);
@@ -76,7 +83,7 @@ export function isGroupableToolCall(item: StreamItem): item is ToolCallItem {
   );
 }
 
-function createRun(calls: readonly ToolCallItem[], isSealed: boolean): ToolCallRun {
+function createRun(calls: readonly GroupableItem[], isSealed: boolean): ToolCallRun {
   const first = calls[0];
   const latest = calls.at(-1);
   if (!first || !latest) {
@@ -85,20 +92,21 @@ function createRun(calls: readonly ToolCallItem[], isSealed: boolean): ToolCallR
   return { id: first.id, calls, latest, isSealed };
 }
 
-function createHost(run: ToolCallRun): ToolCallItem {
+function createHost(run: ToolCallRun): GroupableItem {
   if (run.calls.length === 1) {
     return run.latest;
   }
   return { ...run.latest, id: run.id };
 }
 
-function isRunning(call: ToolCallItem): boolean {
+function isRunning(call: GroupableItem): boolean {
+  if (call.kind === "thought") return call.status !== "ready";
   const status = describeToolCall(call).status;
   return status === "running" || status === "executing";
 }
 
 function appendRun<TGroup>(input: {
-  calls: readonly ToolCallItem[];
+  calls: readonly GroupableItem[];
   isSealed: boolean;
   output: StreamItem[];
   groups: Map<string, TGroup>;
@@ -116,13 +124,17 @@ function appendRun<TGroup>(input: {
 export function prepareGroupedHistory<TGroup>(input: {
   tail: StreamItem[];
   buildGroup: (run: ToolCallRun) => TGroup;
+  autoExpandReasoning?: boolean;
 }): GroupedHistory<TGroup> {
   const output: StreamItem[] = [];
   const groups = new Map<string, TGroup>();
-  let pending: ToolCallItem[] = [];
+  let pending: GroupableItem[] = [];
 
   for (const item of input.tail) {
-    if (isGroupableToolCall(item)) {
+    if (
+      isGroupableToolCall(item, input.autoExpandReasoning) &&
+      !isTurnBoundary(pending.at(-1) ?? null, item)
+    ) {
       pending.push(item);
       continue;
     }
@@ -134,7 +146,8 @@ export function prepareGroupedHistory<TGroup>(input: {
       buildGroup: input.buildGroup,
     });
     pending = [];
-    output.push(item);
+    if (isGroupableToolCall(item, input.autoExpandReasoning)) pending.push(item);
+    else output.push(item);
   }
 
   appendRun({
@@ -157,6 +170,7 @@ export function groupLiveToolCalls<TGroup>(input: {
   head: StreamItem[];
   isTurnActive: boolean;
   buildGroup: (run: ToolCallRun) => TGroup;
+  autoExpandReasoning?: boolean;
 }): GroupedToolCalls<TGroup> {
   const head: StreamItem[] = [];
   const liveGroups = new Map<string, TGroup>();
@@ -181,7 +195,8 @@ export function groupLiveToolCalls<TGroup>(input: {
   };
 
   for (const item of input.head) {
-    if (isGroupableToolCall(item)) {
+    if (isTurnBoundary(pending.at(-1) ?? null, item)) flush(true);
+    if (isGroupableToolCall(item, input.autoExpandReasoning)) {
       if (pending.length === 0) {
         hostPlacement = "head";
       }

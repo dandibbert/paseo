@@ -1,4 +1,4 @@
-import { existsSync, promises as fs, type Dirent } from "node:fs";
+import { promises as fs, type Dirent } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
 import type { ProviderSkill } from "@getpaseo/protocol/messages";
@@ -42,20 +42,24 @@ function toPosixPath(value: string): string {
   return value.split(path.sep).join("/");
 }
 
-function findGitRepoRoot(startDir: string): string | null {
+async function findGitRepoRoot(startDir: string): Promise<string | null> {
   let current = path.resolve(startDir);
   while (true) {
-    if (existsSync(path.join(current, ".git"))) return current;
+    const isGitRoot = await fs.access(path.join(current, ".git")).then(
+      () => true,
+      () => false,
+    );
+    if (isGitRoot) return current;
     const parent = path.dirname(current);
     if (parent === current) return null;
     current = parent;
   }
 }
 
-function ancestorAgentsSkillDirs(cwd: string): string[] {
+async function ancestorAgentsSkillDirs(cwd: string): Promise<string[]> {
   const dirs: string[] = [];
   const start = path.resolve(cwd);
-  const gitRoot = findGitRepoRoot(start);
+  const gitRoot = await findGitRepoRoot(start);
   let dir = start;
   while (true) {
     dirs.push(path.join(dir, ".agents", "skills"));
@@ -67,7 +71,7 @@ function ancestorAgentsSkillDirs(cwd: string): string[] {
   return dirs;
 }
 
-function piSkillLocations(paths: PiSkillPaths): PiSkillLocation[] {
+async function piSkillLocations(paths: PiSkillPaths): Promise<PiSkillLocation[]> {
   const home = paths.homeDir ?? homedir();
   const projectBaseDir = path.join(path.resolve(paths.cwd), ".pi");
   const projectSettingsPath = path.join(projectBaseDir, "settings.json");
@@ -84,7 +88,7 @@ function piSkillLocations(paths: PiSkillPaths): PiSkillLocation[] {
       source: ".pi/skills",
     },
   ];
-  for (const skillsDir of ancestorAgentsSkillDirs(paths.cwd)) {
+  for (const skillsDir of await ancestorAgentsSkillDirs(paths.cwd)) {
     if (path.resolve(skillsDir) === path.resolve(userAgentsSkillsDir)) continue;
     locations.push({
       scope: "project",
@@ -281,7 +285,7 @@ function isEnabledByOverrides(
 async function discoverPiSkillFiles(paths: PiSkillPaths): Promise<PiSkillFile[]> {
   const files: PiSkillFile[] = [];
   const seen = new Set<string>();
-  for (const location of piSkillLocations(paths)) {
+  for (const location of await piSkillLocations(paths)) {
     for (const filePath of await collectSkillFiles(
       location.skillsDir,
       location.skillsDir,
