@@ -1,6 +1,9 @@
 import { expect } from "@playwright/test";
 
 export async function runSettingsScrollRegression(page, resizeWindow) {
+  // The dev runner's pending open-project request navigates after the bridge is ready.
+  // Let it land before opening Settings so it cannot interrupt the scroll assertions.
+  await page.waitForURL(/\/h\/[^/]+\/workspace\//, { timeout: 60_000 });
   // Device-metrics emulation also pins later webview guests. Resize the real
   // window so the following browser regression starts without an override.
   const original = await resizeWindow({ width: 1000, height: 500 });
