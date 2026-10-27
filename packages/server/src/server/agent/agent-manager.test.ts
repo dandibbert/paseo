@@ -12403,3 +12403,73 @@ test("an out-of-band command racing idle cleanup waits for the resumed runtime",
   expect(h.commands).toEqual(["/maintenance"]);
   expect(h.prompts).toEqual([]);
 });
+
+test("CLI updates reject running derived providers and block new work until completion", async () => {
+  const workdir = mkdtempSync(join(tmpdir(), "agent-cli-update-"));
+  const manager = new AgentManager({
+    clients: {
+      codex: new TestAgentClient(),
+      profile: new TestAgentClient("profile"),
+      alias: new TestAgentClient("alias"),
+    },
+    providerDefinitions: {
+      codex: { enabled: true },
+      profile: { enabled: true, derivedFromProviderId: "codex" },
+      alias: { enabled: true },
+    },
+    logger,
+  });
+  const updateDone = deferred<void>();
+  let agentId: string | null = null;
+  try {
+    const agent = await manager.createAgent({ provider: "profile", cwd: workdir }, undefined, {
+      workspaceId: undefined,
+    });
+    agentId = agent.id;
+    const run = manager.streamAgent(agent.id, "active work");
+    await expect(manager.withProviderCliUpdate("codex", async () => "updated")).rejects.toThrow(
+      "Wait for running or starting agents",
+    );
+    await drainAsyncGenerator(run);
+    const update = manager.withProviderCliUpdate("codex", () => updateDone.promise);
+    expect(() => manager.streamAgent(agent.id, "new task")).toThrow("being updated");
+    await expect(
+      manager.createAgent({ provider: "codex", cwd: workdir }, undefined, {
+        workspaceId: undefined,
+      }),
+    ).rejects.toThrow("Wait for the CLI update");
+    await expect(manager.withProviderCliUpdate("codex", async () => undefined)).rejects.toThrow(
+      "Another CLI update",
+    );
+    updateDone.resolve();
+    await update;
+    await drainAsyncGenerator(manager.streamAgent(agent.id, "after update"));
+    const alias = await manager.createAgent({ provider: "alias", cwd: workdir }, undefined, {
+      workspaceId: undefined,
+    });
+    try {
+      const aliasRun = manager.streamAgent(
+        alias.id,
+        "same binary under an unrelated ACP provider ID",
+      );
+      await expect(manager.withProviderCliUpdate("codex", async () => undefined)).rejects.toThrow(
+        "Wait for running or starting agents",
+      );
+      await drainAsyncGenerator(aliasRun);
+    } finally {
+      await manager.closeAgent(alias.id);
+    }
+    await expect(
+      manager.withProviderCliUpdate("codex", async () => {
+        throw new Error("update failed");
+      }),
+    ).rejects.toThrow("update failed");
+    await expect(manager.withProviderCliUpdate("codex", async () => "retried")).resolves.toBe(
+      "retried",
+    );
+  } finally {
+    updateDone.resolve();
+    if (agentId) await manager.closeAgent(agentId);
+    rmSync(workdir, { recursive: true, force: true });
+  }
+});

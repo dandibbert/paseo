@@ -905,6 +905,10 @@ export class PluginAgentClientRegistry {
     return this.providers.has(provider);
   }
 
+  command(provider: string): string | undefined {
+    return this.providers.get(provider)?.registration.command?.[0];
+  }
+
   async shutdown(): Promise<void> {
     const providers = [...this.providers.values()];
     this.providers.clear();

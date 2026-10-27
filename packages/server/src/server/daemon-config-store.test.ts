@@ -438,7 +438,7 @@ describe("DaemonConfigStore", () => {
 
     await store.patch({
       providers: {
-        gemini: { enabled: false },
+        gemini: { enabled: false, updateCommand: ["gemini", "upgrade"] },
       },
     });
 
@@ -448,6 +448,7 @@ describe("DaemonConfigStore", () => {
       label: "Gemini",
       command: ["gemini", "--acp"],
       enabled: false,
+      updateCommand: ["gemini", "upgrade"],
     });
   });
 

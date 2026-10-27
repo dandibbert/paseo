@@ -2951,6 +2951,31 @@ export const ko: TranslationResources = {
       },
     },
     providers: {
+      cliUpdate: {
+        updatedCommand: "Launcher command saved after the update:",
+        nativeTarget: "The update command checks for a release using its configured channel.",
+        title: "CLI updates",
+        description:
+          "Updates the CLI on the selected daemon host, not this device. Running tasks must finish first. Review the detected installer and exact update command before confirming.",
+        hostUnsupported:
+          "This host does not support in-app CLI updates. Update the host or use the CLI’s original installer. Windows installations require manual updates.",
+        checking: "Checking the installation and latest version...",
+        check: "Check for updates",
+        host: "Host: {{host}}",
+        current: "Installed: {{version}}",
+        latest: "Latest: {{version}}",
+        update: "Update CLI",
+        updating: "Updating...",
+        updatingHint:
+          "Updating on the host. Do not close Paseo or start tasks using this provider until the update finishes.",
+        success:
+          "CLI updated: {{version}}. Existing sessions may still use the old process; create a new session to use the updated CLI.",
+        confirmTitle: "Update this provider CLI?",
+        confirmMessage:
+          "Host: {{host}}\nCLI: {{binary}}\nCommand: {{command}}\n\nThis changes the CLI installation on that host. Existing sessions are not restarted.",
+        connectionWarning:
+          "The host may still be updating. Check the installed version before retrying.",
+      },
       title: "프로바이더",
       addProvider: "프로바이더 추가",
       providerDetails: "{{name}} 프로바이더 세부 정보",

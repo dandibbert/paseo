@@ -549,3 +549,52 @@ for (const width of [320, 390, 800, 1280]) {
     }
   });
 }
+
+test("CLI update inspection explains unsupported installations without affecting agent sessions", async ({
+  page,
+}, testInfo) => {
+  const client = await connectDaemonClient<
+    ProviderConfigClient &
+      Pick<
+        import("@getpaseo/client/internal/daemon-client").DaemonClient,
+        "inspectProviderCliUpdate"
+      >
+  >({ clientIdPrefix: "provider-cli-inspection" });
+  const inspection = await client.inspectProviderCliUpdate("mock");
+  expect(inspection.status).toBe("unavailable");
+  if (inspection.status !== "unavailable")
+    throw new Error("Expected an unsupported mock installation");
+  const session = await seedMockAgentWorkspace({
+    repoPrefix: "provider-cli-inspection-",
+    title: "Provider CLI update inspection",
+  });
+  try {
+    await openAgentRoute(page, session);
+    await expectComposerVisible(page);
+    await openDesktopProviderSettings(page);
+    await page.getByTestId("provider-cli-update-open").click();
+    const sheet = page.getByTestId("provider-cli-update-sheet");
+    await expect(sheet).toBeVisible();
+    await expect(
+      sheet.getByText(inspection.reason, {
+        exact: true,
+      }),
+    ).toBeVisible();
+    await expect(
+      sheet.getByRole("button", { name: "Check for updates", exact: true }),
+    ).toBeEnabled();
+    await sheet.getByRole("button", { name: "Check for updates", exact: true }).click();
+    await expect(
+      sheet.getByRole("button", { name: "Check for updates", exact: true }),
+    ).toBeEnabled();
+    await testInfo.attach("provider-cli-update-unsupported", {
+      body: await sheet.screenshot(),
+      contentType: "image/png",
+    });
+    await closeSheetByHeaderButton(page, "provider-cli-update-sheet");
+    await expectProviderSettingsVisible(page);
+  } finally {
+    await client.close();
+    await session.cleanup();
+  }
+});

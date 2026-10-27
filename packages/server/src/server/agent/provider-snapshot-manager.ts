@@ -1,3 +1,4 @@
+import { ProviderCliUpdater, ProviderCliUpdateError } from "./provider-cli-update.js";
 import { normalizeAgentModelCatalog } from "@getpaseo/protocol/agent-types";
 import { createHash } from "node:crypto";
 import { EventEmitter } from "node:events";
@@ -234,6 +235,7 @@ interface ProviderSnapshotTarget {
 }
 
 export class ProviderSnapshotManager {
+  private readonly cliUpdater = new ProviderCliUpdater();
   private readonly catalogs = new Map<string, Map<AgentProvider, ProviderCatalog>>();
   private readonly targets = new Map<string, Target>();
   private readonly events = new EventEmitter();
@@ -568,6 +570,56 @@ export class ProviderSnapshotManager {
       unattended: input.unattended || parent?.isUnattended === true,
       availableModes: entry.modes ?? [],
     });
+  }
+
+  async inspectCliUpdate(provider: AgentProvider) {
+    const definition = this.generation.definitions[provider];
+    if (!definition) {
+      return {
+        status: "unavailable" as const,
+        reason: "This provider is not configured on this host.",
+      };
+    }
+    return this.cliUpdater.inspect({
+      provider,
+      settings: definition.configuration?.runtimeSettings,
+      baseProvider: definition.derivedFromProviderId ?? undefined,
+      defaultCommand: this.pluginProviders.command(provider),
+    });
+  }
+
+  async updateCli(
+    provider: AgentProvider,
+    token: string,
+    persistCommand?: (command: string[]) => Promise<void>,
+  ) {
+    const definition = this.generation.definitions[provider];
+    const settings = definition?.configuration?.runtimeSettings;
+    if (!definition) {
+      throw new ProviderCliUpdateError(
+        "The provider configuration changed. Check for updates again.",
+      );
+    }
+    return this.cliUpdater.update({
+      provider,
+      token,
+      settings,
+      baseProvider: definition.derivedFromProviderId ?? undefined,
+      defaultCommand: this.pluginProviders.command(provider),
+      persistCommand,
+    });
+  }
+
+  reloadClientsAfterCliUpdate(_provider: AgentProvider): AgentManagerProviderState {
+    // Different provider IDs can share one executable, including unrelated ACP aliases.
+    const changed = new Set<AgentProvider>(this.generation.order);
+    const clients = { ...this.providerClients };
+    for (const id of changed) delete clients[id];
+    const generation = this.createGeneration(this.generation.definitions, this.providerOverrides);
+    const state = this.createAgentManagerState(generation.definitions, clients);
+    // Old sessions retain their clients; new sessions must re-probe version-dependent adapters.
+    this.installGeneration(generation, clients, changed);
+    return state;
   }
 
   async getProviderDiagnostic(provider: AgentProvider): Promise<ProviderDiagnosticResult> {

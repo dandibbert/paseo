@@ -534,6 +534,23 @@ test("builds registry with no overrides — same as built-in count", () => {
   expect(Object.keys(registry)).toHaveLength(AGENT_PROVIDER_DEFINITIONS.length);
 });
 
+test("CLI update commands inherit across profiles and permit an explicit override", () => {
+  const updateCommand = ["npm", "install", "--global", "@openai/codex@latest"];
+  const registry = buildProviderRegistry(logger, {
+    providerOverrides: {
+      codex: { updateCommand },
+      inherited: { extends: "codex", label: "Inherited" },
+      custom: { extends: "codex", label: "Custom", updateCommand: ["private-updater", "update"] },
+    },
+  });
+  expect(registry.codex.configuration?.runtimeSettings?.updateCommand).toEqual(updateCommand);
+  expect(registry.inherited.configuration?.runtimeSettings?.updateCommand).toEqual(updateCommand);
+  expect(registry.custom.configuration?.runtimeSettings?.updateCommand).toEqual([
+    "private-updater",
+    "update",
+  ]);
+});
+
 test("includes mock provider only for development builds", () => {
   expect(buildProviderRegistry(logger).mock).toBeUndefined();
   expect(buildProviderRegistry(logger, { isDev: false }).mock).toBeUndefined();

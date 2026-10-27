@@ -1,3 +1,4 @@
+import { ProviderCliUpdate } from "@/providers/cli-update";
 import * as Clipboard from "expo-clipboard";
 import {
   AlertTriangle,
@@ -824,6 +825,7 @@ export function ProviderDiagnosticSheet({
             {providerErrorMessage}
           </Text>
         ) : null}
+        <ProviderCliUpdate provider={provider} serverId={serverId} />
         <ProviderModalBody
           discoveredCount={discoveredModels.length}
           additionalCount={additionalModels.length}

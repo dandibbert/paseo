@@ -1,3 +1,4 @@
+import { ProviderCliUpdateError } from "./provider-cli-update.js";
 import type { AttachedAgentTool, PluginAgentToolsRuntime } from "../plugins/agent-tools.js";
 import type { AgentToolResult } from "@getpaseo/plugin/server";
 import type { RuntimeCleanupCandidate } from "./idle-runtime-cleanup/index.js";
@@ -770,6 +771,7 @@ export class AgentManager {
   private readonly previousStatuses = new Map<string, AgentLifecycleStatus>();
   private readonly backgroundTasks = new Set<Promise<void>>();
   private readonly agentRegistrationTasks = new Set<Promise<void>>();
+  private updatingProviderCli: string | null = null;
   private readonly inFlightAgentCloses = new Map<string, Promise<void>>();
   private readonly reloadedSessionCloses = new WeakMap<AgentSession, Promise<void>>();
   private readonly runtimeCleanupIdentities = new WeakMap<AgentSession, object>();
@@ -1091,6 +1093,45 @@ export class AgentManager {
     return this.subscribers.size;
   }
 
+  async withProviderCliUpdate<T>(provider: string, update: () => Promise<T>): Promise<T> {
+    if (this.updatingProviderCli)
+      throw new ProviderCliUpdateError("Another CLI update is in progress.");
+    const hasActiveTasks = Array.from(this.agents.values()).some(
+      (agent) =>
+        agent.lifecycle === "running" ||
+        agent.lifecycle === "initializing" ||
+        this.runs.hasRun(agent.id) ||
+        this.providerSubagents.list(agent.id).some((child) => child.status === "running"),
+    );
+    if (hasActiveTasks || this.agentRegistrationTasks.size > 0) {
+      throw new ProviderCliUpdateError(
+        "Wait for running or starting agents to finish before updating this CLI.",
+      );
+    }
+    this.updatingProviderCli = provider;
+    try {
+      return await update();
+    } finally {
+      this.updatingProviderCli = null;
+    }
+  }
+
+  private assertProviderCliIdle(): void {
+    if (this.updatingProviderCli)
+      throw new ProviderCliUpdateError(
+        "Wait for the CLI update to finish before starting or reloading an agent.",
+      );
+  }
+
+  private assertProviderCliAvailable(_provider: string): void {
+    // Unrelated ACP provider IDs can launch the same installed executable.
+    if (this.updatingProviderCli) {
+      throw new ProviderCliUpdateError(
+        "This provider CLI is being updated. Retry after the update finishes.",
+      );
+    }
+  }
+
   listAgents(options?: { includeInternal?: boolean }): ManagedAgent[] {
     return Array.from(this.agents.values())
       .filter((agent) => options?.includeInternal === true || !agent.internal)
@@ -1365,6 +1406,7 @@ export class AgentManager {
     options: CreateAgentOptions,
   ): Promise<ManagedAgent> {
     this.assertAcceptingAgentRegistrations();
+    this.assertProviderCliIdle();
     const resolvedAgentId = validateAgentId(agentId ?? this.idFactory(), "createAgent");
     if (this.pluginLifecycle && !config.internal) {
       const request = await this.pluginLifecycle.before("agent.create", {
@@ -1476,6 +1518,7 @@ export class AgentManager {
     resumeOptions?: AgentResumeSessionOptions,
   ): Promise<ManagedAgent> {
     this.assertAcceptingAgentRegistrations();
+    this.assertProviderCliIdle();
     const resolvedAgentId = validateAgentId(
       agentId ?? this.idFactory(),
       "resumeAgentFromPersistence",
@@ -1556,6 +1599,7 @@ export class AgentManager {
     labels?: Record<string, string>;
   }): Promise<ManagedAgent> {
     this.assertAcceptingAgentRegistrations();
+    this.assertProviderCliIdle();
     const resolvedAgentId = validateAgentId(this.idFactory(), "importProviderSession");
     this.requireEnabledProvider(input.provider);
 
@@ -1649,6 +1693,7 @@ export class AgentManager {
     options?: { rehydrateFromDisk?: boolean },
   ): Promise<ManagedAgent> {
     this.assertAcceptingAgentRegistrations();
+    this.assertProviderCliIdle();
     let existing = this.requireSessionAgent(agentId);
     if (this.hasInFlightRun(agentId)) {
       await this.cancelAgentRunBefore(agentId, "reload");
@@ -2638,6 +2683,7 @@ export class AgentManager {
       });
     }
     const agent = this.requireSessionAgent(agentId);
+    this.assertProviderCliAvailable(agent.provider);
     // Providers parse slash commands from the raw text, so a command another agent sent
     // must reach them without its sender envelope.
     const agentMessage = typeof prompt === "string" ? parseAgentMessage(prompt) : null;
@@ -2784,6 +2830,7 @@ export class AgentManager {
     if (this.collectingRuntimes.has(agentId) || (!this.agents.has(agentId) && this.registry))
       return this.streamAfterRuntimeCollection(agentId, prompt, options);
     const existingAgent = this.requireSessionAgent(agentId);
+    this.assertProviderCliAvailable(existingAgent.provider);
     this.logger.trace(
       {
         agentId,
@@ -5676,6 +5723,7 @@ export class AgentManager {
   }
 
   private requireEnabledProvider(provider: AgentProvider): void {
+    this.assertProviderCliAvailable(provider);
     if (this.providerEnabled.get(provider) === false) {
       throw new Error(`Provider '${provider}' is disabled`);
     }
@@ -5686,6 +5734,7 @@ export class AgentManager {
   }
 
   private requireClient(provider: AgentProvider): AgentClient {
+    this.assertProviderCliAvailable(provider);
     const client = this.clients.get(provider);
     if (!client) {
       throw new Error(`No client registered for provider '${provider}'`);

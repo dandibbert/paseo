@@ -1038,6 +1038,28 @@ export class Session {
           this.supports(CLIENT_CAPS.providerSnapshotReferences),
         listProviderAvailability: () => this.agentManager.listProviderAvailability(),
         listDraftFeatures: (config) => this.agentManager.listDraftFeatures(config),
+        updateProviderCli: (provider, token) =>
+          this.agentManager.withProviderCliUpdate(provider, async () => {
+            const configured = JSON.stringify(this.daemonConfigStore.get().providers[provider]);
+            const result = await providerSnapshotManager.updateCli(
+              provider,
+              token,
+              async (command) => {
+                await this.daemonConfigStore.patch((current) => {
+                  if (JSON.stringify(current.providers[provider]) !== configured)
+                    throw new Error(
+                      "The provider configuration changed during the update. Check for updates again.",
+                    );
+                  return { providers: { [provider]: { command } } };
+                });
+              },
+            );
+            if (result.success)
+              this.agentManager.updateProviderRegistry(
+                providerSnapshotManager.reloadClientsAfterCliUpdate(provider),
+              );
+            return result;
+          }),
       },
       providerSnapshotManager,
       logger: this.sessionLogger,
@@ -3159,6 +3181,10 @@ export class Session {
         return this.providerCatalogSession.handleGetProvidersSnapshotRequest(msg);
       case "refresh_providers_snapshot_request":
         return this.providerCatalogSession.handleRefreshProvidersSnapshotRequest(msg);
+      case "provider.cli.inspect_update.request":
+        return this.providerCatalogSession.handleInspectCliUpdateRequest(msg);
+      case "provider.cli.update.request":
+        return this.providerCatalogSession.handleCliUpdateRequest(msg);
       case "provider_diagnostic_request":
         return this.providerCatalogSession.handleProviderDiagnosticRequest(msg);
       case "agent.provider.skills.list.request":

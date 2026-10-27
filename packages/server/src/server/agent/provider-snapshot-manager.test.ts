@@ -3988,3 +3988,23 @@ test("model overrides preserve negotiated plugin capabilities and connection shu
     manager.destroy();
   }
 });
+
+test("CLI updates replace clients for new sessions and derived profiles without closing existing clients", async () => {
+  const manager = new ProviderSnapshotManager({
+    logger: createTestLogger(),
+    providerOverrides: {
+      profile: { extends: "codex", label: "Codex profile" },
+      codex: { updateCommand: ["npm", "install", "--global", "@openai/codex@latest"] },
+    },
+  });
+  try {
+    const before = manager.getAgentManagerProviderState();
+    const after = manager.reloadClientsAfterCliUpdate("codex");
+    expect(after.clients.codex).not.toBe(before.clients.codex);
+    expect(after.clients.profile).not.toBe(before.clients.profile);
+    expect(after.clients.claude).not.toBe(before.clients.claude);
+    expect(after.providerDefinitions).toEqual(before.providerDefinitions);
+  } finally {
+    await manager.shutdown();
+  }
+});

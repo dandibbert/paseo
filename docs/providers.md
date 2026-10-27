@@ -3,6 +3,27 @@
 Add new providers through the plugin SDK. The core adapter patterns below describe the existing
 server integrations.
 
+## CLI update boundary
+
+The daemon owns CLI update plans, installation verification, and execution. Clients send an
+expiring confirmation token, never a command. Use `daemon.manage` for execution. The
+agent manager's update admission spans the process and verification so another client or a
+schedule cannot start work midway through installation. The lock covers all agent work:
+unrelated ACP provider IDs can share one executable. Include provider-owned subagents.
+
+Native updaters choose their own release channel. Do not label an npm registry version as
+their target: Claude's stable channel and Cursor's date-based releases do not share that
+contract. Verify official installer ownership before offering a self-update command. An
+exit-zero no-op is valid when the installed version already matches the updater's channel.
+
+After an update, replace provider clients for new sessions, including aliases that can share the binary. Existing sessions retain their
+clients: shutting them down to invalidate version caches would interrupt user sessions.
+OpenCode selects its protocol adapter once per client, so refreshing the model catalog alone
+does not pick up a CLI major-version change.
+
+Supported installation methods and the user workflow live in the
+[public provider guide](../public-docs/providers.md#update-a-cli).
+
 ## Plugin providers
 
 Keep a bundled provider in `plugins/<id>/` and register it through

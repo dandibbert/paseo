@@ -59,6 +59,12 @@ function makeSubsystem(options: MakeOptions = {}) {
     supportsCompactProviderSnapshots: () => options.supportsCompactProviderSnapshots ?? false,
     listProviderAvailability: async () => [],
     listDraftFeatures: async () => [],
+    updateProviderCli: async () => ({
+      success: true,
+      version: "1.1.0",
+      output: "updated",
+      error: null,
+    }),
     ...options.host,
   };
   const providerSnapshotManager = createStub<ProviderSnapshotManager>({
@@ -463,6 +469,12 @@ it("announces shared content without retransmitting models or hashing discovery 
         supportsProviderSnapshotReferences: () => references,
         listProviderAvailability: async () => [],
         listDraftFeatures: async () => [],
+        updateProviderCli: async () => ({
+          success: true,
+          version: "1.1.0",
+          output: "updated",
+          error: null,
+        }),
       },
     });
   const emitted: SessionOutboundMessage[] = [];
@@ -730,3 +742,78 @@ it.each(["full", "embedded", "references"])(
     client.subsystem.dispose();
   },
 );
+
+describe("provider CLI updates", () => {
+  it("returns an inspection to the correlated requester", async () => {
+    const { subsystem, emitted } = makeSubsystem({
+      snapshot: {
+        inspectCliUpdate: async () => ({
+          status: "unavailable",
+          reason: "Use the native installer",
+        }),
+      },
+    });
+    await subsystem.handleInspectCliUpdateRequest({
+      type: "provider.cli.inspect_update.request",
+      provider: "codex",
+      requestId: "inspect",
+    });
+    expect(emitted).toEqual([
+      {
+        type: "provider.cli.inspect_update.response",
+        payload: {
+          inspection: { status: "unavailable", reason: "Use the native installer" },
+          requestId: "inspect",
+        },
+      },
+    ]);
+  });
+
+  it("returns the update result and refreshes metadata after success", async () => {
+    const refresh = vi.fn(async () => undefined);
+    const { subsystem, emitted } = makeSubsystem({
+      snapshot: { refreshSettingsSnapshot: refresh },
+    });
+    await subsystem.handleCliUpdateRequest({
+      type: "provider.cli.update.request",
+      provider: "codex",
+      token: "confirmed",
+      requestId: "update",
+    });
+    expect(emitted).toEqual([
+      {
+        type: "provider.cli.update.response",
+        payload: {
+          result: { success: true, version: "1.1.0", output: "updated", error: null },
+          requestId: "update",
+        },
+      },
+    ]);
+    expect(refresh).toHaveBeenCalledWith({ providers: ["codex"] });
+  });
+
+  it("returns a visible failure when admission rejects the update", async () => {
+    const { subsystem, emitted } = makeSubsystem({
+      host: {
+        updateProviderCli: async () => {
+          throw new Error("Wait for running agents");
+        },
+      },
+    });
+    await subsystem.handleCliUpdateRequest({
+      type: "provider.cli.update.request",
+      provider: "codex",
+      token: "confirmed",
+      requestId: "update",
+    });
+    expect(emitted).toEqual([
+      {
+        type: "provider.cli.update.response",
+        payload: {
+          result: { success: false, version: null, output: "", error: "Wait for running agents" },
+          requestId: "update",
+        },
+      },
+    ]);
+  });
+});

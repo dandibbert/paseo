@@ -1,3 +1,7 @@
+import {
+  ProviderCliUpdateInspectionSchema,
+  ProviderCliUpdateResultSchema,
+} from "./provider-cli-update.js";
 import { AgentMessageSchema } from "./agent-message.js";
 import {
   HostsListRequestSchema,
@@ -169,6 +173,7 @@ const MutableDaemonProviderModelSchema = z
 
 const MutableDaemonProviderConfigSchema = z
   .object({
+    updateCommand: z.array(z.string().min(1)).min(1).optional(),
     paseoTools: ProviderPaseoToolsPolicySchema.optional(),
     enabled: z.boolean().optional(),
     additionalModels: z.array(MutableDaemonProviderModelSchema).optional(),
@@ -1917,6 +1922,19 @@ export const RefreshProvidersSnapshotRequestMessageSchema = z.object({
   requestId: z.string(),
 });
 
+export const ProviderCliInspectUpdateRequestMessageSchema = z.object({
+  type: z.literal("provider.cli.inspect_update.request"),
+  provider: AgentProviderSchema,
+  requestId: z.string(),
+});
+
+export const ProviderCliUpdateRequestMessageSchema = z.object({
+  type: z.literal("provider.cli.update.request"),
+  provider: AgentProviderSchema,
+  token: z.string(),
+  requestId: z.string(),
+});
+
 export const ProviderDiagnosticRequestMessageSchema = z.object({
   type: z.literal("provider_diagnostic_request"),
   provider: AgentProviderSchema,
@@ -3454,6 +3472,8 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   GetProvidersSnapshotRequestMessageSchema,
   RefreshProvidersSnapshotRequestMessageSchema,
   ProviderDiagnosticRequestMessageSchema,
+  ProviderCliInspectUpdateRequestMessageSchema,
+  ProviderCliUpdateRequestMessageSchema,
   ProviderUsageListRequestMessageSchema,
   UsageListReportsRequestMessageSchema,
   ResumeAgentRequestMessageSchema,
@@ -3919,6 +3939,7 @@ export const ServerInfoStatusPayloadSchema = z
         commitBaseClassification: z.boolean().optional(),
         // COMPAT(providerRemoval): added in v0.1.105, drop the gate when floor >= v0.1.105.
         providerRemoval: z.boolean().optional(),
+        providerCliUpdate: z.boolean().optional(),
         // COMPAT(hopliteProvider): added after v0.11.2, remove after 2027-04-15 once host floor includes the bundled adapter.
         hopliteProvider: z.boolean().optional(),
         // COMPAT(importSessionWorkspaceTarget): added in v0.1.110, remove gate after 2027-01-16.
@@ -6449,6 +6470,16 @@ export const RefreshProvidersSnapshotResponseMessageSchema = z.object({
   }),
 });
 
+export const ProviderCliInspectUpdateResponseMessageSchema = z.object({
+  type: z.literal("provider.cli.inspect_update.response"),
+  payload: z.object({ inspection: ProviderCliUpdateInspectionSchema, requestId: z.string() }),
+});
+
+export const ProviderCliUpdateResponseMessageSchema = z.object({
+  type: z.literal("provider.cli.update.response"),
+  payload: z.object({ result: ProviderCliUpdateResultSchema, requestId: z.string() }),
+});
+
 // COMPAT(providersSnapshot): added in v0.1.48, remove gating when all clients use snapshot
 export const ProviderDiagnosticResponseMessageSchema = z.object({
   type: z.literal("provider_diagnostic_response"),
@@ -7359,6 +7390,8 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   ProvidersSnapshotUpdateMessageSchema,
   RefreshProvidersSnapshotResponseMessageSchema,
   ProviderDiagnosticResponseMessageSchema,
+  ProviderCliInspectUpdateResponseMessageSchema,
+  ProviderCliUpdateResponseMessageSchema,
   ProviderUsageListResponseMessageSchema,
   UsageListReportsUpdateMessageSchema,
   UsageListReportsResponseMessageSchema,

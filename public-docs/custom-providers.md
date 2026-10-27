@@ -154,6 +154,36 @@ Create as many entries as you want against the same first-class provider. Each o
 }
 ```
 
+## CLI update commands
+
+If Paseo cannot identify your CLI's installer, set `updateCommand` under the provider on
+its daemon host. Use an argument array, not a shell command string:
+
+```json
+{
+  "agents": {
+    "providers": {
+      "my-agent": {
+        "extends": "acp",
+        "label": "My agent",
+        "command": ["/opt/my-agent/bin/agent", "--acp"],
+        "updateCommand": ["/opt/my-agent/bin/updater", "upgrade", "--non-interactive"]
+      }
+    }
+  }
+}
+```
+
+The command runs with the provider's environment, in the daemon user's home directory,
+without a shell or interactive stdin. Use your installer's documented non-interactive flags.
+Profiles inherit the base provider's update command unless they override it. Reload the host
+configuration after editing the file, then open **CLI updates** to review and confirm.
+Configuring a command does not execute it automatically.
+
+Treat this field like the provider's launch command: anyone who can edit it can choose code
+that runs on the host. Updating requires `daemon.manage`. Paseo binds confirmation to the
+provider configuration and resolved installation; changed configurations require another check.
+
 ## ACP providers
 
 Any agent that speaks [ACP](https://agentclientprotocol.com) over stdio can be added with `extends: "acp"` and a `command`. Paseo spawns the process, sends an `initialize` JSON-RPC request, and the agent reports its capabilities, modes, and models at runtime.
@@ -213,4 +243,4 @@ Any agent that speaks [ACP](https://agentclientprotocol.com) over stdio can be a
 
 ## Full reference
 
-For the complete field reference (`extends`, `label`, `command`, `env`, `options`, `models`, `additionalModels`, `disallowedTools`, `paseoTools`, `enabled`, `order`), model and thinking-option schemas, and deeper examples for each plan, see [docs/custom-providers.md](https://github.com/getpaseo/paseo/blob/main/docs/custom-providers.md) on GitHub. See [Limit Paseo tools by provider](/docs/mcp#limit-paseo-tools-by-provider) for `paseoTools` configuration.
+For the complete field reference (`extends`, `label`, `command`, `updateCommand`, `env`, `options`, `models`, `additionalModels`, `disallowedTools`, `paseoTools`, `enabled`, `order`), model and thinking-option schemas, and deeper examples for each plan, see [docs/custom-providers.md](https://github.com/getpaseo/paseo/blob/main/docs/custom-providers.md) on GitHub. See [Limit Paseo tools by provider](/docs/mcp#limit-paseo-tools-by-provider) for `paseoTools` configuration.

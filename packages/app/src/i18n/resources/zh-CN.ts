@@ -2942,6 +2942,29 @@ export const zhCN: TranslationResources = {
       },
     },
     providers: {
+      cliUpdate: {
+        updatedCommand: "升级后保存的启动命令：",
+        nativeTarget: "由升级命令按其配置检查并选择目标版本。",
+        title: "CLI 更新",
+        description:
+          "更新所选主机上的 CLI，不是当前设备。请先等待运行中的任务结束，并确认识别出的安装方式和升级命令。",
+        hostUnsupported:
+          "此主机不支持应用内 CLI 更新。请更新主机或使用 CLI 原来的安装工具。Windows 安装需要手动更新。",
+        checking: "正在检查安装来源和最新版本...",
+        check: "检查更新",
+        host: "主机：{{host}}",
+        current: "已安装：{{version}}",
+        latest: "最新版本：{{version}}",
+        update: "更新 CLI",
+        updating: "正在更新...",
+        updatingHint:
+          "正在主机上更新。更新完成前请勿关闭 Paseo，也不要启动使用此 Provider 的任务。",
+        success: "CLI 已更新：{{version}}。已有会话可能仍在使用旧进程，请新建会话以使用新版 CLI。",
+        confirmTitle: "更新此 Provider 的 CLI？",
+        confirmMessage:
+          "主机：{{host}}\nCLI：{{binary}}\n命令：{{command}}\n\n这会修改该主机上的 CLI 安装，不会重启已有会话。",
+        connectionWarning: "主机可能仍在更新。重试前请先检查已安装版本。",
+      },
       title: "Providers",
       addProvider: "添加 Provider",
       providerDetails: "{{name}} Provider 详情",

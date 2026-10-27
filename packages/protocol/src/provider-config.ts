@@ -24,6 +24,7 @@ export const ProviderCommandSchema = z.discriminatedUnion("mode", [
 
 export const ProviderRuntimeSettingsSchema = z.object({
   command: ProviderCommandSchema.optional(),
+  updateCommand: z.array(z.string().min(1)).min(1).optional(),
   env: z.record(z.string(), z.string()).optional(),
   disallowedTools: z.array(z.string()).optional(),
 });
@@ -61,6 +62,7 @@ export const ProviderOverrideSchema = z.object({
   label: z.string().optional(),
   description: z.string().optional(),
   command: z.array(z.string().min(1)).min(1).optional(),
+  updateCommand: z.array(z.string().min(1)).min(1).optional(),
   env: z.record(z.string(), z.string()).optional(),
   options: z.record(z.string(), z.unknown()).optional(),
   // COMPAT(providerParams): added in v0.10.0, remove after 2027-03-30 once configs use options.

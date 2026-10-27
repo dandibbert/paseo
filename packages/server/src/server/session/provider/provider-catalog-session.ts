@@ -1,3 +1,4 @@
+import type { ProviderCliUpdateResult } from "@getpaseo/protocol/provider-cli-update";
 import type pino from "pino";
 import { createHash } from "node:crypto";
 import { getErrorMessage } from "@getpaseo/protocol/error-utils";
@@ -51,6 +52,7 @@ export interface ProviderCatalogSessionHost {
   publishSnapshot(project: () => SessionOutboundMessage | null): void;
   listProviderAvailability(): Promise<ProviderAvailability[]>;
   listDraftFeatures(config: AgentSessionConfig): Promise<AgentFeature[]>;
+  updateProviderCli(provider: string, token: string): Promise<ProviderCliUpdateResult>;
 }
 
 export interface ProviderCatalogSessionOptions {
@@ -451,6 +453,41 @@ export class ProviderCatalogSession {
         requestId: msg.requestId,
       },
     });
+  }
+
+  async handleInspectCliUpdateRequest(
+    msg: Extract<SessionInboundMessage, { type: "provider.cli.inspect_update.request" }>,
+  ): Promise<void> {
+    const inspection = await this.providerSnapshotManager.inspectCliUpdate(msg.provider);
+    this.host.emit({
+      type: "provider.cli.inspect_update.response",
+      payload: { inspection, requestId: msg.requestId },
+    });
+  }
+
+  async handleCliUpdateRequest(
+    msg: Extract<SessionInboundMessage, { type: "provider.cli.update.request" }>,
+  ): Promise<void> {
+    let result: ProviderCliUpdateResult;
+    try {
+      result = await this.host.updateProviderCli(msg.provider, msg.token);
+    } catch (error) {
+      result = { success: false, version: null, output: "", error: getErrorMessage(error) };
+    }
+    this.host.emit({
+      type: "provider.cli.update.response",
+      payload: { result, requestId: msg.requestId },
+    });
+    if (result.success) {
+      void this.providerSnapshotManager
+        .refreshSettingsSnapshot({ providers: [msg.provider] })
+        .catch((error) => {
+          this.logger.warn(
+            { err: error, provider: msg.provider },
+            "Could not refresh provider catalog after CLI update",
+          );
+        });
+    }
   }
 
   async handleProviderDiagnosticRequest(

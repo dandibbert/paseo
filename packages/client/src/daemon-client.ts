@@ -5631,6 +5631,24 @@ export class DaemonClient {
     });
   }
 
+  async inspectProviderCliUpdate(provider: AgentProvider) {
+    const response =
+      await this.sendNamespacedCorrelatedSessionRequest<"provider.cli.inspect_update.response">({
+        message: { type: "provider.cli.inspect_update.request", provider },
+        timeout: 60000,
+      });
+    return response.inspection;
+  }
+
+  async updateProviderCli(provider: AgentProvider, token: string) {
+    const response =
+      await this.sendNamespacedCorrelatedSessionRequest<"provider.cli.update.response">({
+        message: { type: "provider.cli.update.request", provider, token },
+        timeout: 360000,
+      });
+    return response.result;
+  }
+
   async getProviderDiagnostic(
     provider: AgentProvider,
     options?: { requestId?: string },
