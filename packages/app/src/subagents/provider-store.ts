@@ -5,6 +5,7 @@ import type {
 } from "@getpaseo/protocol/messages";
 import { DaemonConnectionError, type DaemonClient } from "@getpaseo/client/internal/daemon-client";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useEffect } from "react";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { z } from "zod";
@@ -90,6 +91,8 @@ export function providerSubagentLifecycleStatus(
 type ProviderSubagentListClient = Pick<DaemonClient, "listProviderSubagents">;
 
 const pendingListRequests = new WeakMap<ProviderSubagentListClient, Map<string, Promise<void>>>();
+type DescriptorChanges = Map<string, ProviderSubagentDescriptorPayload | undefined>;
+const inFlightListChanges = new Map<string, Set<DescriptorChanges>>();
 
 export function refreshProviderSubagents(
   client: ProviderSubagentListClient,
@@ -106,13 +109,33 @@ export function refreshProviderSubagents(
   if (pending) return pending;
 
   useProviderSubagentStore.getState().trackParent(serverId, parentAgentId);
+  // A live descriptor (including a removal) takes precedence over this in-flight snapshot.
+  const prefix = parentPrefix(serverId, parentAgentId);
+  const liveChanges: DescriptorChanges = new Map();
+  const pendingChanges = inFlightListChanges.get(prefix) ?? new Set<DescriptorChanges>();
+  pendingChanges.add(liveChanges);
+  inFlightListChanges.set(prefix, pendingChanges);
   const request = client
     .listProviderSubagents(parentAgentId)
     .then((payload) => {
-      useProviderSubagentStore.getState().replaceList(serverId, parentAgentId, payload.subagents);
+      const subagents = new Map(
+        payload.subagents.map((subagent) => [
+          providerSubagentKey(serverId, parentAgentId, subagent.id),
+          subagent,
+        ]),
+      );
+      for (const [key, subagent] of liveChanges) {
+        if (subagent) subagents.set(key, subagent);
+        else subagents.delete(key);
+      }
+      useProviderSubagentStore
+        .getState()
+        .replaceList(serverId, parentAgentId, [...subagents.values()]);
       return undefined;
     })
     .finally(() => {
+      pendingChanges.delete(liveChanges);
+      if (pendingChanges.size === 0) inFlightListChanges.delete(prefix);
       clientRequests?.delete(requestKey);
     });
   clientRequests.set(requestKey, request);
@@ -125,8 +148,8 @@ function parentPrefix(serverId: string, parentAgentId: string): string {
 
 /**
  * Updates are not replayed across a reconnect, so a child that finished or started while the
- * update feed was down stays stale until its parent is listed again. Call this once the feed has
- * resubscribed, so every update after the list is delivered.
+ * update feed was down stays stale until its parent is listed again. Call after resubscription
+ * and on foreground recovery, even if the socket stayed connected.
  */
 export async function resyncProviderSubagents(
   client: ProviderSubagentListClient,
@@ -137,11 +160,33 @@ export async function resyncProviderSubagents(
     .filter((key) => key.startsWith(serverPrefix))
     .map((key) => key.slice(serverPrefix.length, -1));
   await Promise.all(
-    parentAgentIds.map((parentAgentId) =>
+    parentAgentIds.map(async (parentAgentId) => {
+      // A read started before recovery cannot certify the recovered feed's baseline.
+      await pendingListRequests
+        .get(client)
+        ?.get(`${serverId}\0${parentAgentId}`)
+        ?.catch(() => undefined);
       // A parent that was archived meanwhile has nothing left to catch up.
-      refreshProviderSubagents(client, serverId, parentAgentId).catch(() => undefined),
-    ),
+      await refreshProviderSubagents(client, serverId, parentAgentId).catch(() => undefined);
+    }),
   );
+}
+
+export function useProviderSubagentForegroundSync({
+  client,
+  serverId,
+  isAppVisible,
+  isConnected,
+}: {
+  client: ProviderSubagentListClient;
+  serverId: string;
+  isAppVisible: boolean;
+  isConnected: boolean;
+}): void {
+  useEffect(() => {
+    // A foreground liveness probe can keep the same socket, without resubscribing its feeds.
+    if (isAppVisible && isConnected) void resyncProviderSubagents(client, serverId);
+  }, [client, serverId, isAppVisible, isConnected]);
 }
 
 const EMPTY_TIMELINE: ProviderSubagentTimelineState = {
@@ -249,6 +294,11 @@ export const useProviderSubagentStore = create<ProviderSubagentState>()(
               payload.subagent.parentAgentId,
               payload.subagent.id,
             );
+            for (const changes of inFlightListChanges.get(
+              parentPrefix(serverId, payload.subagent.parentAgentId),
+            ) ?? []) {
+              changes.set(key, payload.subagent);
+            }
             const descriptors = new Map(state.descriptors);
             const hiddenFromTrack = new Set(state.hiddenFromTrack);
             const previous = descriptors.get(key);
@@ -266,6 +316,11 @@ export const useProviderSubagentStore = create<ProviderSubagentState>()(
           }
           if (payload.kind === "remove") {
             const key = providerSubagentKey(serverId, payload.parentAgentId, payload.subagentId);
+            for (const changes of inFlightListChanges.get(
+              parentPrefix(serverId, payload.parentAgentId),
+            ) ?? []) {
+              changes.set(key, undefined);
+            }
             const descriptors = new Map(state.descriptors);
             descriptors.delete(key);
             const timelines = new Map(state.timelines);

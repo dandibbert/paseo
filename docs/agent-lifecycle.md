@@ -156,6 +156,13 @@ A watched child that closes before its finish event also notifies the caller so 
 
 ## Provider-managed child agents
 
+Native child status belongs to the child session, not the tool call that created it. Codex can
+report completion or shutdown through a later `wait` or `closeAgent` call. Apply that observation
+to the original child without changing its parent or task description. A control tool can fail
+while its child keeps running; only an explicit child-state observation settles the child.
+When one spawn owns several children, keep their statuses independent. Parent turn completion
+does not prove that its native children have stopped.
+
 Some providers can create their own child sessions inside one provider runtime. OMP's task tool reports these with `child_session` events; `AgentManager` imports the live provider handle, stamps `paseo.parent-agent-id`, and surfaces the result as a normal subagent in the parent's subagents track.
 
 The provider still owns the underlying runtime. Paseo keeps an agent record so the child can be opened, tracked, archived, and cascaded with the parent, but prompts and history hydration route through the provider adapter for that native child handle.
@@ -297,6 +304,12 @@ parentAgentId === thisAgent.id  AND  !archivedAt
 Clicking either kind opens a workspace tab. On compact layouts it opens in a [sheet](explorer-sidebar.md#sheets) over the subagents list instead; the sheet hides the composer and shows the agent's model and thinking as one line in its place (`PaneSubtitle`, the row provider subagents already use), and a Paseo subagent's sheet offers **Open as tab** (the full-screen glyph in the header) to get the composer back. A Paseo subagent tab is a normal interactive agent pane. A provider subagent tab is a read-only timeline pane with no composer, archive, detach, rewind, or fork actions. It shows its own direct children in a subagents track. Every subagent pane links back to its parent (`packages/app/src/subagents/parent/`): a pill above the composer when there is one, a parent box in the composer's place when there is not. Both panes use `AgentStreamView`, so message, reasoning, tool-call, and layout rendering stay identical.
 
 Provider timelines use the same structural timeline item format but deliberately have a separate lifecycle and transport. A provider thread/session identifier is not a Paseo agent identifier, and closing its tab is always layout-only.
+
+Provider-child updates are not replayed across a disconnected feed. Refresh tracked parent lists
+after resubscription and when the app returns to the foreground, even if its socket stays healthy.
+A read already pending before recovery cannot establish that baseline. Live descriptor updates and
+removals received during a list request take precedence over its response; do not use timestamps
+or terminal-state precedence, because a child can restart within the same timestamp resolution.
 
 Provider descriptors may include one compact subtitle. The provider owns its contents and formatting; clients display and truncate it without interpreting provider-specific model, thinking, or usage fields.
 

@@ -1,5 +1,9 @@
+/**
+ * @vitest-environment jsdom
+ */
 import { DaemonConnectionError } from "@getpaseo/client/internal/daemon-client";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { act, renderHook } from "@testing-library/react";
 import { afterEach, describe, expect, test } from "vitest";
 import type { ProviderSubagentDescriptorPayload } from "@getpaseo/protocol/messages";
 import {
@@ -7,6 +11,7 @@ import {
   providerSubagentKey,
   refreshProviderSubagents,
   resyncProviderSubagents,
+  useProviderSubagentForegroundSync,
   useProviderSubagentStore,
 } from "./provider-store";
 
@@ -804,6 +809,124 @@ describe("resyncing after the update feed resubscribes", () => {
     useProviderSubagentStore
       .getState()
       .descriptors.get(providerSubagentKey(SERVER_ID, parentAgentId, subagentId))?.status;
+
+  test("does not overwrite a live completion with an in-flight running list", async () => {
+    const running = child(SUBAGENT_ID, PARENT_ID, "running");
+    const daemon = fakeDaemon({ [PARENT_ID]: [running] });
+    const refresh = refreshProviderSubagents(daemon.client, SERVER_ID, PARENT_ID);
+    useProviderSubagentStore.getState().applyUpdate(SERVER_ID, {
+      kind: "upsert",
+      subagent: { ...running, status: "completed" },
+    });
+
+    await refresh;
+
+    expect(status(PARENT_ID, SUBAGENT_ID)).toBe("completed");
+  });
+
+  test("keeps live additions and removals while accepting unaffected snapshot rows", async () => {
+    const daemon = fakeDaemon({
+      [PARENT_ID]: [
+        child("removed", PARENT_ID, "running"),
+        child("unchanged", PARENT_ID, "completed"),
+      ],
+    });
+    const refresh = refreshProviderSubagents(daemon.client, SERVER_ID, PARENT_ID);
+    // The removed child need not already be cached: its tombstone still supersedes the list.
+    useProviderSubagentStore.getState().applyUpdate(SERVER_ID, {
+      kind: "remove",
+      parentAgentId: PARENT_ID,
+      subagentId: "removed",
+    });
+    useProviderSubagentStore.getState().applyUpdate(SERVER_ID, {
+      kind: "upsert",
+      subagent: child("new", PARENT_ID, "running"),
+    });
+    await refresh;
+
+    expect(status(PARENT_ID, "removed")).toBeUndefined();
+    expect(status(PARENT_ID, "unchanged")).toBe("completed");
+    expect(status(PARENT_ID, "new")).toBe("running");
+  });
+
+  test("accepts a live restart over a completed snapshot and releases the request overlay", async () => {
+    const daemon = fakeDaemon({ [PARENT_ID]: [child(SUBAGENT_ID, PARENT_ID, "completed")] });
+    const refresh = refreshProviderSubagents(daemon.client, SERVER_ID, PARENT_ID);
+    useProviderSubagentStore.getState().applyUpdate(SERVER_ID, {
+      kind: "upsert",
+      subagent: child(SUBAGENT_ID, PARENT_ID, "running"),
+    });
+    await refresh;
+    expect(status(PARENT_ID, SUBAGENT_ID)).toBe("running");
+
+    // No new push: a subsequent authoritative read can settle the child again.
+    await refreshProviderSubagents(daemon.client, SERVER_ID, PARENT_ID);
+    expect(status(PARENT_ID, SUBAGENT_ID)).toBe("completed");
+  });
+
+  test("resync requests a fresh list after a read started before subscription recovery", async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let requests = 0;
+    const client = {
+      listProviderSubagents: async () => {
+        const firstRequest = ++requests === 1;
+        if (firstRequest) await gate;
+        return {
+          requestId: "list",
+          parentAgentId: PARENT_ID,
+          subagents: [child(SUBAGENT_ID, PARENT_ID, firstRequest ? "running" : "completed")],
+          error: null,
+        };
+      },
+    };
+    const initial = refreshProviderSubagents(client, SERVER_ID, PARENT_ID);
+    // Completion was missed before the feed recovered; the pending read still has its old state.
+    const resync = resyncProviderSubagents(client, SERVER_ID);
+    release();
+    await Promise.all([initial, resync]);
+
+    expect(status(PARENT_ID, SUBAGENT_ID)).toBe("completed");
+    expect(requests).toBe(2);
+  });
+
+  test("foreground recovery catches up without replacing a healthy connection", async () => {
+    const daemon = fakeDaemon({ [PARENT_ID]: [child(SUBAGENT_ID, PARENT_ID, "running")] });
+    await refreshProviderSubagents(daemon.client, SERVER_ID, PARENT_ID);
+    const { rerender, unmount } = renderHook(
+      ({ isAppVisible, isConnected }) =>
+        useProviderSubagentForegroundSync({
+          client: daemon.client,
+          serverId: SERVER_ID,
+          isAppVisible,
+          isConnected,
+        }),
+      { initialProps: { isAppVisible: false, isConnected: true } },
+    );
+    try {
+      daemon.lists[PARENT_ID] = [child(SUBAGENT_ID, PARENT_ID, "completed")];
+      expect(daemon.requested).toEqual([PARENT_ID]);
+      await act(async () => rerender({ isAppVisible: true, isConnected: true }));
+
+      expect(status(PARENT_ID, SUBAGENT_ID)).toBe("completed");
+      expect(daemon.requested).toEqual([PARENT_ID, PARENT_ID]);
+
+      await act(async () => rerender({ isAppVisible: true, isConnected: false }));
+      daemon.lists[PARENT_ID] = [child(SUBAGENT_ID, PARENT_ID, "running")];
+      await act(async () => rerender({ isAppVisible: false, isConnected: false }));
+      await act(async () => rerender({ isAppVisible: true, isConnected: false }));
+      expect(status(PARENT_ID, SUBAGENT_ID)).toBe("completed");
+      expect(daemon.requested).toEqual([PARENT_ID, PARENT_ID]);
+
+      await act(async () => rerender({ isAppVisible: true, isConnected: true }));
+      expect(status(PARENT_ID, SUBAGENT_ID)).toBe("running");
+      expect(daemon.requested).toEqual([PARENT_ID, PARENT_ID, PARENT_ID]);
+    } finally {
+      unmount();
+    }
+  });
 
   test("catches up on children that finished or started while updates were not delivered", async () => {
     const daemon = fakeDaemon({ [PARENT_ID]: [child("child-1", PARENT_ID, "running")] });

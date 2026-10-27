@@ -49,7 +49,11 @@ import { useToast } from "@/contexts/toast-context";
 import { toErrorMessage } from "@/utils/error-messages";
 import { showProviderNoticeToast } from "@/utils/provider-notice-toast";
 import { applyCheckoutStatusUpdateFromEvent } from "@/git/checkout-status-cache";
-import { resyncProviderSubagents, useProviderSubagentStore } from "@/subagents/provider-store";
+import {
+  resyncProviderSubagents,
+  useProviderSubagentForegroundSync,
+  useProviderSubagentStore,
+} from "@/subagents/provider-store";
 import { TerminalSecureInputSheet } from "@/components/terminal-secure-input-sheet";
 
 // Re-export types from session-store and draft-store for backward compatibility
@@ -314,6 +318,8 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
   useEffect(() => {
     viewedTimelineSyncRef.current?.setActive(isAppVisible);
   }, [isAppVisible]);
+
+  useProviderSubagentForegroundSync({ client, serverId, isAppVisible, isConnected });
 
   // Client activity tracking (heartbeat, push token registration)
   useClientActivity({

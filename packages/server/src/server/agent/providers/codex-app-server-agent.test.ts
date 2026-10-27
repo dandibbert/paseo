@@ -3590,6 +3590,189 @@ describe("Codex app-server provider", () => {
     }
   });
 
+  test.each([
+    ["closeAgent", "shutdown", "canceled"],
+    ["wait", "completed", "completed"],
+    ["wait", "failed", "failed"],
+  ] as const)(
+    "settles an existing child from a later %s result with %s state",
+    async (tool, childStatus, expectedStatus) => {
+      const session = createSession();
+      const events: AgentStreamEvent[] = [];
+      session.subscribe((event) => events.push(event));
+      const internals = asInternals(session);
+      for (const id of ["review-child", "other-child"]) {
+        await internals.handleNotification("item/completed", {
+          threadId: "test-thread",
+          item: {
+            type: "collabAgentToolCall",
+            id: `spawn-${id}`,
+            tool: "spawnAgent",
+            status: "completed",
+            prompt: `Task for ${id}`,
+            receiverThreadIds: [id],
+            agentsStates: { [id]: { status: "running" } },
+          },
+        });
+      }
+      events.length = 0;
+      await internals.handleNotification("item/completed", {
+        threadId: "test-thread",
+        item: {
+          type: "collabAgentToolCall",
+          id: "later-control-call",
+          tool,
+          status: "completed",
+          receiverThreadIds: ["review-child"],
+          agentsStates: { "review-child": { status: childStatus } },
+        },
+      });
+      const updates = events.flatMap((event) =>
+        event.type === "provider_subagent" && event.event.type === "upsert" ? [event.event] : [],
+      );
+      expect(updates).toEqual([
+        expect.objectContaining({
+          id: "review-child",
+          status: expectedStatus,
+          toolCallId: "spawn-review-child",
+          description: "Task for review-child",
+        }),
+      ]);
+      expect(events).toContainEqual(
+        expect.objectContaining({
+          type: "timeline",
+          item: expect.objectContaining({ callId: "spawn-review-child", status: expectedStatus }),
+        }),
+      );
+      // Late trailing output must keep the settled status and original child routing.
+      await internals.handleNotification("item/agentMessage/delta", {
+        threadId: "review-child",
+        itemId: "trailing",
+        delta: "Final review",
+      });
+      expect(
+        events.findLast(
+          (event) => event.type === "provider_subagent" && event.event.type === "upsert",
+        ),
+      ).toMatchObject({
+        event: { id: "review-child", status: expectedStatus, toolCallId: "spawn-review-child" },
+      });
+    },
+  );
+
+  test("keeps per-child statuses when a shared spawn is observed by a later wait or close call", async () => {
+    const session = createSession();
+    const events: AgentStreamEvent[] = [];
+    session.subscribe((event) => events.push(event));
+    const internals = asInternals(session);
+    await internals.handleNotification("item/completed", {
+      threadId: "test-thread",
+      item: {
+        type: "collabAgentToolCall",
+        id: "shared-spawn",
+        tool: "spawnAgent",
+        status: "completed",
+        receiverThreadIds: ["finished-child", "active-child"],
+        agentsStates: {
+          "finished-child": { status: "running" },
+          "active-child": { status: "running" },
+        },
+      },
+    });
+    events.length = 0;
+    await internals.handleNotification("item/completed", {
+      threadId: "test-thread",
+      item: {
+        type: "collabAgentToolCall",
+        id: "wait-result",
+        tool: "wait",
+        status: "completed",
+        receiverThreadIds: ["finished-child", "active-child"],
+        agentsStates: {
+          "finished-child": { status: "completed" },
+          "active-child": { status: "running" },
+        },
+      },
+    });
+    const statuses = () =>
+      new Map(
+        events.flatMap((event) =>
+          event.type === "provider_subagent" && event.event.type === "upsert"
+            ? [[event.event.id, event.event.status] as const]
+            : [],
+        ),
+      );
+    expect(statuses()).toEqual(
+      new Map([
+        ["finished-child", "completed"],
+        ["active-child", "running"],
+      ]),
+    );
+    await internals.handleNotification("item/agentMessage/delta", {
+      threadId: "active-child",
+      itemId: "work",
+      delta: "Working",
+    });
+    expect(statuses()).toEqual(
+      new Map([
+        ["finished-child", "completed"],
+        ["active-child", "running"],
+      ]),
+    );
+    await internals.handleNotification("turn/completed", {
+      threadId: "active-child",
+      turn: { status: "completed" },
+    });
+    expect(statuses()).toEqual(
+      new Map([
+        ["finished-child", "completed"],
+        ["active-child", "completed"],
+      ]),
+    );
+    await internals.handleNotification("turn/started", {
+      threadId: "active-child",
+      turn: { id: "next-turn" },
+    });
+    expect(statuses()).toEqual(
+      new Map([
+        ["finished-child", "completed"],
+        ["active-child", "running"],
+      ]),
+    );
+  });
+
+  test("does not replace a child status with a failed wait tool that reports no child state", async () => {
+    const session = createSession();
+    const events: AgentStreamEvent[] = [];
+    session.subscribe((event) => events.push(event));
+    const internals = asInternals(session);
+    await internals.handleNotification("item/completed", {
+      threadId: "test-thread",
+      item: {
+        type: "collabAgentToolCall",
+        id: "original-spawn",
+        tool: "spawnAgent",
+        status: "completed",
+        receiverThreadIds: ["child"],
+        agentsStates: { child: { status: "running" } },
+      },
+    });
+    events.length = 0;
+    await internals.handleNotification("item/completed", {
+      threadId: "test-thread",
+      item: {
+        type: "collabAgentToolCall",
+        id: "failed-wait",
+        tool: "wait",
+        status: "failed",
+        receiverThreadIds: ["child"],
+        agentsStates: {},
+        error: { message: "wait timed out" },
+      },
+    });
+    expect(events.filter((event) => event.type === "provider_subagent")).toEqual([]);
+  });
+
   test("updates a registered child with its later native activity name", async () => {
     const session = createSession();
     const events: AgentStreamEvent[] = [];
@@ -4257,6 +4440,7 @@ describe("Codex app-server provider", () => {
         : [],
     );
     expect(grandchildUpserts.map((event) => event.parentSubagentId)).toEqual([
+      "child-thread-root",
       "child-thread-root",
       "child-thread-root",
     ]);
