@@ -3129,6 +3129,81 @@ describe("PiRpcAgentClient", () => {
     ]);
   });
 
+  test.each([
+    { outcome: "successful", error: null },
+    { outcome: "failed", error: new Error("summarizer failed") },
+  ])("waits for $outcome manual compaction before sending a new prompt", async ({ error }) => {
+    const { pi, session, events } = await createSession();
+    onTestFinished(() => session.close());
+    const fakeSession = pi.latestSession();
+    fakeSession.compactError = error;
+    const compactionFinished = Promise.withResolvers<void>();
+    fakeSession.compactCompletion = compactionFinished.promise;
+    const handler = session.tryHandleOutOfBand("/compact");
+    const compaction = handler!.run({ emit: () => {} });
+
+    const { turnId } = await session.startTurn("continue after compaction");
+    await flushTurnScheduling();
+    expect(fakeSession.compactRequests).toEqual([{}]);
+    expect(fakeSession.prompts).toEqual([]);
+
+    compactionFinished.resolve();
+    await compaction;
+    await flushTurnScheduling();
+    expect(fakeSession.prompts).toEqual([{ message: "continue after compaction", imageCount: 0 }]);
+
+    fakeSession.finishTurn();
+    await events.nextTurnCompletion();
+    expect(events.turnLifecycleEvents()).toContainEqual({ type: "turn_completed", turnId });
+    expect(events.eventTypes()).not.toContain("turn_failed");
+  });
+
+  test.each(["interrupt", "close"] as const)(
+    "does not send a prompt waiting on compaction after %s",
+    async (action) => {
+      const { pi, session } = await createSession();
+      onTestFinished(() => session.close());
+      const fakeSession = pi.latestSession();
+      const compactionFinished = Promise.withResolvers<void>();
+      fakeSession.compactCompletion = compactionFinished.promise;
+      const handler = session.tryHandleOutOfBand("/compact");
+      const compaction = handler!.run({ emit: () => {} });
+
+      await session.startTurn("do not send this prompt");
+      await session[action]();
+      compactionFinished.resolve();
+      await compaction;
+      await flushTurnScheduling();
+
+      expect(fakeSession.prompts).toEqual([]);
+    },
+  );
+
+  test("does not send a prompt when compaction finishes during interruption", async () => {
+    const { pi, session, events } = await createSession();
+    onTestFinished(() => session.close());
+    const fakeSession = pi.latestSession();
+    const compactionFinished = Promise.withResolvers<void>();
+    fakeSession.compactCompletion = compactionFinished.promise;
+    const clearQueueFinished = Promise.withResolvers<void>();
+    fakeSession.clearQueueCompletion = clearQueueFinished.promise;
+    const handler = session.tryHandleOutOfBand("/compact");
+    const compaction = handler!.run({ emit: () => {} });
+    const { turnId } = await session.startTurn("do not send this prompt");
+
+    const interruption = session.interrupt();
+    compactionFinished.resolve();
+    await compaction;
+    await flushTurnScheduling();
+    expect(fakeSession.controlRequests).toEqual(["clear_queue"]);
+    expect(fakeSession.prompts).toEqual([]);
+
+    clearQueueFinished.resolve();
+    await interruption;
+    expect(events.turnLifecycleEvents()).toEqual([{ type: "turn_canceled", turnId }]);
+    expect(fakeSession.prompts).toEqual([]);
+  });
+
   test("closes Pi compact loading marker when RPC rejects after compaction starts", async () => {
     const { pi, session } = await createSession();
     const fakeSession = pi.latestSession();
@@ -3597,9 +3672,13 @@ describe("Pi provider skills", () => {
     expect(
       JSON.parse(readFileSync(path.join(workspace.agentDir, "settings.json"), "utf8")),
     ).toEqual({ skills: ["-skills/pdf-tools/SKILL.md"] });
-    expect(skills).toMatchObject([
-      { name: "skill:pdf-tools", enabled: false, scope: "user", toggleSupported: true },
-    ]);
+    const skill = skills.find((entry) => entry.path === workspace.skillPath);
+    expect(skill).toMatchObject({
+      name: "skill:pdf-tools",
+      enabled: false,
+      scope: "user",
+      toggleSupported: true,
+    });
   });
 
   test("refuses to toggle a skill while a Pi turn is running", async () => {
@@ -3642,4 +3721,24 @@ describe("Pi provider skills", () => {
       'PASEO_COMMAND_RESULT {"requestId":"reload-1","ok":true}',
     ]);
   });
+});
+
+test("pi runtime safety protects queued replies and runtime-owned activity", async () => {
+  const runtime = new FakePi();
+  const session = await createClient(runtime).createSession(createConfig());
+  onTestFinished(() => session.close());
+  const native = runtime.latestSession();
+  expect(await session.canStopRuntime!()).toBe(true);
+  native.state.pendingMessageCount = 1;
+  expect(await session.canStopRuntime!()).toBe(false);
+  native.state.pendingMessageCount = 0;
+  native.state.isStreaming = true;
+  expect(await session.canStopRuntime!()).toBe(false);
+  native.state.isStreaming = false;
+  native.state.isCompacting = true;
+  expect(await session.canStopRuntime!()).toBe(false);
+  native.state.isCompacting = false;
+  expect(await session.canStopRuntime!()).toBe(true);
+  native.getStateError = new Error("Unable to prove idle");
+  await expect(session.canStopRuntime!()).rejects.toThrow("Unable to prove idle");
 });
