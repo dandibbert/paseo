@@ -62,7 +62,18 @@ async function installation(options: InstallationOptions = {}) {
   return { updater, prefix, bin, root, calls };
 }
 
-describe("ProviderCliUpdater", () => {
+it.runIf(process.platform === "win32")("requires the original installer on Windows", async () => {
+  const resolveBinary = vi.fn();
+  const updater = new ProviderCliUpdater({ isContainer: false, resolveBinary });
+  expect(await updater.inspect({ provider: "codex" })).toEqual({
+    status: "unavailable",
+    reason:
+      "Update this CLI using its installer or container image. In-app updates currently run on macOS and Linux hosts outside containers.",
+  });
+  expect(resolveBinary).not.toHaveBeenCalled();
+});
+
+describe.skipIf(process.platform === "win32")("ProviderCliUpdater", () => {
   it("pins the update to the package and prefix used by the resolved binary", async () => {
     const { updater, prefix, bin, calls } = await installation();
     const inspection = await updater.inspect({ provider: "codex" });
@@ -198,32 +209,35 @@ describe("ProviderCliUpdater", () => {
   });
 });
 
-it("runs the real update process and verifies its installed binary without network access", async () => {
-  const { bin, root } = await installation();
-  await writeFile(
-    join(root, "bin/codex.js"),
-    `#!${process.execPath}\nconsole.log('codex-cli ' + JSON.parse(require('node:fs').readFileSync(${JSON.stringify(join(root, "package.json"))}, 'utf8')).version);\n`,
-    { mode: 0o755 },
-  );
-  await writeFile(
-    join(bin, "../lib/node_modules/npm/bin/npm-cli.js"),
-    `#!${process.execPath}\nconst fs = require('node:fs');\nif (process.argv[2] === 'view') console.log(JSON.stringify('1.1.0'));\nelse { const file = ${JSON.stringify(join(root, "package.json"))}; const manifest = JSON.parse(fs.readFileSync(file, 'utf8')); manifest.version = '1.1.0'; fs.writeFileSync(file, JSON.stringify(manifest)); console.log('updated by real child'); }\n`,
-    { mode: 0o755 },
-  );
-  await chmod(join(bin, "../lib/node_modules/npm/bin/npm-cli.js"), 0o755);
-  const updater = new ProviderCliUpdater({
-    isContainer: false,
-    resolveBinary: async (command) => join(bin, command),
-  });
-  const inspection = await updater.inspect({ provider: "codex" });
-  if (inspection.status !== "available") throw new Error(inspection.reason);
-  expect(await updater.update({ provider: "codex", token: inspection.plan.token })).toEqual({
-    success: true,
-    version: "codex-cli 1.1.0",
-    output: "updated by real child",
-    error: null,
-  });
-});
+it.skipIf(process.platform === "win32")(
+  "runs the real update process and verifies its installed binary without network access",
+  async () => {
+    const { bin, root } = await installation();
+    await writeFile(
+      join(root, "bin/codex.js"),
+      `#!${process.execPath}\nconsole.log('codex-cli ' + JSON.parse(require('node:fs').readFileSync(${JSON.stringify(join(root, "package.json"))}, 'utf8')).version);\n`,
+      { mode: 0o755 },
+    );
+    await writeFile(
+      join(bin, "../lib/node_modules/npm/bin/npm-cli.js"),
+      `#!${process.execPath}\nconst fs = require('node:fs');\nif (process.argv[2] === 'view') console.log(JSON.stringify('1.1.0'));\nelse { const file = ${JSON.stringify(join(root, "package.json"))}; const manifest = JSON.parse(fs.readFileSync(file, 'utf8')); manifest.version = '1.1.0'; fs.writeFileSync(file, JSON.stringify(manifest)); console.log('updated by real child'); }\n`,
+      { mode: 0o755 },
+    );
+    await chmod(join(bin, "../lib/node_modules/npm/bin/npm-cli.js"), 0o755);
+    const updater = new ProviderCliUpdater({
+      isContainer: false,
+      resolveBinary: async (command) => join(bin, command),
+    });
+    const inspection = await updater.inspect({ provider: "codex" });
+    if (inspection.status !== "available") throw new Error(inspection.reason);
+    expect(await updater.update({ provider: "codex", token: inspection.plan.token })).toEqual({
+      success: true,
+      version: "codex-cli 1.1.0",
+      output: "updated by real child",
+      error: null,
+    });
+  },
+);
 
 interface NativeFixtureOptions {
   noChange?: boolean;
@@ -270,7 +284,7 @@ async function nativeInstallation(
   return { updater, home, binary, target, calls };
 }
 
-describe("official CLI self-updates", () => {
+describe.skipIf(process.platform === "win32")("official CLI self-updates", () => {
   it.each(["claude", "opencode", "cursor"] as const)(
     "runs %s's official update command without npm",
     async (provider) => {
@@ -418,7 +432,7 @@ describe("official CLI self-updates", () => {
   });
 });
 
-describe("installation-aware update methods", () => {
+describe.skipIf(process.platform === "win32")("installation-aware update methods", () => {
   it("never executes the custom updater during inspection, even to resolve its executable", async () => {
     const { prefix, bin, root } = await installation();
     const marker = join(prefix, "updater-executed");
@@ -440,8 +454,13 @@ describe("installation-aware update methods", () => {
     if (inspection.status !== "available") throw new Error(inspection.reason);
     await expect(readFile(marker, "utf8")).rejects.toMatchObject({ code: "ENOENT" });
     expect(
-      (await updater.update({ provider: "private-agent", settings, token: inspection.plan.token }))
-        .success,
+      (
+        await updater.update({
+          provider: "private-agent",
+          settings,
+          token: inspection.plan.token,
+        })
+      ).success,
     ).toBe(true);
     expect(await readFile(marker, "utf8")).toBe("executed");
   });

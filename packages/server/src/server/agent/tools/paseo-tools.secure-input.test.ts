@@ -10,6 +10,7 @@ function setup(callerAgentId?: string) {
   const request = vi.fn(async () => "submitted" as const);
   const catalog = createPaseoToolCatalog({
     agentManager: {
+      getPluginTools: () => [],
       getAgent: (agentId: string) => ({
         id: agentId,
         cwd: "/work/example",

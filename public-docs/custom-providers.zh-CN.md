@@ -147,6 +147,29 @@ Z.AI 通过兼容 Anthropic 的端点提供 GLM 模型。把 `ANTHROPIC_BASE_URL
 }
 ```
 
+## CLI 升级命令 {#cli-update-commands}
+
+如果 Paseo 无法识别 CLI 的安装方式，可在 daemon 主机的 Provider 配置下设置 `updateCommand`。使用参数数组，不要使用 shell 命令字符串：
+
+```json
+{
+  "agents": {
+    "providers": {
+      "my-agent": {
+        "extends": "acp",
+        "label": "My agent",
+        "command": ["/opt/my-agent/bin/agent", "--acp"],
+        "updateCommand": ["/opt/my-agent/bin/updater", "upgrade", "--non-interactive"]
+      }
+    }
+  }
+}
+```
+
+命令使用 Provider 的环境变量，在 daemon 用户的主目录中执行，不经过 shell，也不提供交互式标准输入。请使用安装器文档中规定的非交互参数。配置别名继承基础 Provider 的升级命令，除非自行覆盖。修改文件后重新加载主机配置，再打开 **CLI 更新**核对并确认。配置命令不会自动执行它。
+
+此字段与 Provider 启动命令一样：有权编辑它的人可以选择在主机上执行的代码。升级需要 `daemon.manage` 权限。Paseo 将确认操作绑定到 Provider 配置和解析后的安装；配置变更后必须重新检查。
+
 ## ACP Provider {#acp-providers}
 
 任何通过 stdio 使用 [ACP](https://agentclientprotocol.com) 的 Agent，都可以用 `extends: "acp"` 和 `command` 添加。Paseo 启动该进程并发送 `initialize` JSON-RPC 请求，Agent 在运行时报告它的能力、模式和模型。
@@ -206,4 +229,4 @@ Z.AI 通过兼容 Anthropic 的端点提供 GLM 模型。把 `ANTHROPIC_BASE_URL
 
 ## 完整参考 {#full-reference}
 
-完整的字段参考（`extends`、`label`、`command`、`env`、`options`、`models`、`additionalModels`、`disallowedTools`、`paseoTools`、`enabled`、`order`）、模型和思考选项的 schema，以及每种套餐更深入的示例，请参见 GitHub 上的 [docs/custom-providers.md](https://github.com/getpaseo/paseo/blob/main/docs/custom-providers.md)。`paseoTools` 的配置见[按 Provider 限制 Paseo 工具](/docs/mcp#limit-paseo-tools-by-provider)。
+完整的字段参考（`extends`、`label`、`command`、`updateCommand`、`env`、`options`、`models`、`additionalModels`、`disallowedTools`、`paseoTools`、`enabled`、`order`）、模型和思考选项的 schema，以及每种套餐更深入的示例，请参见 GitHub 上的 [docs/custom-providers.md](https://github.com/getpaseo/paseo/blob/main/docs/custom-providers.md)。`paseoTools` 的配置见[按 Provider 限制 Paseo 工具](/docs/mcp#limit-paseo-tools-by-provider)。

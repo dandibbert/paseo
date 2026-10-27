@@ -373,6 +373,14 @@
                   "minLength": 1
                 }
               },
+              "updateCommand": {
+                "minItems": 1,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
               "env": {
                 "type": "object",
                 "propertyNames": {

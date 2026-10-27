@@ -21,6 +21,27 @@ Provider 是 Paseo 与某个外部 Agent CLI 之间的约定：如何启动它�
 
 无论哪种方式，**底层 CLI 都由你安装**，Paseo 负责运行它。
 
+## 更新 CLI {#update-a-cli}
+
+打开**设置 → 你的主机 → Provider → 对应 Provider → CLI 更新**，检查是否有新版本。确认前请核对主机、可执行文件路径和升级命令。即使你使用手机或另一台电脑操作，升级也在对应 daemon 主机上执行。
+
+在 macOS 和 Linux 上，Paseo 根据 Provider 实际使用的可执行文件识别安装方式，包括自定义命令和环境变量覆盖：
+
+- Claude Code、OpenCode、Cursor、OMP 和 Goose 的官方原生升级命令。
+- Muse 已安装的启动器，使用 Meta 提供的同步安装模式。
+- npm、pnpm 和 Bun 全局安装的包，包括 ACP 和插件 Provider。包名来自可执行文件所属的已安装包，不受 Provider 白名单限制。
+- Homebrew formula 和 cask，通过解析后的 Cellar 或 Caskroom 安装路径验证。
+- ACP 目录中固定版本的 `npx` 命令。Paseo 先准备新版本包，再保存主机上的新启动命令，不会另装一份全局 CLI。
+- 自定义安装器通过 `updateCommand` 指定的命令。见[自定义 Provider](/docs/custom-providers#cli-update-commands)。
+
+原生升级器和包管理器按自身通道设置选择目标版本。目标版本未知时，Paseo 显示将执行的命令，不会声称已知版本。CLI 已是最新版时，命令成功退出且未做修改也属于正常结果。升级后会重新检查选中的安装。npm 和固定版本的 `npx` 升级会解析并显示具体目标版本。
+
+Antigravity 官方安装器提供后台自动升级，没有文档化的独立升级命令，Paseo 不会自行编造；通过包管理器安装或显式配置升级命令的版本仍可使用。无法识别的安装布局、系统软件包、Windows 和容器需要使用原安装工具。Paseo 不使用 `sudo`，也不执行下载的安装脚本。每次升级都需要确认。
+
+请等待所有正在运行的任务结束，包括配置别名和子 Agent。自定义 ACP 条目可能使用同一可执行文件，却没有共同的 Provider ID，因此 Paseo 会在升级和验证完成前阻止所有新的 Agent 工作。已有会话保留原进程；要使用新版 CLI，请启动新会话。daemon 不会重启。如果连接中断，主机可能仍在升级，请先检查已安装版本再重试。
+
+更新 Paseo 本身不会更新 Provider CLI。Paseo 的版本更新见[更新](/docs/updates)。
+
 ## 接下来 {#where-to-go-next}
 
 - [支持的 Provider](/docs/supported-providers)：完整列表和安装链接。
