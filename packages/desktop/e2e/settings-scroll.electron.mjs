@@ -14,8 +14,14 @@ export async function runSettingsScrollRegression(page, resizeWindow) {
     await page.getByRole("button", { name: "Settings", exact: true }).click();
     await sidebar().hover();
     await page.mouse.wheel(0, 2000);
-    await expect.poll(offset).toBeGreaterThan(0);
+    // Wheel delivery is asynchronous; do not save an intermediate offset while it is moving.
+    await expect
+      .poll(() =>
+        sidebar().evaluate((node) => node.scrollHeight - node.clientHeight - node.scrollTop),
+      )
+      .toBe(0);
     const saved = await offset();
+    expect(saved).toBeGreaterThan(0);
     for (const title of ["Providers", "Terminals", "Providers", "Terminals"]) {
       const button = page
         .locator('[data-testid="settings-sidebar"]:visible')
