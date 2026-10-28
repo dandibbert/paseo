@@ -38,7 +38,7 @@ jobs:
         run: npm run lint -- packages/server/src/server/browser-tools/broker.ts packages/server/src/server/browser-tools/broker.test.ts packages/server/src/server/browser-tools/tools.ts packages/server/src/server/session.ts packages/server/src/server/websocket-server.browser-tools.test.ts
 
   macos-arm64:
-    runs-on: macos-14
+    runs-on: macos-15
     timeout-minutes: 120
     steps:
       - uses: actions/checkout@v4
