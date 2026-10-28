@@ -1,6 +1,9 @@
 name: Personal Beta Format Preflight
 
 on:
+  push:
+    branches:
+      - fix/personal-beta-release-20261028
   workflow_dispatch:
 
 permissions:
