@@ -486,6 +486,7 @@ export interface SessionOptions {
   workspaceAutoName: WorkspaceAutoName;
   daemonConfigStore: DaemonConfigStore;
   pluginRuntime?: {
+    wait: import("./plugins/lifecycle/index.js").PluginLifecycle["wait"];
     before: import("./plugins/lifecycle/index.js").PluginLifecycle["before"];
     emit: import("./plugins/lifecycle/index.js").PluginLifecycle["emit"];
     listPlugins(): Promise<import("@getpaseo/protocol/messages").PluginListItem[]>;
@@ -519,7 +520,7 @@ export interface SessionOptions {
     removePlugin(pluginId: string): Promise<void>;
     subscribe(listener: (pluginId: string) => void): () => void;
     subscribeSettings?(listener: (pluginId: string, settingsId: string) => void): () => void;
-    catalog(): Array<{ id: string; clientBundle: string }>;
+    catalog(): Array<{ id: string; clientBundle: string; clientBundleHash?: string }>;
     invokePluginRpc(pluginId: string, method: string, input: unknown): Promise<unknown>;
     listUsageReports(options?: {
       forceRefresh?: boolean;
@@ -578,12 +579,14 @@ export type SessionLifecycleIntent =
       clientId: string;
       requestId: string;
       reason: string;
+      keepTerminals: boolean;
     }
   | {
       type: "restart";
       clientId: string;
       requestId: string;
       reason: string;
+      keepTerminals: boolean;
     };
 
 function parseClientCapabilities(
@@ -1130,6 +1133,7 @@ export class Session {
         "Terminal output": this.terminalController.getMetrics().streamSubscriptionCount,
       }),
       listProviderAvailability: () => this.agentManager.listProviderAvailability(),
+      getTerminalsUnavailable: () => terminalManager?.getUnavailableError?.()?.message ?? null,
       listAgents: () => this.agentManager.listAgents(),
       listProjects: () => this.projectRegistry.list(),
       listWorkspaces: () => this.workspaceRegistry.list(),
@@ -2355,6 +2359,7 @@ export class Session {
     respond = true,
   ): Promise<void> {
     if (!this.browserToolsBroker) throw new Error("Browser hosting is unavailable");
+    const source = this.delivery.currentSource;
     let unregister: (() => void) | undefined;
     const owner = this.delivery.begin("browser-host", undefined, () => unregister?.());
     try {
@@ -2363,6 +2368,19 @@ export class Session {
         hostKind: request.hostKind,
         supportedCommands: request.supportedCommands,
         sendBrowserAutomationRequest: (message) => owner.emit(message),
+        getActivity: () => {
+          const activity = source ? this.getClientActivity(source) : null;
+          if (!activity) return null;
+          const focusedAgent = activity.focusedAgentId
+            ? this.agentManager.getAgent(activity.focusedAgentId)
+            : null;
+          return {
+            appVisible: activity.appVisible,
+            focusedAgentId: activity.focusedAgentId,
+            focusedWorkspaceId: focusedAgent?.workspaceId ?? null,
+            lastActivityAtMs: activity.lastActivityAt.getTime(),
+          };
+        },
       });
       if (respond)
         this.emit({
@@ -2610,12 +2628,17 @@ export class Session {
       });
     }
     if (msg.type === "plugin.catalog.get.request") {
+      const cached = new Map(
+        msg.cachedClientBundles?.map((entry) => [entry.id, entry.clientBundleHash]),
+      );
+      const plugins = (this.pluginRuntime?.catalog() ?? []).map(({ clientBundle, ...plugin }) =>
+        plugin.clientBundleHash !== undefined && cached.get(plugin.id) === plugin.clientBundleHash
+          ? plugin
+          : Object.assign(plugin, { clientBundle }),
+      );
       this.emit({
         type: "plugin.catalog.get.response",
-        payload: {
-          requestId: msg.requestId,
-          plugins: this.pluginRuntime?.catalog() ?? [],
-        },
+        payload: { requestId: msg.requestId, plugins },
       });
       return undefined;
     }
@@ -2748,9 +2771,13 @@ export class Session {
       case "dictation_stream_cancel":
         return this.voiceSessions.handleMessage(msg);
       case "restart_server_request":
-        return this.handleRestartServerRequest(msg.requestId, msg.reason);
+        return this.handleRestartServerRequest(msg.requestId, msg.reason, {
+          keepTerminals: msg.killTerminals !== true,
+        });
       case "shutdown_server_request":
-        return this.handleShutdownServerRequest(msg.requestId);
+        return this.handleShutdownServerRequest(msg.requestId, {
+          keepTerminals: msg.keepTerminals === true,
+        });
       case "client_heartbeat":
         this.handleClientHeartbeat(msg);
         return undefined;
@@ -3310,7 +3337,11 @@ export class Session {
     this.terminalController.handleBinaryFrame(binaryFrame.frame, source);
   }
 
-  private async handleRestartServerRequest(requestId: string, reason?: string): Promise<void> {
+  private async handleRestartServerRequest(
+    requestId: string,
+    reason: string | undefined,
+    options: { keepTerminals: boolean },
+  ): Promise<void> {
     const lifecycleReason = normalizeClientRestartRpcReason(reason);
     const payload: { status: string } & Record<string, unknown> = {
       status: "restart_requested",
@@ -3321,7 +3352,10 @@ export class Session {
     }
     payload.requestId = requestId;
 
-    this.sessionLogger.warn({ reason: lifecycleReason }, "Restart requested via websocket");
+    this.sessionLogger.warn(
+      { reason: lifecycleReason, keepTerminals: options.keepTerminals },
+      "Restart requested via websocket",
+    );
     this.emit({
       type: "status",
       payload,
@@ -3332,12 +3366,19 @@ export class Session {
       clientId: this.clientId,
       requestId,
       reason: lifecycleReason,
+      keepTerminals: options.keepTerminals,
     });
   }
 
-  private async handleShutdownServerRequest(requestId: string): Promise<void> {
+  private async handleShutdownServerRequest(
+    requestId: string,
+    options: { keepTerminals: boolean },
+  ): Promise<void> {
     const reason = CLIENT_SHUTDOWN_RPC_REASON;
-    this.sessionLogger.warn({ reason }, "Shutdown requested via websocket");
+    this.sessionLogger.warn(
+      { reason, keepTerminals: options.keepTerminals },
+      "Shutdown requested via websocket",
+    );
     this.emit({
       type: "status",
       payload: {
@@ -3352,6 +3393,7 @@ export class Session {
       clientId: this.clientId,
       requestId,
       reason,
+      keepTerminals: options.keepTerminals,
     });
   }
 
@@ -6257,6 +6299,7 @@ export class Session {
     },
   ): Promise<CreatePaseoWorktreeResult> {
     const result = await createPaseoWorktree(input, {
+      lifecycle: this.pluginRuntime,
       github: this.github,
       ...(options?.resolveDefaultBranch
         ? { resolveDefaultBranch: options.resolveDefaultBranch }
@@ -7065,7 +7108,7 @@ export class Session {
     // and must not rerun hooks or compare their potentially changing output.
     if (this.pluginRuntime) {
       const { type, requestId, ...input } = request;
-      const transformed = await this.pluginRuntime.before("workspace.create", input);
+      const transformed = await this.pluginRuntime.before("workspace.create.before", input);
       creationRequest = { ...transformed, type, requestId };
     }
     return creationRequest.source.kind === "directory"

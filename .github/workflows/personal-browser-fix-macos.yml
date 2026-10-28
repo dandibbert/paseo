@@ -1,0 +1,67 @@
+name: Personal macOS Browser Fix Build
+
+on:
+  push:
+    branches:
+      - fix/browser-host-routing-20261028
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  ONNXRUNTIME_NODE_INSTALL: skip
+
+jobs:
+  browser-tests:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Install dependencies
+        run: node scripts/npm-retry.mjs ci
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build server dependencies
+        run: npm run build:server-deps
+      - name: Browser host routing unit tests
+        run: npx vitest run packages/server/src/server/browser-tools/broker.test.ts --bail=1
+      - name: Browser host WebSocket integration tests
+        run: npx vitest run packages/server/src/server/websocket-server.browser-tools.test.ts --bail=1
+      - name: Typecheck server
+        run: npm run typecheck --workspace=@getpaseo/server
+      - name: Lint changed TypeScript
+        run: npm run lint -- packages/server/src/server/browser-tools/broker.ts packages/server/src/server/browser-tools/broker.test.ts packages/server/src/server/browser-tools/tools.ts packages/server/src/server/session.ts packages/server/src/server/websocket-server.browser-tools.test.ts
+
+  macos-arm64:
+    runs-on: macos-14
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Install dependencies
+        run: node scripts/npm-retry.mjs ci
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build unsigned Apple Silicon desktop package
+        env:
+          NODE_OPTIONS: --max-old-space-size=4096
+          EP_GH_IGNORE_TIME: "true"
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+        run: npm run build:desktop -- --publish never --mac --arm64 -c.mac.identity=null -c.mac.notarize=false
+      - name: Upload macOS installation packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: paseo-browser-fix-macos-arm64
+          path: |
+            packages/desktop/release/*.dmg
+            packages/desktop/release/*.zip
+          if-no-files-found: error
+          retention-days: 14

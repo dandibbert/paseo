@@ -415,8 +415,19 @@ test.describe("Settings — compact master-detail", () => {
     const workspace = await withWorkspace({ prefix: "host-picker-settings-back-" });
     const workspaceRoute = buildHostWorkspaceRoute(getServerId(), workspace.workspaceId);
 
-    await openWorkspace(page, workspace);
+    const worktreeSetupCallout = page.locator('[data-testid^="worktree-setup-callout-"]');
+
+    await test.step("the wide sidebar shows the worktree setup prompt for this workspace", async () => {
+      await page.setViewportSize({ width: 1280, height: 900 });
+      await openWorkspace(page, workspace);
+      await expect(worktreeSetupCallout.first()).toBeVisible({ timeout: 30_000 });
+      await page.setViewportSize({ width: 390, height: 844 });
+    });
+
     await page.getByRole("button", { name: "Open menu", exact: true }).click();
+    // The compact sidebar shows only native callouts, so the prompt stays out.
+    await expect(page.getByTestId("sidebar-hosts-trigger")).toBeVisible();
+    await expect(worktreeSetupCallout).toHaveCount(0);
     await page.getByTestId("sidebar-hosts-trigger").click();
     await page.getByRole("button", { name: /Open .* settings/ }).click();
 
@@ -478,4 +489,77 @@ test.describe("Settings — compact master-detail", () => {
     await expect(page).toHaveURL(/\/welcome$/);
     await expect(page.getByTestId("welcome-direct-connection")).toBeVisible();
   });
+});
+
+async function measureDockedNavigation(page: import("@playwright/test").Page, width: number) {
+  await page.setViewportSize({ width, height: 951 });
+  const history = page.getByRole("button", { name: /^History/ }).filter({ visible: true });
+  const settings = page
+    .getByRole("button", { name: "Settings", exact: true })
+    .filter({ visible: true });
+  await expect(history).toBeVisible();
+  await expect(settings).toBeVisible();
+  return {
+    width,
+    history: await history.evaluate((el) => el.getBoundingClientRect().height),
+    settings: await settings.evaluate((el) => el.getBoundingClientRect().height),
+  };
+}
+
+async function measureSettingsSplit(page: import("@playwright/test").Page, width: number) {
+  await page.setViewportSize({ width, height: 951 });
+  const sidebar = page.getByTestId("settings-sidebar");
+  const detail = page.getByTestId("settings-detail-pane");
+  await expect(sidebar).toBeVisible();
+  await expect(detail).toBeVisible();
+  return {
+    width,
+    sidebar: await sidebar.evaluate((el) => el.getBoundingClientRect().width),
+    detail: await detail.evaluate((el) => el.getBoundingClientRect().width),
+  };
+}
+
+async function expectConsistentDockedNavigation(page: import("@playwright/test").Page) {
+  const wide = await measureDockedNavigation(page, 951);
+  for (const width of [600, 669, 719, 720]) {
+    const narrow = await measureDockedNavigation(page, width);
+    expect
+      .soft(narrow.history, `History keeps its wide-layout density at ${width}`)
+      .toBeCloseTo(wide.history, 0);
+    expect
+      .soft(narrow.settings, `Settings keeps its wide-layout density at ${width}`)
+      .toBeCloseTo(wide.settings, 0);
+  }
+}
+
+async function expectSettingsDetailKeepsReadingWidth(page: import("@playwright/test").Page) {
+  const reference = await measureSettingsSplit(page, 720);
+  for (const width of [600, 669, 719]) {
+    const narrow = await measureSettingsSplit(page, width);
+    expect
+      .soft(narrow.detail, `Settings preserves its detail budget at ${width}`)
+      .toBeGreaterThanOrEqual(reference.detail);
+    expect
+      .soft(narrow.sidebar, `Settings navigation yields width at ${width}`)
+      .toBeLessThan(reference.sidebar);
+  }
+  const wide = await measureSettingsSplit(page, 951);
+  expect(wide.sidebar).toBeCloseTo(reference.sidebar, 0);
+  expect(wide.detail).toBeGreaterThan(reference.detail);
+}
+
+test("docked navigation keeps its density and Settings preserves reading width", async ({
+  page,
+  withWorkspace,
+}) => {
+  const workspace = await withWorkspace({ prefix: "narrow-wide-layout-" });
+  await gotoWorkspace(page, workspace.workspaceId);
+  await expectConsistentDockedNavigation(page);
+  await openSettings(page);
+  await openSettingsSection(page, "appearance");
+  await expectAppearanceContent(page);
+  await expectSettingsDetailKeepsReadingWidth(page);
+  await page.setViewportSize({ width: 599, height: 951 });
+  await expectSettingsSidebarHidden(page);
+  await expectAppearanceContent(page);
 });

@@ -96,7 +96,7 @@ export function registerBrowserTools(options: RegisterBrowserToolsOptions): void
     {
       title: "Create browser tab",
       description:
-        "Create a new Paseo browser tab in this agent's workspace on the most recently connected browser automation host, opened in the background without switching the user's view. Pass an http(s) URL or a scheme-less host URL, which is treated as http; the returned browserId is used by tab-scoped tools.",
+        "Create a new Paseo browser tab in this agent's workspace in the desktop window showing the agent, or the most active available browser host when that window is unavailable. The tab opens in the background without switching the user's view. Pass an http(s) URL or a scheme-less host URL, which is treated as http; the returned browserId is used by tab-scoped tools.",
       inputSchema: {
         url: BrowserHttpUrlInputSchema.optional(),
       },

@@ -181,7 +181,7 @@ import {
 import { setupAutoArchiveOnMerge } from "./auto-archive-on-merge/index.js";
 import { wrapSessionMessage, type SessionOutboundMessage } from "./messages.js";
 import type { TerminalManager } from "../terminal/terminal-manager.js";
-import { createConfiguredTerminalManager } from "../terminal/terminal-manager-factory.js";
+import { startWorkerTerminalManager } from "../terminal/worker-terminal-manager.js";
 import { applyTerminalAgentHookSetting } from "../terminal/agent-hooks/terminal-agent-hook-setting.js";
 import { loadOrCreateDaemonKeyPair } from "./daemon-keypair.js";
 import { createRelayRuntime, type RelayRuntime } from "./relay-runtime.js";
@@ -397,12 +397,14 @@ export type DaemonLifecycleIntent =
       clientId: string;
       requestId: string;
       reason: string;
+      keepTerminals: boolean;
     }
   | {
       type: "restart";
       clientId: string;
       requestId: string;
       reason: string;
+      keepTerminals: boolean;
     };
 
 export interface PaseoDaemonConfig {
@@ -495,7 +497,8 @@ export interface PaseoDaemon {
   scriptRuntimeStore: WorkspaceScriptRuntimeStore;
   browserToolsBroker: BrowserToolsBroker;
   start(): Promise<void>;
-  stop(): Promise<void>;
+  /** Stops the daemon. Terminals keep running for the next daemon only with keepTerminals. */
+  stop(options?: { keepTerminals?: boolean }): Promise<void>;
   getListenTarget(): ListenTarget | null;
   getServerId(): string;
 }
@@ -712,7 +715,10 @@ export async function createPaseoDaemon(
   });
   let boundListenTarget: ListenTarget | null = null;
   let workspaceRegistry: FileBackedWorkspaceRegistry | null = null;
-  const terminalManager = createConfiguredTerminalManager({
+  const terminalManager = await startWorkerTerminalManager({
+    paseoHome: config.paseoHome,
+    paseoVersion: daemonVersion,
+    logger,
     getTerminalActivityUrl: () => createTerminalActivityUrl(boundListenTarget),
   });
   applyTerminalAgentHookSetting({ store: daemonConfigStore, logger });
@@ -964,7 +970,7 @@ export async function createPaseoDaemon(
       if (!hasActiveWorkspace) workspaceRuntimeStore.remove(cwd);
     }
     if (mutation.kind === "archive" && mutation.workspace) {
-      pluginRuntime.emit("workspace.archived", {
+      pluginRuntime.emit("workspace.archive.after", {
         workspace: describeHookWorkspace(mutation.workspace),
       });
     }
@@ -1214,6 +1220,7 @@ export async function createPaseoDaemon(
         worktreesRoot: config.worktreesRoot,
         createPaseoWorktree: async (workflowInput, workflowOptions) => {
           return createRegisteredPaseoWorktree(workflowInput, {
+            lifecycle: pluginRuntime,
             github,
             ...(workflowOptions?.resolveDefaultBranch
               ? {
@@ -1948,7 +1955,9 @@ export async function createPaseoDaemon(
     }
   };
 
-  const stop = async () => {
+  const stop = async (options?: { keepTerminals?: boolean }) => {
+    const keepTerminals = options?.keepTerminals === true;
+    let terminalShutdownError: unknown = null;
     localCredential = null;
     await deleteLocalCredential(config.paseoHome);
     // Stop tracking plugin provider registrations before anything tears plugins
@@ -1978,7 +1987,19 @@ export async function createPaseoDaemon(
     await agentStorage.flush().catch(() => undefined);
     await agentProviderRuntime.shutdown();
     await pluginRuntime.stopAllPlugins();
-    terminalManager.killAll();
+    try {
+      if (keepTerminals) {
+        await terminalManager.detach();
+        logger.info("Terminals left running for the next daemon");
+      } else {
+        await terminalManager.closeTerminals();
+      }
+    } catch (error) {
+      // Finish the rest of the shutdown, then report it: the supervisor and `daemon stop`
+      // retry the cleanup from the record the reaper kept.
+      terminalShutdownError = error;
+      logger.error({ err: error }, "Terminal shutdown failed");
+    }
     await speechService.stop();
     await scheduleService.stop().catch(() => undefined);
     await relayRuntime?.stop().catch(() => undefined);
@@ -2000,6 +2021,9 @@ export async function createPaseoDaemon(
     // Clean up socket files
     if (listenTarget.type === "socket" && existsSync(listenTarget.path)) {
       unlinkSync(listenTarget.path);
+    }
+    if (terminalShutdownError) {
+      throw terminalShutdownError;
     }
   };
 

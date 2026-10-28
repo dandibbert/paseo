@@ -6,7 +6,7 @@ import type {
   BrowserAutomationExecuteResponse,
 } from "@getpaseo/protocol/browser-automation/rpc-schemas";
 import { BROWSER_AUTOMATION_COMMAND_NAMES } from "@getpaseo/protocol/browser-automation/rpc-schemas";
-import { BrowserToolsBroker, type BrowserHostClient } from "./broker.js";
+import { BrowserToolsBroker, type BrowserHostActivity, type BrowserHostClient } from "./broker.js";
 
 const BROWSER_ID = "11111111-1111-4111-8111-111111111111";
 const SECOND_BROWSER_ID = "22222222-2222-4222-8222-222222222222";
@@ -15,16 +15,23 @@ class FakeBrowserHostClient implements BrowserHostClient {
   public readonly receivedRequests: BrowserAutomationExecuteRequest[] = [];
   public readonly hostKind: string;
   public readonly supportedCommands: readonly BrowserAutomationCommandName[];
+  public activity: BrowserHostActivity | null;
 
   public constructor(
     public readonly id: string,
     options: {
       hostKind?: string;
       supportedCommands?: readonly BrowserAutomationCommandName[];
+      activity?: BrowserHostActivity;
     } = {},
   ) {
     this.hostKind = options.hostKind ?? "desktop app";
     this.supportedCommands = options.supportedCommands ?? [...BROWSER_AUTOMATION_COMMAND_NAMES];
+    this.activity = options.activity ?? null;
+  }
+
+  public getActivity(): BrowserHostActivity | null {
+    return this.activity;
   }
 
   public sendBrowserAutomationRequest(request: BrowserAutomationExecuteRequest): void {
@@ -300,6 +307,115 @@ describe("BrowserToolsBroker", () => {
       ok: true,
       result: { command: "snapshot", browserId: BROWSER_ID },
     });
+  });
+
+  test.each([
+    {
+      caseName: "a visible window showing the caller",
+      agentId: "agent-1",
+      workspaceId: "workspace-1",
+      first: {
+        appVisible: true,
+        focusedAgentId: "agent-1",
+        focusedWorkspaceId: "workspace-1",
+        lastActivityAtMs: 10,
+      },
+      second: {
+        appVisible: true,
+        focusedAgentId: "agent-2",
+        focusedWorkspaceId: "workspace-2",
+        lastActivityAtMs: 100,
+      },
+    },
+    {
+      caseName: "a visible window showing a parent agent in the caller's workspace",
+      agentId: "child-agent",
+      workspaceId: "workspace-1",
+      first: {
+        appVisible: true,
+        focusedAgentId: "parent-agent",
+        focusedWorkspaceId: "workspace-1",
+        lastActivityAtMs: 10,
+      },
+      second: {
+        appVisible: true,
+        focusedAgentId: "agent-2",
+        focusedWorkspaceId: "workspace-2",
+        lastActivityAtMs: 100,
+      },
+    },
+    {
+      caseName: "the most recently active visible host without a workspace match",
+      agentId: "agent-unfocused",
+      workspaceId: "workspace-3",
+      first: {
+        appVisible: true,
+        focusedAgentId: null,
+        focusedWorkspaceId: null,
+        lastActivityAtMs: 10,
+      },
+      second: {
+        appVisible: false,
+        focusedAgentId: null,
+        focusedWorkspaceId: null,
+        lastActivityAtMs: 100,
+      },
+    },
+  ])("routes a new tab to $caseName instead of the last connected host", async ({
+    agentId,
+    workspaceId,
+    first,
+    second,
+  }) => {
+    const broker = createBroker();
+    const preferred = new FakeBrowserHostClient("host-preferred", { activity: first });
+    const laterConnected = new FakeBrowserHostClient("host-later", { activity: second });
+    broker.registerClient(preferred);
+    broker.registerClient(laterConnected);
+
+    const pending = broker.execute({
+      command: { command: "new_tab", args: { url: "https://example.com" } },
+      agentId,
+      workspaceId,
+    });
+
+    expect(preferred.receivedRequests).toHaveLength(1);
+    expect(laterConnected.receivedRequests).toHaveLength(0);
+    preferred.resolveLatestWith(broker, {
+      requestId: "req-1",
+      ok: true,
+      result: {
+        command: "new_tab",
+        browserId: BROWSER_ID,
+        workspaceId,
+        url: "https://example.com",
+      },
+    });
+    await expect(pending).resolves.toMatchObject({ ok: true });
+
+    const snapshot = broker.execute({
+      command: { command: "snapshot", args: { browserId: BROWSER_ID } },
+      agentId,
+      workspaceId,
+    });
+    expect(preferred.receivedRequests.at(-1)?.command.command).toBe("snapshot");
+    expect(laterConnected.receivedRequests).toHaveLength(0);
+    preferred.resolveLatestWith(broker, {
+      requestId: "req-1",
+      ok: true,
+      result: {
+        command: "snapshot",
+        browserId: BROWSER_ID,
+        workspaceId,
+        url: "https://example.com",
+        title: "Example",
+        format: "aria-yaml",
+        snapshot: "- document",
+        truncated: false,
+        stats: { nodeCount: 1, refCount: 0, textLength: 10 },
+      },
+    });
+    await expect(snapshot).resolves.toMatchObject({ ok: true });
   });
 
   test("list tabs aggregates all hosts and seeds browser id affinity", async () => {

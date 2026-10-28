@@ -14,6 +14,14 @@ export interface BrowserHostClient {
   hostKind: string;
   supportedCommands: readonly BrowserAutomationCommandName[];
   sendBrowserAutomationRequest(request: BrowserAutomationExecuteRequest): void | Promise<void>;
+  getActivity?(): BrowserHostActivity | null;
+}
+
+export interface BrowserHostActivity {
+  appVisible: boolean;
+  focusedAgentId: string | null;
+  focusedWorkspaceId: string | null;
+  lastActivityAtMs: number;
 }
 
 export interface BrowserToolsExecuteInput {
@@ -137,7 +145,7 @@ export class BrowserToolsBroker {
       });
     }
 
-    const host = this.selectHostForCommand(request.data.command, requestId);
+    const host = this.selectHostForCommand(request.data, requestId);
     if (!host.ok) {
       return host.payload;
     }
@@ -265,13 +273,14 @@ export class BrowserToolsBroker {
   }
 
   private selectHostForCommand(
-    command: BrowserAutomationCommand,
+    request: BrowserAutomationExecuteRequest,
     requestId: string,
   ):
     | { ok: true; value: RegisteredBrowserHost }
     | { ok: false; payload: BrowserToolsResponsePayload } {
+    const { command } = request;
     if (command.command === "new_tab") {
-      const host = this.selectMostRecentlyRegisteredHost();
+      const host = this.selectHostForNewTab(request);
       return host
         ? { ok: true, value: host }
         : { ok: false, payload: this.noBrowserHostFailure(requestId) };
@@ -336,6 +345,44 @@ export class BrowserToolsBroker {
     let selected: RegisteredBrowserHost | null = null;
     for (const host of this.clients.values()) {
       selected = host;
+    }
+    return selected;
+  }
+
+  private selectHostForNewTab(request: BrowserAutomationExecuteRequest): RegisteredBrowserHost | null {
+    // Browser tabs live in a renderer's local workspace layout. Sending new_tab to the
+    // last connected renderer can create an invisible tab in another window or machine.
+    let selected: RegisteredBrowserHost | null = null;
+    let selectedRank = -1;
+    let selectedActivityAt = Number.NEGATIVE_INFINITY;
+    for (const host of this.clients.values()) {
+      const activity = host.client.getActivity?.() ?? null;
+      const matchingAgent = Boolean(
+        request.agentId && activity?.focusedAgentId === request.agentId,
+      );
+      const matchingWorkspace = Boolean(
+        request.workspaceId && activity?.focusedWorkspaceId === request.workspaceId,
+      );
+      const rank = matchingAgent
+        ? activity?.appVisible
+          ? 5
+          : 3
+        : matchingWorkspace
+          ? activity?.appVisible
+            ? 4
+            : 2
+          : activity?.appVisible
+            ? 1
+            : 0;
+      const activityAt = activity?.lastActivityAtMs ?? Number.NEGATIVE_INFINITY;
+      if (
+        rank > selectedRank ||
+        (rank === selectedRank && activityAt >= selectedActivityAt)
+      ) {
+        selected = host;
+        selectedRank = rank;
+        selectedActivityAt = activityAt;
+      }
     }
     return selected;
   }

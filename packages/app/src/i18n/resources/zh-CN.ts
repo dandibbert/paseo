@@ -1942,7 +1942,6 @@ export const zhCN: TranslationResources = {
     parent: {
       backToParent: "返回父代理",
       backTo: "返回 {{label}}",
-      parent: "父代理",
       parentAgent: "父代理",
       openParent: "打开父代理",
     },
@@ -2120,6 +2119,18 @@ export const zhCN: TranslationResources = {
       sent: "已发送",
       failed: "消息发送失败，请重试。",
     },
+  },
+  daemonOutdated: {
+    title: "守护进程版本过旧",
+    versions: "{{host}} 运行的守护进程为 {{daemonVersion}}，此应用为 {{appVersion}}。",
+    terminalsStayOpen: "更新会重启守护进程，终端将保持打开。",
+    terminalsClose: "更新会重启守护进程，并关闭已打开的终端。",
+    desktopUpdateTerminals:
+      "更新 Paseo Desktop 时，macOS 和 Linux 上的终端保持打开，Windows 上的终端会被关闭。",
+    desktopManaged: "此守护进程由 Paseo Desktop 管理。请在那台电脑上更新 Paseo。",
+    selfUpdateUnsupported: "此守护进程无法自行更新。请在那台电脑上更新 Paseo。",
+    update: "更新",
+    updateFailedTitle: "守护进程更新失败",
   },
   contextWindow: {
     noData: "暂无上下文数据",
@@ -2898,6 +2909,10 @@ export const zhCN: TranslationResources = {
           offlineMessage: "这个 Host 已离线。Paseo 会自动重连，请等它恢复在线后再重启。",
           requestFailedTitle: "错误",
           requestFailedMessage: "发送重启请求失败。Paseo 会自动重连，请在 Host 显示在线后重试。",
+          closeTerminals: "重启并关闭终端",
+          closeTerminalsHint: "重启的同时关闭此主机上的所有终端。",
+          closeTerminalsConfirmMessage:
+            "这将重启守护进程并关闭其所有终端，终端中运行的程序会被结束。应用会自动重新连接。",
           dialogFailedMessage: "无法打开重启确认对话框。",
         },
         update: {

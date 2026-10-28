@@ -1942,7 +1942,6 @@ export const ja: TranslationResources = {
     parent: {
       backToParent: "親に戻る",
       backTo: "{{label}} に戻る",
-      parent: "親",
       parentAgent: "親エージェント",
       openParent: "親を開く",
     },
@@ -2121,6 +2120,20 @@ export const ja: TranslationResources = {
       sent: "送信済み",
       failed: "メッセージを送信できませんでした。もう一度お試しください。",
     },
+  },
+  daemonOutdated: {
+    title: "デーモンが古くなっています",
+    versions: "{{host}}のデーモンは{{daemonVersion}}です。このアプリは{{appVersion}}です。",
+    terminalsStayOpen: "更新するとデーモンが再起動します。ターミナルは開いたままです。",
+    terminalsClose: "更新するとデーモンが再起動し、開いているターミナルは閉じられます。",
+    desktopUpdateTerminals:
+      "Paseo Desktop を更新すると、macOS と Linux ではターミナルは開いたままですが、Windows では閉じられます。",
+    desktopManaged:
+      "このデーモンはPaseo Desktopによって管理されています。そのコンピューターでPaseoを更新してください。",
+    selfUpdateUnsupported:
+      "このデーモンは自身を更新できません。そのコンピューターでPaseoを更新してください。",
+    update: "更新",
+    updateFailedTitle: "デーモンを更新できませんでした",
   },
   contextWindow: {
     noData: "コンテキストデータがありません",
@@ -2919,6 +2932,10 @@ export const ja: TranslationResources = {
           requestFailedTitle: "エラー",
           requestFailedMessage:
             "再起動リクエストの送信に失敗しました。Paseoは自動的に再接続します。ホストがオンラインになったら再試行してください。",
+          closeTerminals: "再起動してターミナルを閉じる",
+          closeTerminalsHint: "再起動し、このホストのすべてのターミナルも閉じます。",
+          closeTerminalsConfirmMessage:
+            "デーモンを再起動し、すべてのターミナルを閉じます。ターミナルで実行中のプログラムは終了します。アプリは自動的に再接続します。",
           dialogFailedMessage: "再起動確認ダイアログを開けませんでした。",
         },
         update: {

@@ -7846,7 +7846,7 @@ test("workspace ownership does not turn an ordinary agent into a disposable help
   expect(manager.listAgents().map((agent) => agent.id)).toEqual([agentId]);
   expect(await storage.get(agentId)).not.toBeNull();
   // Workspace ownership preserves ordinary agent lifecycle hooks.
-  expect(beforeHookCalls).toContain("agent.create");
+  expect(beforeHookCalls).toContain("agent.create.before");
 });
 
 test("global subscribers receive internal agent events only when they opt in", async () => {
@@ -12111,15 +12111,15 @@ test.each([
     const session = client.sessions[0]!;
     session.pushEvent({ type: "turn_started", provider: "codex", turnId: "hook-turn" });
     await expect
-      .poll(() => events.filter(({ name }) => name === "agent.turn_started").length)
+      .poll(() => events.filter(({ name }) => name === "agent.turn.before").length)
       .toBe(1);
     expect(timelineStore.itemReads).toBe(readsBeforeDispatch);
     session.pushEvent(terminalEvent);
     await expect
-      .poll(() => events.filter(({ name }) => name === "agent.turn_ended"))
+      .poll(() => events.filter(({ name }) => name === "agent.turn.after"))
       .toEqual([
         {
-          name: "agent.turn_ended",
+          name: "agent.turn.after",
           event: {
             agent: {
               id: agent.id,
