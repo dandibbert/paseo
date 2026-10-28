@@ -485,8 +485,8 @@ describe("tool call detail-level projection", () => {
     const result = project({ level: "overview", head: [before, card, after] });
 
     expect(result.head).toEqual([before, card, after]);
-    expect(result.groupsByHostId.get(before.id)?.run.calls).toEqual([before]);
-    expect(result.groupsByHostId.get(after.id)?.run.calls).toEqual([after]);
+    // Single calls remain ungrouped; the visual card preserves their order.
+    expect(result.groupsByHostId.size).toBe(0);
   });
 });
 

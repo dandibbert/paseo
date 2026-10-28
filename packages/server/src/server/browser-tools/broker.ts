@@ -349,7 +349,9 @@ export class BrowserToolsBroker {
     return selected;
   }
 
-  private selectHostForNewTab(request: BrowserAutomationExecuteRequest): RegisteredBrowserHost | null {
+  private selectHostForNewTab(
+    request: BrowserAutomationExecuteRequest,
+  ): RegisteredBrowserHost | null {
     // Browser tabs live in a renderer's local workspace layout. Sending new_tab to the
     // last connected renderer can create an invisible tab in another window or machine.
     let selected: RegisteredBrowserHost | null = null;
@@ -359,10 +361,7 @@ export class BrowserToolsBroker {
       const activity = host.client.getActivity?.() ?? null;
       const rank = rankBrowserHostActivity(activity, request.agentId, request.workspaceId);
       const activityAt = activity?.lastActivityAtMs ?? Number.NEGATIVE_INFINITY;
-      if (
-        rank > selectedRank ||
-        (rank === selectedRank && activityAt >= selectedActivityAt)
-      ) {
+      if (rank > selectedRank || (rank === selectedRank && activityAt >= selectedActivityAt)) {
         selected = host;
         selectedRank = rank;
         selectedActivityAt = activityAt;

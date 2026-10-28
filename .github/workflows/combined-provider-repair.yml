@@ -92,6 +92,15 @@ jobs:
         run: node scripts/npm-retry.mjs ci
       - name: Build server stack
         run: npm run build:server
+      - name: Browser host and merged UI regression tests
+        run: |
+          npx vitest run \
+            packages/server/src/server/browser-tools/broker.test.ts \
+            packages/server/src/server/websocket-server.browser-tools.test.ts --bail=1
+          npm run test --workspace=@getpaseo/app -- \
+            src/components/ui/menu/menu-root.test.tsx \
+            src/tool-calls/detail-level/projection.test.ts --bail=1
+          node --test scripts/ci-workflow.test.mjs
       - name: Typecheck
         run: npm run typecheck
       - name: Provider profile schema regression tests
@@ -195,6 +204,7 @@ jobs:
           build_number=$(jq -r .run_number <<< "$metadata")
           [[ "$build_number" =~ ^[0-9]+$ ]]
           root_version=$(gh api "repos/$GITHUB_REPOSITORY/contents/package.json?ref=$SOURCE_REVISION" --jq .content | base64 --decode | jq -r .version)
+          root_version="${root_version%%-*}"
           [[ "$root_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
           # Test and stable builds share the run number, so the newer build always has the higher version.
           version="$root_version-personal.$build_number"
@@ -332,7 +342,11 @@ jobs:
           const p = 'packages/desktop/package.json';
           const pkg = JSON.parse(fs.readFileSync(p, 'utf8'));
           const rootPkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
-          pkg.version = `${rootPkg.version}-personal.${process.env.GITHUB_RUN_NUMBER}`;
+          const baseVersion = rootPkg.version.split("-")[0];
+          if (!/^\d+\.\d+\.\d+$/.test(baseVersion)) {
+            throw new Error(`Invalid personal release base version: ${rootPkg.version}`);
+          }
+          pkg.version = `${baseVersion}-personal.${process.env.GITHUB_RUN_NUMBER}`;
           fs.writeFileSync(p, JSON.stringify(pkg, null, 2) + '\n');
           // In-app updates read the feed that the release job keeps current.
           const configPath = 'packages/desktop/electron-builder.yml';

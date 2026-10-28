@@ -14,6 +14,7 @@ import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { BottomSheetScrollView } from "@gorhom/bottom-sheet";
 import { ChevronLeft } from "lucide-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { isWeb } from "@/constants/platform";
 import {
   IsolatedBottomSheetModal,
   useIsolatedBottomSheetVisibility,
@@ -390,6 +391,16 @@ function MenuSheetSurface({
     // Android Back steps back through the pages before it closes the sheet.
     onBack: menu.goBack,
   });
+  const handleMenuSheetDismiss = useCallback(() => {
+    handleSheetDismiss();
+    if (!isWeb) return;
+    // Closing the portal can discard focus restored earlier by the overlay registry.
+    // Restore it after the sheet has actually left the DOM.
+    setTimeout(() => {
+      const trigger = menu.triggerRef.current;
+      if (trigger instanceof HTMLElement && document.contains(trigger)) trigger.focus();
+    }, 0);
+  }, [handleSheetDismiss, menu.triggerRef]);
 
   const openPageId = currentPageId(menu.path);
   const openPage = openPageId ? pages.find((page) => page.id === openPageId) : null;
@@ -426,7 +437,7 @@ function MenuSheetSurface({
       enableContentPanningGesture={!fillPage}
       maxDynamicContentSize={windowHeight * 0.8}
       onChange={handleSheetChange}
-      onDismiss={handleSheetDismiss}
+      onDismiss={handleMenuSheetDismiss}
       backdropOpacity={0.45}
       enablePanDownToClose
       // `interactive` rather than `extend`, which is what every other sheet in the app uses.
@@ -445,25 +456,25 @@ function MenuSheetSurface({
         style={fillPage ? styles.fillPage : undefined}
       >
         {fillPage ? (
-        <View style={styles.fillPage} testID={testID ? `${testID}-${fillPage.id}` : undefined}>
-          {fillPage.content}
-        </View>
-      ) : (
-        <MenuSheetScrollView dataSet={sheetDataSet} testID={testID}>
-          {listPage ? (
-            <>
-              <MenuSheetHeader title={listPage.title} onBack={menu.goBack} />
-              <MenuPage depth={depth}>{listPage.content}</MenuPage>
-            </>
-          ) : (
-            <>
-              {sheetTitle ? (
-                <MenuSheetHeader title={sheetTitle} onBack={null} trailing={sheetTrailing} />
-              ) : null}
-              <MenuPage depth={0}>{children}</MenuPage>
-            </>
-          )}
-        </MenuSheetScrollView>
+          <View style={styles.fillPage} testID={testID ? `${testID}-${fillPage.id}` : undefined}>
+            {fillPage.content}
+          </View>
+        ) : (
+          <MenuSheetScrollView testID={testID}>
+            {listPage ? (
+              <>
+                <MenuSheetHeader title={listPage.title} onBack={menu.goBack} />
+                <MenuPage depth={depth}>{listPage.content}</MenuPage>
+              </>
+            ) : (
+              <>
+                {sheetTitle ? (
+                  <MenuSheetHeader title={sheetTitle} onBack={null} trailing={sheetTrailing} />
+                ) : null}
+                <MenuPage depth={0}>{children}</MenuPage>
+              </>
+            )}
+          </MenuSheetScrollView>
         )}
       </View>
     </IsolatedBottomSheetModal>
@@ -475,11 +486,9 @@ function MenuSheetSurface({
  * one left where the menu was opened: inside a sheet tab, none is.
  */
 function MenuSheetScrollView({
-  dataSet,
   testID,
   children,
 }: {
-  dataSet: { keyboardScope: KeyboardFocusScope } | undefined;
   testID?: string;
   children: ReactNode;
 }) {
@@ -495,7 +504,6 @@ function MenuSheetScrollView({
   );
   return (
     <BottomSheetScrollView
-      dataSet={dataSet}
       contentContainerStyle={contentStyle}
       keyboardShouldPersistTaps="handled"
       showsVerticalScrollIndicator={false}
