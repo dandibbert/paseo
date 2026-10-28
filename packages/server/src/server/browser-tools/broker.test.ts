@@ -361,62 +361,60 @@ describe("BrowserToolsBroker", () => {
         lastActivityAtMs: 100,
       },
     },
-  ])("routes a new tab to $caseName instead of the last connected host", async ({
-    agentId,
-    workspaceId,
-    first,
-    second,
-  }) => {
-    const broker = createBroker();
-    const preferred = new FakeBrowserHostClient("host-preferred", { activity: first });
-    const laterConnected = new FakeBrowserHostClient("host-later", { activity: second });
-    broker.registerClient(preferred);
-    broker.registerClient(laterConnected);
+  ])(
+    "routes a new tab to $caseName instead of the last connected host",
+    async ({ agentId, workspaceId, first, second }) => {
+      const broker = createBroker();
+      const preferred = new FakeBrowserHostClient("host-preferred", { activity: first });
+      const laterConnected = new FakeBrowserHostClient("host-later", { activity: second });
+      broker.registerClient(preferred);
+      broker.registerClient(laterConnected);
 
-    const pending = broker.execute({
-      command: { command: "new_tab", args: { url: "https://example.com" } },
-      agentId,
-      workspaceId,
-    });
-
-    expect(preferred.receivedRequests).toHaveLength(1);
-    expect(laterConnected.receivedRequests).toHaveLength(0);
-    preferred.resolveLatestWith(broker, {
-      requestId: "req-1",
-      ok: true,
-      result: {
-        command: "new_tab",
-        browserId: BROWSER_ID,
+      const pending = broker.execute({
+        command: { command: "new_tab", args: { url: "https://example.com" } },
+        agentId,
         workspaceId,
-        url: "https://example.com",
-      },
-    });
-    await expect(pending).resolves.toMatchObject({ ok: true });
+      });
 
-    const snapshot = broker.execute({
-      command: { command: "snapshot", args: { browserId: BROWSER_ID } },
-      agentId,
-      workspaceId,
-    });
-    expect(preferred.receivedRequests.at(-1)?.command.command).toBe("snapshot");
-    expect(laterConnected.receivedRequests).toHaveLength(0);
-    preferred.resolveLatestWith(broker, {
-      requestId: "req-1",
-      ok: true,
-      result: {
-        command: "snapshot",
-        browserId: BROWSER_ID,
+      expect(preferred.receivedRequests).toHaveLength(1);
+      expect(laterConnected.receivedRequests).toHaveLength(0);
+      preferred.resolveLatestWith(broker, {
+        requestId: "req-1",
+        ok: true,
+        result: {
+          command: "new_tab",
+          browserId: BROWSER_ID,
+          workspaceId,
+          url: "https://example.com",
+        },
+      });
+      await expect(pending).resolves.toMatchObject({ ok: true });
+
+      const snapshot = broker.execute({
+        command: { command: "snapshot", args: { browserId: BROWSER_ID } },
+        agentId,
         workspaceId,
-        url: "https://example.com",
-        title: "Example",
-        format: "aria-yaml",
-        snapshot: "- document",
-        truncated: false,
-        stats: { nodeCount: 1, refCount: 0, textLength: 10 },
-      },
-    });
-    await expect(snapshot).resolves.toMatchObject({ ok: true });
-  });
+      });
+      expect(preferred.receivedRequests.at(-1)?.command.command).toBe("snapshot");
+      expect(laterConnected.receivedRequests).toHaveLength(0);
+      preferred.resolveLatestWith(broker, {
+        requestId: "req-1",
+        ok: true,
+        result: {
+          command: "snapshot",
+          browserId: BROWSER_ID,
+          workspaceId,
+          url: "https://example.com",
+          title: "Example",
+          format: "aria-yaml",
+          snapshot: "- document",
+          truncated: false,
+          stats: { nodeCount: 1, refCount: 0, textLength: 10 },
+        },
+      });
+      await expect(snapshot).resolves.toMatchObject({ ok: true });
+    },
+  );
 
   test("list tabs aggregates all hosts and seeds browser id affinity", async () => {
     const broker = createBroker();

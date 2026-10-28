@@ -485,13 +485,7 @@ function MenuSheetSurface({
  * Rendered on the far side of the sheet's portal so it clears the screen's bottom inset, not the
  * one left where the menu was opened: inside a sheet tab, none is.
  */
-function MenuSheetScrollView({
-  testID,
-  children,
-}: {
-  testID?: string;
-  children: ReactNode;
-}) {
+function MenuSheetScrollView({ testID, children }: { testID?: string; children: ReactNode }) {
   const safeAreaInsets = useSafeAreaInsets();
   const contentStyle = useMemo(
     () => ({
