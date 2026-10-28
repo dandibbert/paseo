@@ -357,23 +357,7 @@ export class BrowserToolsBroker {
     let selectedActivityAt = Number.NEGATIVE_INFINITY;
     for (const host of this.clients.values()) {
       const activity = host.client.getActivity?.() ?? null;
-      const matchingAgent = Boolean(
-        request.agentId && activity?.focusedAgentId === request.agentId,
-      );
-      const matchingWorkspace = Boolean(
-        request.workspaceId && activity?.focusedWorkspaceId === request.workspaceId,
-      );
-      const rank = matchingAgent
-        ? activity?.appVisible
-          ? 5
-          : 3
-        : matchingWorkspace
-          ? activity?.appVisible
-            ? 4
-            : 2
-          : activity?.appVisible
-            ? 1
-            : 0;
+      const rank = rankBrowserHostActivity(activity, request.agentId, request.workspaceId);
       const activityAt = activity?.lastActivityAtMs ?? Number.NEGATIVE_INFINITY;
       if (
         rank > selectedRank ||
@@ -578,4 +562,19 @@ function getBrowserAutomationResponseRequestId(response: unknown): string | null
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
+}
+
+function rankBrowserHostActivity(
+  activity: BrowserHostActivity | null,
+  agentId: string | undefined,
+  workspaceId: string | undefined,
+): number {
+  if (!activity) return 0;
+  if (agentId && activity.focusedAgentId === agentId) {
+    return activity.appVisible ? 5 : 3;
+  }
+  if (workspaceId && activity.focusedWorkspaceId === workspaceId) {
+    return activity.appVisible ? 4 : 2;
+  }
+  return activity.appVisible ? 1 : 0;
 }
