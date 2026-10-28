@@ -1,0 +1,37 @@
+name: Personal Beta Format Preflight
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  format:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Install formatter
+        run: npm ci --ignore-scripts --no-audit
+      - name: Format the two merge-affected files
+        run: |
+          npm run format:files -- \
+            packages/app/src/components/ui/menu/menu-surface.tsx \
+            packages/server/src/server/browser-tools/broker.test.ts
+          git diff --check
+      - name: Commit formatter output to this branch
+        run: |
+          git add packages/app/src/components/ui/menu/menu-surface.tsx packages/server/src/server/browser-tools/broker.test.ts
+          if git diff --cached --quiet; then
+            echo 'Files already formatted.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'style: apply oxfmt to merged browser and menu code'
+          git push origin "HEAD:$GITHUB_REF_NAME"
