@@ -29,6 +29,8 @@ interface SupportedMutableConfigPatch {
   autoArchiveAfterMerge?: boolean;
   enableTerminalAgentHooks?: boolean;
   idleRuntimeCleanup?: boolean;
+  resumeOnStartup?: boolean;
+  resumePrompt?: string;
   appendSystemPrompt?: string;
   genuiSystemPrompt?: boolean;
   terminalProfiles?: MutableDaemonConfig["terminalProfiles"];
@@ -195,6 +197,8 @@ const RELOADABLE_PATHS = [
   "daemon.agentProfiles",
   "app.baseUrl",
   "agents.idleRuntimeCleanup",
+  "agents.resumeOnStartup",
+  "agents.resumePrompt",
   "agents.providers",
   "agents.catalogRefreshTimeoutMs",
   "agents.metadataGeneration",
@@ -221,6 +225,8 @@ const PERSISTED_TO_MUTABLE_PATH = new Map<string, string>([
   ["daemon.agentProfiles", "agentProfiles"],
   ["app.baseUrl", "app.baseUrl"],
   ["agents.idleRuntimeCleanup", "idleRuntimeCleanup"],
+  ["agents.resumeOnStartup", "resumeOnStartup"],
+  ["agents.resumePrompt", "resumePrompt"],
   ["agents.providers", "providers"],
   ["agents.catalogRefreshTimeoutMs", "catalogRefreshTimeoutMs"],
   ["agents.metadataGeneration", "metadataGeneration"],
@@ -275,6 +281,15 @@ function pickRelayPatch(
   return Object.keys(picked).length > 0 ? { relay: picked } : {};
 }
 
+function pickRestartRecoveryPatch(
+  patch: MutableDaemonConfigPatch,
+): Pick<SupportedMutableConfigPatch, "resumeOnStartup" | "resumePrompt"> {
+  return {
+    ...(patch.resumeOnStartup !== undefined ? { resumeOnStartup: patch.resumeOnStartup } : {}),
+    ...(patch.resumePrompt !== undefined ? { resumePrompt: patch.resumePrompt } : {}),
+  };
+}
+
 function pickSupportedPatchFields(patch: MutableDaemonConfigPatch): SupportedMutableConfigPatch {
   return {
     ...pickRelayPatch(patch.relay),
@@ -295,6 +310,7 @@ function pickSupportedPatchFields(patch: MutableDaemonConfigPatch): SupportedMut
     ...(patch.enableTerminalAgentHooks !== undefined
       ? { enableTerminalAgentHooks: patch.enableTerminalAgentHooks }
       : {}),
+    ...pickRestartRecoveryPatch(patch),
     ...(patch.idleRuntimeCleanup !== undefined
       ? { idleRuntimeCleanup: patch.idleRuntimeCleanup }
       : {}),
@@ -708,6 +724,7 @@ function mergeMutableAgentPatch(
     patch.providers === undefined &&
     patch.metadataGeneration === undefined &&
     patch.skills === undefined &&
+    !hasRestartRecoveryPatch(patch) &&
     patch.idleRuntimeCleanup === undefined &&
     removeProviders.length === 0
   ) {
@@ -741,6 +758,7 @@ function mergeMutableAgentPatch(
     next["skills"] = { selection: patch.skills.selection };
   }
 
+  Object.assign(next, restartRecoveryPatch(patch));
   if (patch.idleRuntimeCleanup !== undefined) {
     next["idleRuntimeCleanup"] = patch.idleRuntimeCleanup;
   }
@@ -777,4 +795,14 @@ function mergeMutableDaemonPatch(
   if (patch.terminalProfiles !== undefined) next.terminalProfiles = patch.terminalProfiles;
   if (patch.agentProfiles !== undefined) next.agentProfiles = patch.agentProfiles;
   return Object.keys(next).length > 0 ? next : undefined;
+}
+
+function hasRestartRecoveryPatch(patch: SupportedMutableConfigPatch) {
+  return patch.resumeOnStartup !== undefined || patch.resumePrompt !== undefined;
+}
+function restartRecoveryPatch(patch: SupportedMutableConfigPatch) {
+  return {
+    ...(patch.resumeOnStartup !== undefined ? { resumeOnStartup: patch.resumeOnStartup } : {}),
+    ...(patch.resumePrompt !== undefined ? { resumePrompt: patch.resumePrompt } : {}),
+  };
 }

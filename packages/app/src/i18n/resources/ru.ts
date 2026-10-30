@@ -2134,18 +2134,6 @@ export const ru: TranslationResources = {
       failed: "Не удалось отправить сообщение. Попробуйте ещё раз.",
     },
   },
-  daemonOutdated: {
-    title: "Демон устарел",
-    versions: "На {{host}} работает демон {{daemonVersion}}. Версия приложения: {{appVersion}}.",
-    terminalsStayOpen: "Обновление перезапустит демон. Терминалы останутся открытыми.",
-    terminalsClose: "Обновление перезапустит демон и закроет открытые терминалы.",
-    desktopUpdateTerminals:
-      "Обновление Paseo Desktop оставляет терминалы открытыми в macOS и Linux и закрывает их в Windows.",
-    desktopManaged: "Этим демоном управляет Paseo Desktop. Обновите Paseo на том компьютере.",
-    selfUpdateUnsupported: "Этот демон не может обновиться сам. Обновите Paseo на том компьютере.",
-    update: "Обновить",
-    updateFailedTitle: "Не удалось обновить демон",
-  },
   contextWindow: {
     noData: "Нет данных о контексте",
     accessibilityNoData: "Контекстное окно: нет данных о контексте",
@@ -2227,6 +2215,7 @@ export const ru: TranslationResources = {
       days: "{{value}} дн.",
       hours: "{{value}} ч",
       minutes: "{{value}} мин",
+      pair: "{{first}} {{second}}",
     },
     timing: {
       lastUpdated: "Последнее обновление {{relativeTime}}",
@@ -2234,6 +2223,8 @@ export const ru: TranslationResources = {
       resetTimePassed: "Время сброса прошло",
       resettingNow: "сброс сейчас",
       resetsIn: "сброс через {{duration}}",
+      resetsAtWeekday: "{{weekday}} {{time}}",
+      resetsAtDate: "{{date}}, {{time}}",
       runsOutNow: "закончится сейчас",
       runsOutIn: "закончится через {{duration}}",
       justNow: "только что",
@@ -2857,6 +2848,14 @@ export const ru: TranslationResources = {
       },
       agents: {
         unavailable: "Подключитесь к этому хосту, чтобы управлять агентами",
+        resumeOnStartup: {
+          title: "Возобновлять агентов после перезапуска",
+          info: "Открывает агентов, которые работали при остановке хоста, и отправляет сообщение для продолжения. Применяется после обычного перезапуска и сбоя.",
+          hint: "Автоматически продолжать прерванную работу.",
+          prompt: "Сообщение для продолжения",
+          edit: "Редактировать",
+          editAccessibilityLabel: "Изменить сообщение",
+        },
         idleRuntimeCleanup: {
           title: "Освобождать неактивных агентов",
           hint: "Освобождает память после часа бездействия.",

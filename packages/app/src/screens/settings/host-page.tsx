@@ -65,6 +65,7 @@ import { ICON_SIZE } from "@/styles/theme";
 import type { Theme } from "@/styles/theme";
 import { useProviderIcon } from "@/components/provider-icons";
 import { BrowserToolsOptInCard } from "./browser-tools-card";
+import { RestartRecoveryCard } from "./restart-recovery-card";
 import { IdleRuntimeCleanupCard } from "./idle-runtime-cleanup-card";
 import { restartDaemonFromSettings, updateDaemonFromSettings } from "./daemon-lifecycle";
 
@@ -293,6 +294,7 @@ export function HostAgentsPage({ serverId }: { serverId: string }) {
           <BrowserToolsOptInCard serverId={serverId} />
           <AppendSystemPromptCard serverId={serverId} />
           <GenuiSystemPromptCard serverId={serverId} />
+          <RestartRecoveryCard serverId={serverId} />
           <IdleRuntimeCleanupCard serverId={serverId} />
         </SettingsSection>
       ) : (

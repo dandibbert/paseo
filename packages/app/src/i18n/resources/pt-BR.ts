@@ -2134,19 +2134,6 @@ export const ptBR: TranslationResources = {
       failed: "Não foi possível enviar a mensagem. Tente novamente.",
     },
   },
-  daemonOutdated: {
-    title: "Daemon desatualizado",
-    versions: "{{host}} executa o daemon {{daemonVersion}}. Este app é {{appVersion}}.",
-    terminalsStayOpen: "Atualizar reinicia o daemon. Os terminais continuam abertos.",
-    terminalsClose: "Atualizar reinicia o daemon e fecha os terminais abertos.",
-    desktopUpdateTerminals:
-      "Atualizar o Paseo Desktop mantém os terminais abertos no macOS e no Linux, e os fecha no Windows.",
-    desktopManaged: "O Paseo Desktop gerencia este daemon. Atualize o Paseo nesse computador.",
-    selfUpdateUnsupported:
-      "Este daemon não consegue se atualizar sozinho. Atualize o Paseo nesse computador.",
-    update: "Atualizar",
-    updateFailedTitle: "Falha ao atualizar o daemon",
-  },
   contextWindow: {
     noData: "Sem dados de contexto",
     accessibilityNoData: "Janela de contexto: sem dados de contexto",
@@ -2228,6 +2215,7 @@ export const ptBR: TranslationResources = {
       days: "{{value}} d",
       hours: "{{value}} h",
       minutes: "{{value}} min",
+      pair: "{{first}} {{second}}",
     },
     timing: {
       lastUpdated: "Última atualização {{relativeTime}}",
@@ -2235,6 +2223,8 @@ export const ptBR: TranslationResources = {
       resetTimePassed: "O horário de redefinição passou",
       resettingNow: "redefinindo agora",
       resetsIn: "redefine em {{duration}}",
+      resetsAtWeekday: "{{weekday}} {{time}}",
+      resetsAtDate: "{{date}}, {{time}}",
       runsOutNow: "esgota agora",
       runsOutIn: "esgota em {{duration}}",
       justNow: "agora mesmo",
@@ -2848,6 +2838,14 @@ export const ptBR: TranslationResources = {
       },
       agents: {
         unavailable: "Conecte-se a este host para gerenciar agentes",
+        resumeOnStartup: {
+          title: "Retomar agentes após reiniciar",
+          info: "Reabre os agentes que estavam trabalhando quando o host parou e envia a mensagem de retomada. Aplica-se após reinicializações normais e falhas.",
+          hint: "Continuar automaticamente o trabalho interrompido.",
+          prompt: "Mensagem de retomada",
+          edit: "Editar",
+          editAccessibilityLabel: "Editar mensagem",
+        },
         idleRuntimeCleanup: {
           title: "Liberar agentes ociosos",
           hint: "Libera memória após uma hora de inatividade.",

@@ -2101,18 +2101,6 @@ export const ar: TranslationResources = {
       failed: "تعذر إرسال الرسالة. حاول مرة أخرى.",
     },
   },
-  daemonOutdated: {
-    title: "الخدمة قديمة",
-    versions: "يشغّل {{host}} الخدمة {{daemonVersion}}. إصدار هذا التطبيق {{appVersion}}.",
-    terminalsStayOpen: "يعيد التحديث تشغيل الخدمة. تبقى الطرفيات مفتوحة.",
-    terminalsClose: "يعيد التحديث تشغيل الخدمة ويغلق الطرفيات المفتوحة.",
-    desktopUpdateTerminals:
-      "يُبقي تحديث Paseo Desktop الطرفيات مفتوحة على macOS وLinux، ويغلقها على Windows.",
-    desktopManaged: "يدير Paseo Desktop هذه الخدمة. حدّث Paseo على ذلك الحاسوب.",
-    selfUpdateUnsupported: "لا يمكن لهذه الخدمة تحديث نفسها. حدّث Paseo على ذلك الحاسوب.",
-    update: "تحديث",
-    updateFailedTitle: "فشل تحديث الخدمة",
-  },
   contextWindow: {
     noData: "لا توجد بيانات للسياق",
     accessibilityNoData: "نافذة السياق: لا توجد بيانات للسياق",
@@ -2212,6 +2200,7 @@ export const ar: TranslationResources = {
       minutes_few: "{{value}} دقائق",
       minutes_many: "{{value}} دقيقة",
       minutes_other: "{{value}} دقيقة",
+      pair: "{{first}} و{{second}}",
     },
     timing: {
       lastUpdated: "آخر تحديث {{relativeTime}}",
@@ -2219,6 +2208,8 @@ export const ar: TranslationResources = {
       resetTimePassed: "مضى وقت إعادة التعيين",
       resettingNow: "تتم إعادة التعيين الآن",
       resetsIn: "تتم إعادة التعيين خلال {{duration}}",
+      resetsAtWeekday: "{{weekday}} {{time}}",
+      resetsAtDate: "{{date}}، {{time}}",
       runsOutNow: "ينفد الآن",
       runsOutIn: "ينفد خلال {{duration}}",
       justNow: "الآن",
@@ -2842,6 +2833,14 @@ export const ar: TranslationResources = {
       },
       agents: {
         unavailable: "Connect to this host to manage agents",
+        resumeOnStartup: {
+          title: "استئناف الوكلاء بعد إعادة التشغيل",
+          info: "إعادة فتح الوكلاء الذين كانوا يعملون عند توقف المضيف وإرسال طلب الاستئناف. ينطبق ذلك بعد إعادة التشغيل العادية والتعطّل.",
+          hint: "متابعة العمل المنقطع تلقائيًا.",
+          prompt: "طلب الاستئناف",
+          edit: "تحرير",
+          editAccessibilityLabel: "تعديل الطلب",
+        },
         idleRuntimeCleanup: {
           title: "تحرير الوكلاء الخاملين",
           hint: "تحرير الذاكرة بعد ساعة من الخمول.",

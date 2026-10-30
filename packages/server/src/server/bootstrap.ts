@@ -1,3 +1,5 @@
+import { createRestartRecovery } from "./agent/restart-recovery/index.js";
+import { sendPromptToAgent } from "./agent/agent-prompt.js";
 import { createIdleRuntimeCleanup } from "./agent/idle-runtime-cleanup/index.js";
 import {
   createFinishSubscriptions,
@@ -466,6 +468,8 @@ export interface PaseoDaemonConfig {
   downloadTokenTtlMs?: number;
   agentProviderSettings?: AgentProviderRuntimeSettingsMap;
   idleRuntimeCleanup?: boolean;
+  resumeOnStartup?: boolean;
+  resumePrompt?: string;
   providerCatalogRefreshTimeoutMs?: number;
   metadataGeneration?: {
     providers?: Array<{
@@ -596,6 +600,8 @@ function createInitialMutableDaemonConfig(config: ResolvedDaemonSettings): Mutab
     autoArchiveAfterMerge: config.autoArchiveAfterMerge ?? false,
     enableTerminalAgentHooks: config.enableTerminalAgentHooks ?? false,
     idleRuntimeCleanup: config.idleRuntimeCleanup !== false,
+    resumeOnStartup: config.resumeOnStartup !== false,
+    resumePrompt: config.resumePrompt ?? "Resume working.",
     appendSystemPrompt: config.appendSystemPrompt ?? "",
     genuiSystemPrompt: config.genuiSystemPrompt !== false,
     pluginsEnabled: config.pluginsEnabled ?? false,
@@ -1044,7 +1050,19 @@ export async function createPaseoDaemon(
     agentStorage,
   );
   await agentStorage.initialize();
-  await closeStaleAgentRecords(agentStorage);
+  const restartRecovery = createRestartRecovery({
+    storage: agentStorage,
+    settings: () => ({
+      enabled: daemonConfigStore.get().resumeOnStartup !== false,
+      prompt: daemonConfigStore.get().resumePrompt ?? "Resume working.",
+    }),
+    eligible: async (record) =>
+      !record.workspaceId || !(await workspaceRegistry?.get(record.workspaceId))?.archivedAt,
+    dispatch: (agentId, prompt) =>
+      sendPromptToAgent({ agentId, prompt, agentManager, agentStorage, logger, unarchive: false }),
+    report: (agentId, err) => logger.error({ agentId, err }, "Agent restart recovery failed"),
+  });
+  await restartRecovery.prepareStartup();
   logger.info({ elapsed: elapsed() }, "Agent storage initialized");
   await bootstrapWorkspaceRegistries({
     serverId,
@@ -1478,6 +1496,7 @@ export async function createPaseoDaemon(
     ...createFinishObservation({
       agentManager,
       agentStorage,
+      waitForResume: restartRecovery.waitForResume,
       serverId,
       logger,
       messages: () => {
@@ -1882,6 +1901,7 @@ export async function createPaseoDaemon(
             pluginRuntime.bindPaseoSessionHost(wsServer);
             await pluginRuntime.start();
             providerSnapshotManager.settlePluginProviders();
+            restartRecovery.resumePending();
             await finishSubscriptions.start();
             wsServer.beginAcceptingConnections();
             const relaySecurityLogger = logger.child({ module: "relay-security" });
@@ -1976,6 +1996,7 @@ export async function createPaseoDaemon(
     await finishSubscriptions.close();
     await wsServer?.agentMessages.close();
     agentManager.prepareForShutdown();
+    await restartRecovery.captureRunningAgents();
     await closeAllAgents(logger, agentManager);
     await withTimeout({
       promise: pluginRuntime.drainEvents(),
@@ -2040,16 +2061,6 @@ export async function createPaseoDaemon(
     getListenTarget: () => boundListenTarget,
     getServerId: () => serverId,
   };
-}
-
-async function closeStaleAgentRecords(agentStorage: AgentStorage): Promise<void> {
-  // No provider runtimes are loaded at startup. Repair interrupted
-  // shutdowns before any status consumer sees the persisted active states.
-  for (const record of await agentStorage.list()) {
-    if (record.lastStatus === "running" || record.lastStatus === "initializing") {
-      await agentStorage.upsert({ ...record, lastStatus: "closed" });
-    }
-  }
 }
 
 /**

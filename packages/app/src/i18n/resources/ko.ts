@@ -2111,20 +2111,6 @@ export const ko: TranslationResources = {
       failed: "메시지를 보내지 못했습니다. 다시 시도하세요.",
     },
   },
-  daemonOutdated: {
-    title: "데몬이 오래되었습니다",
-    versions: "{{host}}의 데몬은 {{daemonVersion}}입니다. 이 앱은 {{appVersion}}입니다.",
-    terminalsStayOpen: "업데이트하면 데몬이 다시 시작됩니다. 터미널은 열린 상태로 유지됩니다.",
-    terminalsClose: "업데이트하면 데몬이 다시 시작되고 열려 있는 터미널이 닫힙니다.",
-    desktopUpdateTerminals:
-      "Paseo Desktop을 업데이트하면 macOS와 Linux에서는 터미널이 열린 상태로 유지되고, Windows에서는 닫힙니다.",
-    desktopManaged:
-      "이 데몬은 Paseo Desktop에서 관리됩니다. 해당 컴퓨터에서 Paseo를 업데이트하세요.",
-    selfUpdateUnsupported:
-      "이 데몬은 스스로 업데이트할 수 없습니다. 해당 컴퓨터에서 Paseo를 업데이트하세요.",
-    update: "업데이트",
-    updateFailedTitle: "데몬 업데이트 실패",
-  },
   contextWindow: {
     noData: "컨텍스트 데이터 없음",
     accessibilityNoData: "컨텍스트 창: 컨텍스트 데이터 없음",
@@ -2206,6 +2192,7 @@ export const ko: TranslationResources = {
       days: "{{value}}일",
       hours: "{{value}}시간",
       minutes: "{{value}}분",
+      pair: "{{first}} {{second}}",
     },
     timing: {
       lastUpdated: "마지막 업데이트: {{relativeTime}}",
@@ -2213,6 +2200,8 @@ export const ko: TranslationResources = {
       resetTimePassed: "초기화 시간이 지났습니다",
       resettingNow: "지금 재설정 중",
       resetsIn: "{{duration}} 후 재설정",
+      resetsAtWeekday: "{{weekday}} {{time}}",
+      resetsAtDate: "{{date}} {{time}}",
       runsOutNow: "지금 한도에 도달",
       runsOutIn: "{{duration}} 후 한도에 도달",
       justNow: "방금",
@@ -2821,6 +2810,14 @@ export const ko: TranslationResources = {
       },
       agents: {
         unavailable: "에이전트를 관리하려면 이 호스트에 연결하세요",
+        resumeOnStartup: {
+          title: "재시작 후 에이전트 재개",
+          info: "호스트가 중지될 때 작업 중이던 에이전트를 다시 열고 재개 메시지를 보냅니다. 정상 재시작과 비정상 종료 후 모두 적용됩니다.",
+          hint: "중단된 작업을 자동으로 계속합니다.",
+          prompt: "재개 메시지",
+          edit: "편집",
+          editAccessibilityLabel: "메시지 편집",
+        },
         idleRuntimeCleanup: {
           title: "유휴 에이전트 해제",
           hint: "1시간 동안 활동이 없으면 메모리를 확보합니다.",
