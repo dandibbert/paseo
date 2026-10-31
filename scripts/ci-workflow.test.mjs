@@ -749,3 +749,31 @@ process.exit(code);
     });
   }
 });
+
+// GitHub retires macOS 14 on 2026-11-02; brownouts already reject these jobs.
+test("workflows avoid retired macOS 14 runners", () => {
+  for (const path of filesUnder(".github/workflows", (candidate) => /\.ya?ml$/.test(candidate))) {
+    assert.doesNotMatch(
+      readFileSync(new URL(path, repoRoot), "utf8"),
+      /macos-14(?:-large|-xlarge)?\b/,
+      path,
+    );
+  }
+});
+
+test("macOS packaging uses current runners while keeping the capacity-tested watcher runner", () => {
+  assert.match(
+    jobBlocks(readFileSync(ciWorkflowPath, "utf8")).get("server-tests-macos").join("\n"),
+    /^    runs-on: macos-15-intel$/m,
+  );
+  for (const [workflow, jobId] of [[nixWorkflowPath, "build-desktop-darwin"]]) {
+    assert.match(
+      jobBlocks(readFileSync(workflow, "utf8")).get(jobId).join("\n"),
+      /^    runs-on: macos-latest$/m,
+    );
+  }
+  const release = readFileSync(new URL(".github/workflows/desktop-release.yml", repoRoot), "utf8");
+  assert.match(release, /runner: macos-latest\n\s+electron_arch: arm64/);
+  // GitHub has no standard macos-latest-intel alias; use the newest Intel image.
+  assert.match(release, /runner: macos-26-intel\n\s+electron_arch: x64/);
+});

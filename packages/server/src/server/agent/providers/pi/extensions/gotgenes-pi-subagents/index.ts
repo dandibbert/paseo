@@ -176,7 +176,8 @@ export const gotgenesPiSubagents: PiExtension = {
         type: "sub_agent" as const,
         subAgentType: title,
         description,
-        log: extractTextFromToolResult(call.result)?.trim() ?? "",
+        // COMPAT(subagent-log): remove after 2027-04-30.
+        log: "",
       };
       // A resume continues the same agent, so it updates that agent's card instead of opening one
       // keyed by its own call ID. Remapping the agent would strand the original card at running.
@@ -219,6 +220,10 @@ export const gotgenesPiSubagents: PiExtension = {
         outputFileFromToolResult(call.result) ?? pendingFilesByAgent.get(details.data.agentId);
       pendingFilesByAgent.delete(details.data.agentId);
       const childSessions = childSession(call.callId, file);
+      const childStatus = runs.get(call.callId)!.status;
+      // Without a session file, as on replay, the child's answer is the tool result.
+      const answer =
+        !file && childStatus !== "running" ? extractTextFromToolResult(call.result)?.trim() : "";
       return {
         detail,
         subagents: [
@@ -228,8 +233,17 @@ export const gotgenesPiSubagents: PiExtension = {
             title,
             description,
             toolCallId: call.callId,
-            status: runs.get(call.callId)!.status,
+            status: childStatus,
           },
+          ...(answer
+            ? [
+                {
+                  type: "timeline" as const,
+                  id: call.callId,
+                  item: { type: "assistant_message" as const, text: answer },
+                },
+              ]
+            : []),
         ],
         childSessions,
       };
@@ -246,7 +260,8 @@ export const gotgenesPiSubagents: PiExtension = {
       const detail = {
         type: "sub_agent" as const,
         description: details.success ? details.data.description : undefined,
-        log,
+        // COMPAT(subagent-log): remove after 2027-04-30.
+        log: "",
       };
       if (call.status === "running") return { detail };
       let report: { agentId: string; status: string; transcriptPath?: string } | undefined;

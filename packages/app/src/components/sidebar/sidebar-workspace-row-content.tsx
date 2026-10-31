@@ -1,4 +1,3 @@
-import { useSidebarRowItems } from "./display-preferences/model";
 import { useCompactTimeAgo } from "@/hooks/use-time-ago";
 import { useTranslation } from "react-i18next";
 import { memo, useMemo, useCallback, useState, type ReactNode } from "react";
@@ -121,9 +120,8 @@ export const SidebarWorkspaceRowContent = memo(function SidebarWorkspaceRowConte
   children?: ReactNode;
 }) {
   const {
-    settings: { workspaceTitleSource },
+    settings: { workspaceTitleSource, sidebarRowItems: rowItems },
   } = useAppSettings();
-  const rowItems = useSidebarRowItems();
   const { t } = useTranslation();
   const workspaceLabel = resolveSidebarWorkspacePrimaryLabel({ workspace, workspaceTitleSource });
   // The workspace carries label names; their colors live in its host's catalog, so the row is
