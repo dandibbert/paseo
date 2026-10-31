@@ -34,13 +34,14 @@ export function FilePane({
   navigationRevision: number;
 }) {
   const { t } = useTranslation();
+  const { workspaceId } = usePaneContext();
   const connected = useSessionStore((state) => Boolean(state.sessions[serverId]?.client));
   const root = workspaceRoot.trim();
   const path = location.path.trim();
-  const target = useMemo(
-    () => (path ? resolveFilePreviewReadTarget({ path, workspaceRoot: root }) : null),
-    [path, root],
-  );
+  const target = useMemo(() => {
+    const resolved = resolveFilePreviewReadTarget({ path, workspaceRoot: root });
+    return resolved ? { ...resolved, workspaceId } : null;
+  }, [path, root, workspaceId]);
   const absolutePath = useMemo(
     () => buildAbsoluteExplorerPath({ workspaceRoot: root, entryPath: path }),
     [path, root],

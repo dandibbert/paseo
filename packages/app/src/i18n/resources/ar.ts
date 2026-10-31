@@ -1166,6 +1166,12 @@ export const ar: TranslationResources = {
     },
   },
   sidebar: {
+    projectSources: {
+      label: "مواقع المشروع",
+      hosts: "عبر {{count}} مضيف",
+      shared: "تشترك هذه المواقع في هوية المشروع. الاسم وحده لا يدمج المشاريع.",
+      distinct: "لهذا المشروع هوية مستقلة. الاسم وحده لا يدمج المشاريع.",
+    },
     statusGroupAccessibility: "مجموعة {{label}}",
     statusBucket: {
       needsInput: "تحتاج إدخالاً",
@@ -1174,11 +1180,21 @@ export const ar: TranslationResources = {
       working: "قيد العمل",
       done: "تم",
     },
+    activityFilter: { all: "الكل", running: "قيد التشغيل", attention: "يحتاج الانتباه" },
+    activitySource: {
+      prompt: "رسالة المستخدم",
+      agent: "نشاط الوكيل",
+      terminal: "عملية طرفية",
+      file: "حفظ ملف",
+      created: "إنشاء مساحة العمل",
+    },
     display: {
       showBackground: "إظهار مساحات العمل في الخلفية",
       trigger: "تفضيلات العرض",
       heading: "العرض",
+      sections: { main: "أساسي", location: "الموقع", work: "معلومات العمل" },
       sort: {
+        activity: "النشاط الأخير",
         label: "الترتيب",
         created: "تاريخ الإنشاء",
         manual: "يدوي",
@@ -1186,6 +1202,7 @@ export const ar: TranslationResources = {
         updateHost: "حدّث المضيفين لترتيب مساحات العمل",
       },
       grouping: {
+        host: "المضيف ← المشروع",
         label: "التجميع",
         project: "المشروع",
         status: "الحالة",
@@ -1197,7 +1214,11 @@ export const ar: TranslationResources = {
         branch: "اسم الفرع",
       },
       show: {
-        label: "إظهار",
+        directory: "مجلد العمل",
+        activityTime: "وقت النشاط",
+        activitySource: "مصدر النشاط",
+        both: "التغييرات ومدة الحالة",
+        label: "عرض المعلومات",
         branch: "الفرع",
         project: "المشروع",
         host: "المضيف",
@@ -1206,7 +1227,7 @@ export const ar: TranslationResources = {
         services: "الخدمات",
         labels: "التسميات",
         diff: "إحصائيات الفروق",
-        timestamp: "آخر نشاط",
+        timestamp: "مدة الحالة",
       },
       checks: {
         iconAndText: "أيقونة ونص",

@@ -104,6 +104,7 @@ const PersistedWorkspaceRecordSchema = z.object({
   untrustedSource: UntrustedWorkspaceSourceSchema.optional(),
   // Public discovery visibility. Contents retain their ordinary lifecycle.
   background: z.boolean().optional().default(false),
+  activity: z.object({ at: z.string(), source: z.enum(["file", "terminal"]) }).optional(),
 });
 
 export type PersistedProjectRecord = z.infer<typeof PersistedProjectRecordSchema>;
@@ -709,4 +710,22 @@ export function resolveWorkspaceName(input: {
 
 export function resolveWorkspaceDisplayName(record: PersistedWorkspaceRecord): string {
   return resolveWorkspaceName({ title: record.title, derivedDisplayName: record.displayName });
+}
+
+/** Persist only owned interactions; opening a panel or clearing attention is not activity. */
+export async function recordWorkspaceInteraction(input: {
+  registry: Pick<WorkspaceRegistry, "get" | "update">;
+  workspaceId: string;
+  cwd: string;
+  source: "file" | "terminal";
+  at?: number;
+}): Promise<void> {
+  const workspace = await input.registry.get(input.workspaceId);
+  if (!workspace || !areEquivalentPaths(workspace.cwd, input.cwd)) return;
+  const at = input.at ?? Date.now();
+  if (workspace.activity && at - Date.parse(workspace.activity.at) < 10_000) return;
+  await input.registry.update(input.workspaceId, (record) => {
+    if (record.activity && at - Date.parse(record.activity.at) < 10_000) return record;
+    return { ...record, activity: { at: new Date(at).toISOString(), source: input.source } };
+  });
 }

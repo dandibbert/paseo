@@ -231,6 +231,12 @@ Switches and segmented controls also sit in the trailing slot. A row that both n
 
 Selected state on rows in a desktop list+detail uses `surfaceSidebarHover` as the background (`packages/app/src/screens/projects-screen.tsx`). Selected state on rows in the sidebar list uses `surface2` (`packages/app/src/components/agent-list.tsx:563-571`).
 
+### Sidebar workspace information
+
+Keep Project as the default structural view; Host adds an outer level without changing project identity. Status is an alternate view. Quick status filters narrow the structural views rather than replacing their groups. Automatic time ordering must apply to groups as well as rows, using only visible unpinned children. Preserve manual order while time sorting is selected.
+
+Put row visibility controls in **Display preferences > Show information**, under Main, Location, and Work information. Preserve existing preferences when adding metadata. Directory, activity time, and activity source are opt-in so an upgrade does not expand every row. Keep the distinction between [Recent activity and Last prompt](glossary.md), and between activity time and the duration of the current status. Project-source details must work by tap on compact layouts as well as on desktop; names alone never establish cross-host membership.
+
 ---
 
 ## 13. Status pills and badges

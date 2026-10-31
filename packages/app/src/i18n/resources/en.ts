@@ -1215,6 +1215,12 @@ export const en = {
     },
   },
   sidebar: {
+    projectSources: {
+      label: "Project locations",
+      hosts: "Across {{count}} hosts",
+      shared: "These locations share a project identity. Names alone do not merge projects.",
+      distinct: "This project has its own identity. Matching names alone do not merge projects.",
+    },
     statusGroupAccessibility: "{{label}} group",
     statusBucket: {
       needsInput: "Needs input",
@@ -1223,11 +1229,21 @@ export const en = {
       working: "Working",
       done: "Done",
     },
+    activityFilter: { all: "All", running: "Running", attention: "Needs attention" },
+    activitySource: {
+      prompt: "Human message",
+      agent: "Agent activity",
+      terminal: "Terminal operation",
+      file: "File saved",
+      created: "Workspace created",
+    },
     display: {
       showBackground: "Show background",
       trigger: "Display preferences",
       heading: "Display",
+      sections: { main: "Main", location: "Location", work: "Work information" },
       sort: {
+        activity: "Recent activity",
         label: "Sort",
         created: "Created",
         manual: "Manual",
@@ -1235,6 +1251,7 @@ export const en = {
         updateHost: "Update hosts to sort workspaces",
       },
       grouping: {
+        host: "Host → Project",
         label: "Grouping",
         project: "Project",
         status: "Status",
@@ -1246,7 +1263,11 @@ export const en = {
         branch: "Branch name",
       },
       show: {
-        label: "Show",
+        directory: "Working directory",
+        activityTime: "Activity time",
+        activitySource: "Activity source",
+        both: "Diff and status duration",
+        label: "Show information",
         branch: "Branch",
         project: "Project",
         host: "Host",
@@ -1255,7 +1276,7 @@ export const en = {
         services: "Services",
         labels: "Labels",
         diff: "Diff stats",
-        timestamp: "Last activity",
+        timestamp: "Status duration",
       },
       checks: {
         iconAndText: "Icon and text",

@@ -63,6 +63,10 @@ class WorkspaceStatus {
 
   private readonly workspaces = [this.workspace];
 
+  private readonly activityTimes = new Map<
+    string,
+    import("./workspace-directory.js").WorkspaceActivity
+  >();
   private readonly agents: AgentSnapshotPayload[] = [];
   private readonly providerSubagents: ProviderSubagentWorkspaceActivity[] = [];
   private readonly terminals: Array<{
@@ -75,6 +79,7 @@ class WorkspaceStatus {
     projectRegistry: { list: async () => [this.project] },
     workspaceRegistry: { list: async () => this.workspaces },
     listAgentPayloads: async () => this.agents,
+    workspaceActivityTimes: async () => this.activityTimes,
     workspaceLastUserMessageTimes: async () => {
       const times = new Map<string, string>();
       for (const agent of this.agents) {
@@ -109,6 +114,12 @@ class WorkspaceStatus {
     }),
   });
 
+  hasActivity(at: string, source: "agent" | "prompt"): void {
+    this.activityTimes.set(this.workspace.workspaceId, { at, source });
+  }
+  hasSavedFile(at: string): void {
+    this.workspace.activity = { at, source: "file" };
+  }
   hasRootAgent(input: AgentState): void {
     this.agents.push(
       createAgent({
@@ -817,4 +828,61 @@ test("prompt recency reads archived records without projecting agents or exposin
   } finally {
     await rm(home, { recursive: true, force: true });
   }
+});
+
+test("activity recency survives archived agents and ignores metadata updatedAt", async () => {
+  const home = await mkdtemp(join(tmpdir(), "workspace-activity-directory-"));
+  const storage = new AgentStorage(home, createTestLogger());
+  try {
+    await storage.upsert({
+      id: "archived",
+      provider: "unavailable",
+      cwd: home,
+      workspaceId: "w",
+      createdAt: NOW,
+      updatedAt: "2026-03-09T00:00:00.000Z",
+      workspaceActivityAt: "2026-03-04T00:00:00.000Z",
+      workspaceActivitySource: "agent",
+      lastStatus: "closed",
+      archivedAt: NOW,
+      labels: {},
+    });
+    const unexpected = (): never => {
+      throw new Error("Activity sorting projected a timeline");
+    };
+    const directory = new AgentDirectory({
+      storage,
+      manager: { listAgents: () => [] },
+      workspaces: { get: async () => null, list: async () => [] },
+      projectLive: unexpected,
+      projectStored: unexpected,
+      isProviderVisible: () => false,
+      isStoredProviderAvailable: () => false,
+    });
+    expect(await directory.workspaceActivityTimes()).toEqual(
+      new Map([["w", { at: "2026-03-04T00:00:00.000Z", source: "agent" }]]),
+    );
+  } finally {
+    await rm(home, { recursive: true, force: true });
+  }
+});
+
+test("workspace activity selects the latest real source and does not fan out to same-directory siblings", async () => {
+  const scenario = new WorkspaceStatus();
+  scenario.hasSiblingWorkspaceSameCwd();
+  scenario.hasActivity("2026-03-04T00:00:00.000Z", "agent");
+  expect(await scenario.workspaceDescriptor()).toMatchObject({
+    activityAt: "2026-03-04T00:00:00.000Z",
+    activitySource: "agent",
+  });
+  scenario.hasSavedFile("2026-03-05T00:00:00.000Z");
+  expect(await scenario.workspaceDescriptor()).toMatchObject({
+    activityAt: "2026-03-05T00:00:00.000Z",
+    activitySource: "file",
+  });
+  // Focus/status transitions must not overwrite the activity clock.
+  expect(await scenario.workspaceDescriptor()).toMatchObject({
+    activityAt: "2026-03-05T00:00:00.000Z",
+    activitySource: "file",
+  });
 });

@@ -13,7 +13,9 @@ async function closeMenuSheet(page: Page): Promise<void> {
   await expect(backdrop).not.toBeVisible({ timeout: 10_000 });
 }
 
-test("project and workspace kebabs open action sheets on compact layouts", async ({ page }) => {
+test("project and workspace kebabs open action sheets on compact layouts", async ({
+  page,
+}, testInfo) => {
   const seeded = await seedWorkspace({ repoPrefix: "sidebar-mobile-menu-sheet-" });
   const secondProject = await seedWorkspace({ repoPrefix: "sidebar-mobile-menu-filter-" });
 
@@ -26,11 +28,16 @@ test("project and workspace kebabs open action sheets on compact layouts", async
     await expect(page.getByRole("menuitem")).toHaveText([
       /^Grouping/,
       /^Sort/,
-      /^Title/,
-      "Show",
+      "Show information",
       "Project",
       "Show background",
     ]);
+    await page.getByTestId("sidebar-display-show").click();
+    await expect(page.getByText("Main", { exact: true })).toBeVisible();
+    await expect(page.getByText("Location", { exact: true })).toBeVisible();
+    await expect(page.getByText("Work information", { exact: true })).toBeVisible();
+    await page.getByTestId("sidebar-row-item-directory").click();
+    await page.screenshot({ path: testInfo.outputPath("sidebar-information-mobile.png") });
     await closeMenuSheet(page);
 
     await page

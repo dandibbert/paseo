@@ -224,3 +224,24 @@ test("time ties use workspace identity so renaming cannot move Created rows", ()
     buildWorkspaceStructureProjects({ sessions, workspaceSort: "created" })[0].workspaceKeys,
   ).toEqual(["h:a", "h:b"]);
 });
+
+test("activity sorting uses actual activity rather than human prompt time", () => {
+  const a = {
+    ...workspace("a", "p", "/p"),
+    createdAt: new Date("2026-01-01"),
+    lastUserMessageAt: new Date("2026-03-01"),
+    activityAt: new Date("2026-03-01"),
+  };
+  const b = {
+    ...workspace("b", "p", "/p"),
+    createdAt: new Date("2026-02-01"),
+    lastUserMessageAt: new Date("2026-02-01"),
+    activityAt: new Date("2026-04-01"),
+  };
+  const sessions = [
+    { serverId: "h", projects: [project({ id: "p", key: "p", root: "/p" })], workspaces: [a, b] },
+  ];
+  expect(
+    buildWorkspaceStructureProjects({ sessions, workspaceSort: "activity" })[0].workspaceKeys,
+  ).toEqual(["h:b", "h:a"]);
+});

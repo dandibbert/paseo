@@ -30,7 +30,7 @@ interface WorkspaceStructureSession {
   workspaces: Iterable<WorkspaceDescriptor>;
 }
 
-export type WorkspaceSort = "manual" | "created" | "lastPrompt";
+export type WorkspaceSort = "manual" | "created" | "lastPrompt" | "activity";
 
 interface WorkspaceSortItem {
   workspaceName: string;
@@ -219,6 +219,7 @@ function workspaceSortTime(
   sort: WorkspaceSort | undefined,
 ): number {
   if (!sort) return 0;
+  if (sort === "activity") return (workspace.activityAt ?? workspace.createdAt)?.getTime() ?? 0;
   const time =
     sort === "lastPrompt"
       ? (workspace.lastUserMessageAt ?? workspace.createdAt)

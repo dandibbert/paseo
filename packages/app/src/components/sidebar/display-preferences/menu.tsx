@@ -28,6 +28,7 @@ import {
 } from "lucide-react-native";
 import {
   MenuItem,
+  MenuLabel,
   MenuRoot,
   MenuSeparator,
   MenuSubTrigger,
@@ -54,7 +55,7 @@ import { workspaceLabelKey, type WorkspaceLabelColor } from "@getpaseo/protocol/
 import type { WorkspaceTitleSource } from "@/hooks/use-settings";
 import { SIDEBAR_CHECKS_DISPLAYS, type SidebarChecksDisplay } from "./checks-display";
 import { useSidebarDisplayPreferences, type SidebarTrailingChoice } from "./model";
-import { SIDEBAR_ROW_ITEMS, type SidebarRowItem } from "./row-items";
+import { type SidebarRowItem } from "./row-items";
 import { useWorkspaceLabelProjection } from "@/workspace-labels";
 import { WorkspaceLabelDot } from "@/workspace-labels/swatch";
 import { WorkspaceLabelManagerModal } from "@/workspace-labels/manager-modal";
@@ -88,6 +89,7 @@ type OptionIcon = ComponentType<{
 // current values, and a column of icons there would be decoration competing with the values.
 const GROUPING_ICONS: Record<SidebarGroupMode, OptionIcon> = {
   project: withUnistyles(Folder),
+  host: withUnistyles(Server),
   status: withUnistyles(CircleDashed),
 };
 
@@ -105,6 +107,9 @@ const ROW_ITEM_ICONS: Record<SidebarRowItem, OptionIcon> = {
   changeRequest: withUnistyles(GitPullRequest),
   services: withUnistyles(Globe),
   labels: withUnistyles(Tag),
+  directory: withUnistyles(Folder),
+  activityTime: withUnistyles(Clock),
+  activitySource: withUnistyles(Clock),
 };
 
 // These mark how much of the row an option spends, not what CI is, so they are the shapes each
@@ -118,14 +123,16 @@ const CHECKS_DISPLAY_ICONS: Record<SidebarChecksDisplay, OptionIcon> = {
 const TRAILING_ICONS: Record<SidebarTrailingChoice, OptionIcon> = {
   diff: withUnistyles(Diff),
   timestamp: withUnistyles(Clock),
+  both: withUnistyles(Diff),
 };
 
-const GROUPING_MODES: readonly SidebarGroupMode[] = ["project", "status"];
+const GROUPING_MODES: readonly SidebarGroupMode[] = ["project", "host", "status"];
 const TITLE_SOURCES: readonly WorkspaceTitleSource[] = ["title", "branch"];
-const TRAILING_CHOICES: readonly SidebarTrailingChoice[] = ["diff", "timestamp"];
+const TRAILING_CHOICES: readonly SidebarTrailingChoice[] = ["diff", "timestamp", "both"];
 
 const GROUPING_LABEL_KEYS: Record<SidebarGroupMode, string> = {
   project: "sidebar.display.grouping.project",
+  host: "sidebar.display.grouping.host",
   status: "sidebar.display.grouping.status",
 };
 
@@ -141,6 +148,9 @@ const ROW_ITEM_LABEL_KEYS: Record<SidebarRowItem, string> = {
   changeRequest: "sidebar.display.show.changeRequest",
   services: "sidebar.display.show.services",
   labels: "sidebar.display.show.labels",
+  directory: "sidebar.display.show.directory",
+  activityTime: "sidebar.display.show.activityTime",
+  activitySource: "sidebar.display.show.activitySource",
 };
 
 const CHECKS_DISPLAY_LABEL_KEYS: Record<SidebarChecksDisplay, string> = {
@@ -152,6 +162,7 @@ const CHECKS_DISPLAY_LABEL_KEYS: Record<SidebarChecksDisplay, string> = {
 const TRAILING_LABEL_KEYS: Record<SidebarTrailingChoice, string> = {
   diff: "sidebar.display.show.diff",
   timestamp: "sidebar.display.show.timestamp",
+  both: "sidebar.display.show.both",
 };
 
 /**
@@ -167,7 +178,12 @@ export function SidebarDisplayPreferencesMenu(): ReactElement {
   const hosts = useHosts();
   // `allProjects`, never `projects`: the model's `projects` is already filtered, so a picker fed
   // from it would lose the row that undoes the filter as soon as the filter narrowed to one.
-  const { allProjects, resolvedProjectFilters, workspaceSortSupported } = useSidebarModel();
+  const {
+    allProjects,
+    resolvedProjectFilters,
+    workspaceSortSupported,
+    workspaceActivitySupported,
+  } = useSidebarModel();
   const { labels } = useWorkspaceLabelProjection();
   const [managerOpen, setManagerOpen] = useState(false);
   const openManager = useCallback(() => setManagerOpen(true), []);
@@ -240,12 +256,16 @@ export function SidebarDisplayPreferencesMenu(): ReactElement {
       },
     ];
 
-    if (preferences.grouping === "project") {
+    if (preferences.grouping !== "status") {
       definitions.push({
         id: "sort",
         title: t("sidebar.display.sort.label"),
         content: (
-          <SortPage preferences={preferences} automaticSortSupported={workspaceSortSupported} />
+          <SortPage
+            preferences={preferences}
+            automaticSortSupported={workspaceSortSupported}
+            activitySupported={workspaceActivitySupported}
+          />
         ),
       });
     }
@@ -284,6 +304,7 @@ export function SidebarDisplayPreferencesMenu(): ReactElement {
     t,
     preferences,
     workspaceSortSupported,
+    workspaceActivitySupported,
     hosts,
     showHostFilter,
     showProjectFilter,
@@ -319,11 +340,13 @@ export function SidebarDisplayPreferencesMenu(): ReactElement {
           >
             {t("sidebar.display.grouping.label")}
           </MenuSubTrigger>
-          {preferences.grouping === "project" ? (
+          {preferences.grouping !== "status" ? (
             <MenuSubTrigger
               id="sort"
               value={
-                workspaceSortSupported || preferences.workspaceSort === "manual"
+                (workspaceSortSupported &&
+                  (preferences.workspaceSort !== "activity" || workspaceActivitySupported)) ||
+                preferences.workspaceSort === "manual"
                   ? t(`sidebar.display.sort.${preferences.workspaceSort}`)
                   : undefined
               }
@@ -331,13 +354,6 @@ export function SidebarDisplayPreferencesMenu(): ReactElement {
               {t("sidebar.display.sort.label")}
             </MenuSubTrigger>
           ) : null}
-          <MenuSubTrigger
-            id="titleSource"
-            value={t(TITLE_SOURCE_LABEL_KEYS[preferences.titleSource])}
-            testID="sidebar-display-title-source"
-          >
-            {t("sidebar.display.titleSource.label")}
-          </MenuSubTrigger>
           <MenuSubTrigger id="show" testID="sidebar-display-show">
             {t("sidebar.display.show.label")}
           </MenuSubTrigger>
@@ -400,20 +416,33 @@ export function SidebarDisplayPreferencesMenu(): ReactElement {
 function SortPage({
   preferences,
   automaticSortSupported,
+  activitySupported,
 }: {
   preferences: Preferences;
   automaticSortSupported: boolean;
+  activitySupported: boolean;
 }): ReactElement {
   const { t } = useTranslation();
   const { setWorkspaceSort } = preferences;
   const selectManual = useCallback(() => setWorkspaceSort("manual"), [setWorkspaceSort]);
   const selectCreated = useCallback(() => setWorkspaceSort("created"), [setWorkspaceSort]);
+  const selectActivity = useCallback(() => setWorkspaceSort("activity"), [setWorkspaceSort]);
   const selectLastPrompt = useCallback(() => setWorkspaceSort("lastPrompt"), [setWorkspaceSort]);
   return (
     <>
       <MenuItem selected={preferences.workspaceSort === "manual"} onSelect={selectManual}>
         {t("sidebar.display.sort.manual")}
       </MenuItem>
+      <MenuItem
+        disabled={!activitySupported}
+        selected={preferences.workspaceSort === "activity"}
+        onSelect={selectActivity}
+      >
+        {t("sidebar.display.sort.activity")}
+      </MenuItem>
+      {!activitySupported && automaticSortSupported ? (
+        <MenuItem disabled>{t("sidebar.display.sort.updateHost")}</MenuItem>
+      ) : null}
       {automaticSortSupported ? (
         <>
           <MenuItem selected={preferences.workspaceSort === "created"} onSelect={selectCreated}>
@@ -606,33 +635,26 @@ function OptionList<Value extends string>({
   ));
 }
 
-/**
- * Two groups, split by the separator. Above it, what a row may say about a workspace — each one
- * independent. Below it, the one thing the slot to the right of the title holds, so picking the
- * one already showing empties the slot and gives the width back to the title.
- *
- * CI is the one item above the separator with three answers rather than two, so it opens a page
- * instead of ticking, and it goes last: a row that navigates does not belong in the middle of a
- * column you are running down with your eyes ticking things on and off.
- */
+/** Identity and operational metadata stay independent; toggling one never resets another. */
 function ShowPage({ preferences }: { preferences: Preferences }): ReactElement {
   const { t } = useTranslation();
+  const renderItem = (item: SidebarRowItem) => (
+    <OptionItem
+      key={item}
+      value={item}
+      icon={ROW_ITEM_ICONS[item]}
+      label={t(ROW_ITEM_LABEL_KEYS[item])}
+      selected={preferences.rowItems[item]}
+      closeOnSelect={false}
+      onSelect={preferences.toggleRowItem}
+      testID={`sidebar-row-item-${item}`}
+    />
+  );
   return (
     <>
-      {SIDEBAR_ROW_ITEMS.map((item) => (
-        <OptionItem
-          key={item}
-          value={item}
-          icon={ROW_ITEM_ICONS[item]}
-          label={t(ROW_ITEM_LABEL_KEYS[item])}
-          selected={preferences.rowItems[item]}
-          closeOnSelect={false}
-          onSelect={preferences.toggleRowItem}
-          testID={`sidebar-row-item-${item}`}
-        />
-      ))}
-      <ChecksSubTrigger />
-      <MenuSeparator />
+      <MenuLabel>{t("sidebar.display.sections.main")}</MenuLabel>
+      <MenuSubTrigger id="titleSource">{t("sidebar.display.titleSource.label")}</MenuSubTrigger>
+      {renderItem("activityTime")}
       {TRAILING_CHOICES.map((choice) => (
         <OptionItem
           key={choice}
@@ -645,6 +667,13 @@ function ShowPage({ preferences }: { preferences: Preferences }): ReactElement {
           testID={`sidebar-workspace-trailing-${choice}`}
         />
       ))}
+      <MenuSeparator />
+      <MenuLabel>{t("sidebar.display.sections.location")}</MenuLabel>
+      {(["host", "branch", "project", "directory"] as const).map(renderItem)}
+      <MenuSeparator />
+      <MenuLabel>{t("sidebar.display.sections.work")}</MenuLabel>
+      {(["changeRequest", "services", "labels", "activitySource"] as const).map(renderItem)}
+      <ChecksSubTrigger />
     </>
   );
 }

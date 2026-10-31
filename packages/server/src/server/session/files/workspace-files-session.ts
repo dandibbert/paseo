@@ -47,6 +47,7 @@ export interface WorkspaceFilesSessionHost {
   emit(msg: SessionOutboundMessage, source?: object): void;
   emitBinary(frame: Uint8Array, source?: object): Promise<void>;
   hasBinaryChannel(): boolean;
+  onFileWritten?(request: FileWriteRequest): Promise<void>;
 }
 
 export interface WorkspaceFilesSessionOptions {
@@ -164,6 +165,7 @@ export class WorkspaceFilesSession {
       expectedModifiedAt: request.expectedModifiedAt,
       expectedRevision: request.expectedRevision,
     });
+    if (result.status === "written") await this.host.onFileWritten?.(request);
     this.host.emit({
       type: "fs.file.write.response",
       payload: { result, requestId: request.requestId },

@@ -1,3 +1,5 @@
+import { groupSidebarProjectsByHost } from "./sidebar-order";
+import type { WorkspaceSort } from "@/projects/workspace-structure";
 import type { TFunction } from "i18next";
 import { buildStatusGroups } from "@/hooks/sidebar-status-view-model";
 import {
@@ -43,6 +45,7 @@ export interface SidebarProjectionInput {
   workspaceEntriesByKey: ReadonlyMap<string, SidebarWorkspaceEntry>;
   projectNamesByViewKey: Map<string, string>;
   groupMode: SidebarGroupMode;
+  workspaceSort?: WorkspaceSort;
   pinnedCollapsed: boolean;
   collapsedProjectKeys: ReadonlySet<string>;
   collapsedWorkspaceGroupKeys: ReadonlySet<string>;
@@ -68,7 +71,20 @@ export function buildSidebarProjection(input: SidebarProjectionInput): SidebarPr
   if (!input.pinnedCollapsed) {
     sections.push({ workspaces: pinnedGroups.pinnedChats });
   }
-  if (input.groupMode === "project") {
+  if (input.groupMode === "host") {
+    const hosts = groupSidebarProjectsByHost(
+      pinnedGroups.unpinnedProjects,
+      input.workspaceEntriesByKey,
+      input.workspaceSort ?? "activity",
+    );
+    for (const host of hosts)
+      sections.push(
+        ...host.projects.map((project) => ({
+          workspaces: project.workspaces,
+          collapsed: input.collapsedProjectKeys.has(project.viewKey),
+        })),
+      );
+  } else if (input.groupMode === "project") {
     sections.push(
       ...pinnedGroups.unpinnedProjects.map((project) => ({
         workspaces: project.workspaces,
@@ -99,6 +115,7 @@ function buildWorkspaceGroups(
 ): SidebarWorkspaceGroup[] {
   switch (input.groupMode) {
     case "project":
+    case "host":
       return [];
     case "status":
       return statusWorkspaceGroups(

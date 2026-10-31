@@ -2964,6 +2964,7 @@ export const FileUnsubscribeRequestSchema = z.object({
 });
 
 export const FileWriteRequestSchema = z.object({
+  workspaceId: z.string().optional(),
   type: z.literal("fs.file.write.request"),
   cwd: z.string(),
   path: z.string(),
@@ -3976,6 +3977,7 @@ export const ServerInfoStatusPayloadSchema = z
         ownedSubscriptions: z.boolean().optional(),
         workspaceSetupObservation: z.boolean().optional(),
         workspaceSortTimes: z.boolean().optional(),
+        workspaceActivity: z.boolean().optional(),
         // COMPAT(canonicalSubmittedPrompts): added in v0.2.6, remove gate after 2027-01-30.
         canonicalSubmittedPrompts: z.boolean().optional(),
         agentMessageProvenance: z.boolean().optional(),
@@ -4321,6 +4323,7 @@ export const WorkspaceDescriptorPayloadSchema = z
       .nullish()
       .transform((value) => value ?? null),
     activityAt: z.string().nullable(),
+    activitySource: z.enum(["prompt", "agent", "terminal", "file", "created"]).optional(),
     createdAt: z.string().optional(),
     lastUserMessageAt: z.string().nullable().optional(),
     diffStat: z

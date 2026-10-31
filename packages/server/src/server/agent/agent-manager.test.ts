@@ -12738,3 +12738,43 @@ test("CLI updates reject running derived providers and block new work until comp
     rmSync(workdir, { recursive: true, force: true });
   }
 });
+
+test("workspace activity ignores metadata and history but records human prompts and agent completion", async () => {
+  const cwd = mkdtempSync(join(tmpdir(), "workspace-activity-"));
+  const codex = fakeCodexEmitting({
+    historyItems: [{ type: "assistant_message", text: "old answer" }],
+  });
+  const storage = new AgentStorage(join(cwd, "agents"), logger);
+  const manager = new AgentManager({ clients: { codex }, registry: storage, logger });
+  const agent = await manager.createAgent({ provider: "codex", cwd }, undefined, {
+    workspaceId: "workspace",
+  });
+  const original = manager.getAgent(agent.id)?.workspaceActivityAt;
+  expect(original).toBeInstanceOf(Date);
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(new Date("2030-01-01"));
+  try {
+    await manager.setTitle(agent.id, "Metadata only");
+    await manager.setLabels(agent.id, { label: "metadata" });
+    await manager.hydrateTimelineFromProvider(agent.id, { force: true });
+    expect(manager.getAgent(agent.id)?.workspaceActivityAt).toEqual(original);
+    await manager.runAgent(agent.id, { text: "real work" });
+    expect(manager.getAgent(agent.id)?.workspaceActivityAt?.getTime()).toBeGreaterThan(
+      original?.getTime() ?? 0,
+    );
+    expect(manager.getAgent(agent.id)?.workspaceActivitySource).toBe("agent");
+    await manager.setTitle(agent.id, "Persist completed activity");
+    const record = await storage.get(agent.id);
+    expect(record?.workspaceActivityAt).toBe(
+      manager.getAgent(agent.id)?.workspaceActivityAt?.toISOString(),
+    );
+    expect(record?.workspaceActivitySource).toBe("agent");
+    const beforeRename = manager.getAgent(agent.id)?.workspaceActivityAt;
+    await manager.setTitle(agent.id, "Another title");
+    expect(manager.getAgent(agent.id)?.workspaceActivityAt).toEqual(beforeRename);
+  } finally {
+    vi.useRealTimers();
+    await manager.closeAgent(agent.id);
+    rmSync(cwd, { recursive: true, force: true });
+  }
+});

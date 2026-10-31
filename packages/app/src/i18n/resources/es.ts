@@ -1202,6 +1202,13 @@ export const es: TranslationResources = {
     },
   },
   sidebar: {
+    projectSources: {
+      label: "Ubicaciones del proyecto",
+      hosts: "En {{count}} hosts",
+      shared:
+        "Estas ubicaciones comparten identidad de proyecto. Un nombre igual no une proyectos.",
+      distinct: "Este proyecto tiene identidad propia. Un nombre igual no une proyectos.",
+    },
     statusGroupAccessibility: "Grupo {{label}}",
     statusBucket: {
       needsInput: "Necesita datos",
@@ -1210,11 +1217,21 @@ export const es: TranslationResources = {
       working: "En ejecución",
       done: "Terminado",
     },
+    activityFilter: { all: "Todos", running: "En ejecución", attention: "Requiere atención" },
+    activitySource: {
+      prompt: "Mensaje del usuario",
+      agent: "Actividad del agente",
+      terminal: "Operación de terminal",
+      file: "Archivo guardado",
+      created: "Espacio creado",
+    },
     display: {
       showBackground: "Mostrar espacios en segundo plano",
       trigger: "Preferencias de visualización",
       heading: "Visualización",
+      sections: { main: "Principal", location: "Ubicación", work: "Información de trabajo" },
       sort: {
+        activity: "Actividad reciente",
         label: "Orden",
         created: "Creación",
         manual: "Manual",
@@ -1222,6 +1239,7 @@ export const es: TranslationResources = {
         updateHost: "Actualiza los hosts para ordenar los espacios de trabajo",
       },
       grouping: {
+        host: "Host → Proyecto",
         label: "Agrupación",
         project: "Proyecto",
         status: "Estado",
@@ -1233,7 +1251,11 @@ export const es: TranslationResources = {
         branch: "Nombre de rama",
       },
       show: {
-        label: "Mostrar",
+        directory: "Directorio de trabajo",
+        activityTime: "Hora de actividad",
+        activitySource: "Origen de actividad",
+        both: "Cambios y duración del estado",
+        label: "Mostrar información",
         branch: "Rama",
         project: "Proyecto",
         host: "Host",
@@ -1242,7 +1264,7 @@ export const es: TranslationResources = {
         services: "Servicios",
         labels: "Etiquetas",
         diff: "Estadísticas de cambios",
-        timestamp: "Última actividad",
+        timestamp: "Duración del estado",
       },
       checks: {
         iconAndText: "Icono y texto",

@@ -1179,6 +1179,12 @@ export const ja: TranslationResources = {
     },
   },
   sidebar: {
+    projectSources: {
+      label: "プロジェクトの場所",
+      hosts: "{{count}} 台のホスト",
+      shared: "これらの場所は同じプロジェクト ID を共有しています。名前だけでは統合されません。",
+      distinct: "このプロジェクトには固有の ID があります。名前だけでは統合されません。",
+    },
     statusGroupAccessibility: "{{label}} グループ",
     statusBucket: {
       needsInput: "入力待ち",
@@ -1187,11 +1193,21 @@ export const ja: TranslationResources = {
       working: "実行中",
       done: "完了",
     },
+    activityFilter: { all: "すべて", running: "実行中", attention: "要確認" },
+    activitySource: {
+      prompt: "ユーザーメッセージ",
+      agent: "エージェントの動作",
+      terminal: "ターミナル操作",
+      file: "ファイル保存",
+      created: "ワークスペース作成",
+    },
     display: {
       showBackground: "バックグラウンドを表示",
       trigger: "表示設定",
       heading: "表示",
+      sections: { main: "主な情報", location: "場所", work: "作業情報" },
       sort: {
+        activity: "最近のアクティビティ",
         label: "並び順",
         created: "作成日時",
         manual: "手動",
@@ -1199,6 +1215,7 @@ export const ja: TranslationResources = {
         updateHost: "ワークスペースを並べ替えるにはホストを更新してください",
       },
       grouping: {
+        host: "ホスト → プロジェクト",
         label: "グループ化",
         project: "プロジェクト",
         status: "ステータス",
@@ -1210,7 +1227,11 @@ export const ja: TranslationResources = {
         branch: "ブランチ名",
       },
       show: {
-        label: "表示項目",
+        directory: "作業ディレクトリ",
+        activityTime: "アクティビティ時刻",
+        activitySource: "アクティビティの種類",
+        both: "差分と状態の経過時間",
+        label: "表示する情報",
         branch: "ブランチ",
         project: "プロジェクト",
         host: "ホスト",
@@ -1219,7 +1240,7 @@ export const ja: TranslationResources = {
         services: "サービス",
         labels: "ラベル",
         diff: "差分統計",
-        timestamp: "最終アクティビティ",
+        timestamp: "状態の経過時間",
       },
       checks: {
         iconAndText: "アイコンとテキスト",

@@ -82,6 +82,7 @@ interface SnapshotSendResult {
 }
 
 export interface TerminalSessionControllerOptions {
+  onWorkspaceInput?: (workspaceId: string, cwd: string) => void;
   terminalManager: TerminalManager | null;
   emit: (msg: SessionOutboundMessage) => void;
   hasBinaryChannel: () => boolean;
@@ -141,6 +142,7 @@ const TERMINAL_MESSAGE_TYPES: ReadonlySet<TerminalDispatchableMessage["type"]> =
 ]);
 
 export class TerminalSessionController {
+  private readonly onWorkspaceInput: (workspaceId: string, cwd: string) => void;
   private readonly terminalManager: TerminalManager | null;
   private readonly emit: (msg: SessionOutboundMessage) => void;
   private readonly hasBinaryChannel: () => boolean;
@@ -157,6 +159,7 @@ export class TerminalSessionController {
   private nextSlot = 0;
 
   constructor(options: TerminalSessionControllerOptions) {
+    this.onWorkspaceInput = options.onWorkspaceInput ?? (() => {});
     this.terminalManager = options.terminalManager;
     this.emit = options.emit;
     this.hasBinaryChannel = options.hasBinaryChannel;
@@ -262,6 +265,7 @@ export class TerminalSessionController {
           return;
         }
         terminal.send({ type: "input", data: text });
+        this.onWorkspaceInput(terminal.workspaceId, terminal.cwd);
         return;
       }
 
@@ -796,6 +800,8 @@ export class TerminalSessionController {
     }
 
     session.send(msg.message);
+    if (msg.message.type === "input" && msg.message.data.length > 0)
+      this.onWorkspaceInput(session.workspaceId, session.cwd);
   }
 
   private handleSecureTerminalInput(msg: TerminalSecureInputRequest): void {
@@ -815,6 +821,7 @@ export class TerminalSessionController {
       // Never log, persist, or return the secret. The receiving program is
       // responsible for disabling PTY echo before prompting for a password.
       terminal.send({ type: "input", data: msg.secret + (msg.submit ? "\r" : "") });
+      this.onWorkspaceInput(terminal.workspaceId, terminal.cwd);
     }
     this.emit({
       type: "terminal.secure_input.response",

@@ -103,6 +103,8 @@ export interface Agent {
 }
 
 export interface WorkspaceDescriptor {
+  activityAt?: Date | null;
+  activitySource?: WorkspaceDescriptorPayload["activitySource"];
   createdAt: Date | null;
   lastUserMessageAt: Date | null;
   id: string;
@@ -144,6 +146,8 @@ export function normalizeWorkspaceDescriptor(
     // COMPAT(workspaceSortTimes): added in v0.13.0, remove after 2027-04-22.
     createdAt: payload.createdAt ? new Date(payload.createdAt) : null,
     lastUserMessageAt: payload.lastUserMessageAt ? new Date(payload.lastUserMessageAt) : null,
+    activityAt: payload.activityAt ? new Date(payload.activityAt) : null,
+    activitySource: payload.activitySource,
     id: normalizeWorkspaceOpaqueId(payload.id) ?? payload.id,
     projectId: payload.projectId,
     projectDisplayName: payload.projectDisplayName,

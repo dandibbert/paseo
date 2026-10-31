@@ -1,3 +1,4 @@
+import { matchesSidebarActivity, orderSidebarProjects } from "./sidebar-order";
 import { useTranslation } from "react-i18next";
 import React, { createContext, useContext, useEffect, useMemo, type ReactNode } from "react";
 import {
@@ -58,6 +59,7 @@ export function SidebarModelProvider({
   const { t } = useTranslation();
   const list = useSidebarWorkspacesList({ enabled: active });
   const showBackground = useSidebarViewStore((state) => state.showBackground);
+  const activityFilter = useSidebarViewStore((state) => state.activityFilter);
   const groupMode = useSidebarViewStore((state) => state.groupMode);
   const labelFilter = useSidebarViewStore((state) => state.labelFilter);
   const projectFilters = useSidebarViewStore((state) => state.projectFilters);
@@ -83,6 +85,7 @@ export function SidebarModelProvider({
     if (!hasAuthoritativeLabelCatalog) return;
     reconcileLabelFilter(availableLabelNames);
   }, [availableLabelNames, hasAuthoritativeLabelCatalog, reconcileLabelFilter]);
+  const effectiveSort = list.effectiveWorkspaceSort;
   const hasActiveLabelFilter = hasActiveSidebarLabelFilter(labelFilter);
   const resolvedProjectFilters = useMemo(
     () =>
@@ -109,11 +112,15 @@ export function SidebarModelProvider({
       projectFilters: resolvedProjectFilters,
     });
     const filtered = filterWorkspacesByLabels({
-      workspaces: byProject.filter((workspace) => showBackground || !workspace.background),
+      workspaces: byProject.filter(
+        (workspace) =>
+          (showBackground || !workspace.background) &&
+          matchesSidebarActivity(workspace, activityFilter),
+      ),
       ...labelFilter,
     });
     return new Map(filtered.map((workspace) => [workspace.workspaceKey, workspace]));
-  }, [showBackground, labelFilter, resolvedProjectFilters, workspaceEntriesByKey]);
+  }, [showBackground, labelFilter, resolvedProjectFilters, workspaceEntriesByKey, activityFilter]);
   const visibleWorkspaceKeys = useMemo(
     () => new Set(filteredWorkspaceEntriesByKey.keys()),
     [filteredWorkspaceEntriesByKey],
@@ -128,19 +135,23 @@ export function SidebarModelProvider({
       const included = new Set(resolvedProjectFilters);
       projects = projects.filter((project) => included.has(project.viewKey));
     }
-    if (hasActiveLabelFilter || !showBackground) {
+    if (hasActiveLabelFilter || !showBackground || activityFilter !== "all") {
       projects = projects.flatMap((project) => {
         const workspaces = project.workspaces.filter((workspace) =>
           visibleWorkspaceKeys.has(workspace.workspaceKey),
         );
-        return workspaces.length > 0 || (!hasActiveLabelFilter && project.workspaces.length === 0)
+        return workspaces.length > 0 ||
+          (!hasActiveLabelFilter && activityFilter === "all" && project.workspaces.length === 0)
           ? [workspaces.length === project.workspaces.length ? project : { ...project, workspaces }]
           : [];
       });
     }
-    return projects;
+    return orderSidebarProjects(projects, filteredWorkspaceEntriesByKey, effectiveSort);
   }, [
     showBackground,
+    activityFilter,
+    effectiveSort,
+    filteredWorkspaceEntriesByKey,
     hasActiveLabelFilter,
     hasActiveProjectFilter,
     resolvedProjectFilters,
@@ -156,6 +167,7 @@ export function SidebarModelProvider({
       workspaceEntriesByKey: filteredWorkspaceEntriesByKey,
       projectNamesByViewKey: list.projectNamesByViewKey,
       groupMode,
+      workspaceSort: effectiveSort,
       pinnedCollapsed,
       collapsedProjectKeys,
       collapsedWorkspaceGroupKeys,
@@ -165,6 +177,7 @@ export function SidebarModelProvider({
       collapsedProjectKeys,
       collapsedWorkspaceGroupKeys,
       groupMode,
+      effectiveSort,
       list.projectNamesByViewKey,
       filteredProjects,
       pinnedCollapsed,

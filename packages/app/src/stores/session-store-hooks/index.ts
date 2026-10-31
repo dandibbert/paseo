@@ -124,10 +124,10 @@ export function useWorkspaceStructure(
     () =>
       composeWorkspaceStructure({
         projects,
-        projectOrder,
+        projectOrder: workspaceSort && workspaceSort !== "manual" ? [] : projectOrder,
         workspaceOrderByProject,
       }),
-    [projectOrder, projects, workspaceOrderByProject],
+    [projectOrder, projects, workspaceOrderByProject, workspaceSort],
   );
 }
 

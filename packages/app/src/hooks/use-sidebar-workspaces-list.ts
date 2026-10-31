@@ -1,3 +1,4 @@
+import type { WorkspaceSort } from "@/projects/workspace-structure";
 import { useHostFeatureMap } from "@/runtime/host-features";
 import { useCallback, useEffect, useMemo } from "react";
 import { useStoreWithEqualityFn } from "zustand/traditional";
@@ -87,6 +88,8 @@ const EMPTY_PROJECT_NAMES = new Map<string, string>();
 
 export interface SidebarWorkspacesListResult {
   workspaceSortSupported: boolean;
+  workspaceActivitySupported: boolean;
+  effectiveWorkspaceSort: WorkspaceSort;
   workspacePlacements: SidebarWorkspacePlacement[];
   projects: SidebarProjectEntry[];
   projectNamesByViewKey: Map<string, string>;
@@ -143,9 +146,13 @@ export function useSidebarWorkspacesList(options?: {
   const workspaceSort = useSidebarViewStore((state) => state.workspaceSort);
   const groupMode = useSidebarViewStore((state) => state.groupMode);
   const sortSupport = useHostFeatureMap(directoryServerIds, "workspaceSortTimes");
+  const activitySupport = useHostFeatureMap(directoryServerIds, "workspaceActivity");
+  const workspaceActivitySupported = [...activitySupport.values()].every(Boolean);
   const workspaceSortSupported = [...sortSupport.values()].every(Boolean);
   const sort =
-    groupMode === "project" && (workspaceSort === "manual" || workspaceSortSupported)
+    groupMode !== "status" &&
+    (workspaceSort === "manual" ||
+      (workspaceSortSupported && (workspaceSort !== "activity" || workspaceActivitySupported)))
       ? workspaceSort
       : undefined;
   const { projects: hostProjects } = useWorkspaceStructure(directoryServerIds, sort);
@@ -201,6 +208,8 @@ export function useSidebarWorkspacesList(options?: {
 
   return {
     workspaceSortSupported,
+    workspaceActivitySupported,
+    effectiveWorkspaceSort: sort ?? "manual",
     workspacePlacements,
     projects,
     projectNamesByViewKey,

@@ -5224,6 +5224,7 @@ export class DaemonClient {
   }
 
   async writeFile(input: {
+    workspaceId?: string;
     cwd: string;
     path: string;
     content: string;

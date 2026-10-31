@@ -1173,6 +1173,12 @@ export const ko: TranslationResources = {
     },
   },
   sidebar: {
+    projectSources: {
+      label: "프로젝트 위치",
+      hosts: "호스트 {{count}}개",
+      shared: "이 위치들은 같은 프로젝트 ID를 공유합니다. 이름만 같아서는 병합되지 않습니다.",
+      distinct: "독립적인 프로젝트 ID입니다. 이름만 같아서는 병합되지 않습니다.",
+    },
     statusGroupAccessibility: "{{label}} 그룹",
     statusBucket: {
       needsInput: "입력 필요",
@@ -1181,11 +1187,21 @@ export const ko: TranslationResources = {
       working: "실행 중",
       done: "완료",
     },
+    activityFilter: { all: "전체", running: "실행 중", attention: "주의 필요" },
+    activitySource: {
+      prompt: "사용자 메시지",
+      agent: "에이전트 활동",
+      terminal: "터미널 작업",
+      file: "파일 저장",
+      created: "작업 공간 생성",
+    },
     display: {
       showBackground: "백그라운드 표시",
       trigger: "표시 설정",
       heading: "표시",
+      sections: { main: "주요 정보", location: "위치", work: "작업 정보" },
       sort: {
+        activity: "최근 활동",
         label: "정렬",
         created: "생성일",
         manual: "수동",
@@ -1193,6 +1209,7 @@ export const ko: TranslationResources = {
         updateHost: "작업 공간을 정렬하려면 호스트를 업데이트하세요",
       },
       grouping: {
+        host: "호스트 → 프로젝트",
         label: "그룹화",
         project: "프로젝트",
         status: "상태",
@@ -1204,7 +1221,11 @@ export const ko: TranslationResources = {
         branch: "브랜치 이름",
       },
       show: {
-        label: "표시 항목",
+        directory: "작업 디렉터리",
+        activityTime: "활동 시간",
+        activitySource: "활동 출처",
+        both: "변경 사항과 상태 시간",
+        label: "정보 표시",
         branch: "브랜치",
         project: "프로젝트",
         host: "호스트",
@@ -1213,7 +1234,7 @@ export const ko: TranslationResources = {
         services: "서비스",
         labels: "레이블",
         diff: "Diff 통계",
-        timestamp: "마지막 활동",
+        timestamp: "상태 지속 시간",
       },
       checks: {
         iconAndText: "아이콘 및 텍스트",

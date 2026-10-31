@@ -38,15 +38,19 @@ function SidebarEmptyStateCard({
  */
 export function SidebarFilterEmptyState() {
   const { t } = useTranslation();
+  const setActivityFilter = useSidebarViewStore((state) => state.setActivityFilter);
+  const clearHostFilters = useSidebarViewStore((state) => state.clearHostFilters);
   const clearLabelFilter = useSidebarViewStore((state) => state.clearLabelFilter);
   const clearProjectFilters = useSidebarViewStore((state) => state.clearProjectFilters);
   // Clears every filter that can empty the list, not just the one that did. The card names no
   // filter, so a Clear that undid only one of two active filters would leave it on screen looking
   // like it had failed.
   const clearFilters = useCallback(() => {
+    setActivityFilter("all");
+    clearHostFilters();
     clearLabelFilter();
     clearProjectFilters();
-  }, [clearLabelFilter, clearProjectFilters]);
+  }, [clearLabelFilter, clearProjectFilters, setActivityFilter, clearHostFilters]);
 
   return (
     <SidebarEmptyStateCard

@@ -1,3 +1,4 @@
+import { readExplorerFile } from "../../file-explorer/service.js";
 import { SessionDelivery } from "../owned-subscriptions/index.js";
 import {
   existsSync,
@@ -41,6 +42,7 @@ function makeDir(prefix: string): string {
 function makeSubsystem(
   options: {
     hasBinaryChannel?: boolean;
+    onFileWritten?: WorkspaceFilesSessionHost["onFileWritten"];
     emitBinary?: (frame: Uint8Array) => Promise<void> | void;
   } = {},
 ) {
@@ -49,6 +51,7 @@ function makeSubsystem(
   let hasBinary = options.hasBinaryChannel ?? false;
   const host: WorkspaceFilesSessionHost = {
     emit: (msg) => emitted.push(msg),
+    onFileWritten: options.onFileWritten,
     emitBinary: async (frame) => {
       binary.push(frame);
       await options.emitBinary?.(frame);
@@ -611,4 +614,39 @@ describe("WorkspaceFilesSession", () => {
     expect(readFileSync(file.path, "utf8")).toBe("hello world");
     await ownership.close();
   });
+});
+
+test("records workspace file activity only after a successful save", async () => {
+  const cwd = makeDir("workspace-activity-save-");
+  writeFileSync(join(cwd, "notes.txt"), "before");
+  const version = await readExplorerFile({ root: cwd, relativePath: "notes.txt" });
+  const saved: string[] = [];
+  const { subsystem, emitted } = makeSubsystem({
+    onFileWritten: async (request) => {
+      saved.push(request.workspaceId ?? "missing");
+    },
+  });
+  const request = {
+    type: "fs.file.write.request" as const,
+    workspaceId: "owner",
+    cwd,
+    path: "notes.txt",
+    content: "after",
+    expectedModifiedAt: version.modifiedAt,
+    expectedRevision: version.revision,
+    requestId: "write",
+  };
+  await subsystem.handleFileWriteRequest(request);
+  expect(saved).toEqual(["owner"]);
+  expect(emitted.at(-1)).toMatchObject({
+    type: "fs.file.write.response",
+    payload: { result: { status: "written" } },
+  });
+  await subsystem.handleFileWriteRequest({
+    ...request,
+    content: "conflicting",
+    expectedModifiedAt: "2000-01-01T00:00:00.000Z",
+    expectedRevision: "stale",
+  });
+  expect(saved).toEqual(["owner"]);
 });

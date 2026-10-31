@@ -1,7 +1,10 @@
+import { useSidebarRowItems } from "./display-preferences/model";
+import { useCompactTimeAgo } from "@/hooks/use-time-ago";
+import { useTranslation } from "react-i18next";
 import { memo, useMemo, useCallback, useState, type ReactNode } from "react";
 import { Text, View, type ViewStyle } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
-import { CircleAlert, Folder, FolderGit2, Monitor } from "lucide-react-native";
+import { CircleAlert, Clock, Folder, FolderGit2, Monitor } from "lucide-react-native";
 import { ProjectStatusIndicator } from "@/components/sidebar/project-leading-visual";
 import type { SidebarSurfaceBackdrop } from "@/styles/surface-backdrop";
 import {
@@ -120,6 +123,8 @@ export const SidebarWorkspaceRowContent = memo(function SidebarWorkspaceRowConte
   const {
     settings: { workspaceTitleSource },
   } = useAppSettings();
+  const rowItems = useSidebarRowItems();
+  const { t } = useTranslation();
   const workspaceLabel = resolveSidebarWorkspacePrimaryLabel({ workspace, workspaceTitleSource });
   // The workspace carries label names; their colors live in its host's catalog, so the row is
   // where the two meet — the meta line is handed finished definitions.
@@ -159,8 +164,23 @@ export const SidebarWorkspaceRowContent = memo(function SidebarWorkspaceRowConte
             <Text style={workspaceBranchTextStyle} numberOfLines={1}>
               {workspaceLabel}
             </Text>
-            <View style={sidebarWorkspaceRowStyles.rowRight}>{children}</View>
+            <View style={sidebarWorkspaceRowStyles.rowRight}>
+              {rowItems.activityTime && workspace.activityAt ? (
+                <SidebarActivityTime at={workspace.activityAt} />
+              ) : null}
+              {children}
+            </View>
           </View>
+          {rowItems.directory ? (
+            <Text style={styles.locationText} selectable numberOfLines={1}>
+              {workspace.workspaceDirectory}
+            </Text>
+          ) : null}
+          {rowItems.activitySource && workspace.activitySource ? (
+            <Text style={styles.locationText}>
+              {t(`sidebar.activitySource.${workspace.activitySource}`)}
+            </Text>
+          ) : null}
           <WorkspaceMetaRow
             currentBranch={workspace.currentBranch}
             projectName={leadingProjectName}
@@ -179,6 +199,22 @@ export const SidebarWorkspaceRowContent = memo(function SidebarWorkspaceRowConte
     </View>
   );
 });
+
+function SidebarActivityTime({ at }: { at: Date }) {
+  const label = useCompactTimeAgo(at);
+  const { t } = useTranslation();
+  return (
+    <View
+      style={sidebarWorkspaceRowStyles.rowRight}
+      accessibilityLabel={`${t("sidebar.display.show.activityTime")}: ${label}`}
+    >
+      <DensityIcon icon={Clock} size="xs" color="foregroundMuted" />
+      <Text style={styles.locationText} numberOfLines={1}>
+        {label}
+      </Text>
+    </View>
+  );
+}
 
 function WorkspaceStatusIndicator({
   bucket,
@@ -457,6 +493,7 @@ export function SidebarWorkspaceTrailingActionOverlay({
 const TITLE_LINE_HEIGHT = 20;
 
 const styles = StyleSheet.create((theme) => ({
+  locationText: { color: theme.colors.foregroundMuted, fontSize: theme.fontSize.sm, flexShrink: 1 },
   workspaceRowContent: {
     position: "relative",
   },

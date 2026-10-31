@@ -1,3 +1,4 @@
+import { recordWorkspaceInteraction } from "./workspace-registry.js";
 import { type WorkspaceRuntimeStore } from "./workspace-runtime-store/index.js";
 import type { AgentMessageDelivery } from "./agent/agent-messages/index.js";
 import { AgentDirectory } from "./agent/directory.js";
@@ -931,6 +932,20 @@ export class Session {
         emit: (msg, source) => this.emitForSource(msg, source),
         emitBinary: (frame, source) => this.emitBinaryForFileTransfer(frame, source),
         hasBinaryChannel: () => this.onBinaryMessage !== null,
+        onFileWritten: async (request) => {
+          if (!request.workspaceId) return;
+          await recordWorkspaceInteraction({
+            registry: this.workspaceRegistry,
+            workspaceId: request.workspaceId,
+            cwd: request.cwd,
+            source: "file",
+          }).catch((err) =>
+            this.sessionLogger.warn(
+              { err, workspaceId: request.workspaceId },
+              "File saved but activity could not be recorded",
+            ),
+          );
+        },
       },
       downloadTokenStore,
       paseoHome,
@@ -1152,6 +1167,19 @@ export class Session {
     this.daemonConfigStore = daemonConfigStore;
     this.terminalManager = terminalManager;
     this.terminalController = new TerminalSessionController({
+      onWorkspaceInput: (workspaceId, cwd) => {
+        void recordWorkspaceInteraction({
+          registry: this.workspaceRegistry,
+          workspaceId,
+          cwd,
+          source: "terminal",
+        }).catch((error) =>
+          this.sessionLogger.warn(
+            { err: error, workspaceId },
+            "Failed to record terminal activity",
+          ),
+        );
+      },
       terminalManager,
       emit: (msg) => this.emit(msg),
       hasBinaryChannel: () => this.onBinaryMessage !== null,
@@ -1268,6 +1296,7 @@ export class Session {
       projectRegistry: this.projectRegistry,
       workspaceRegistry: this.workspaceRegistry,
       listAgentPayloads: () => this.listAgentPayloads({ includeBackground: true }),
+      workspaceActivityTimes: () => this.agentDirectory.workspaceActivityTimes(),
       workspaceLastUserMessageTimes: () => this.agentDirectory.workspaceLastUserMessageTimes(),
       listProviderSubagentActivity: async () => this.agentManager.listProviderSubagentActivity(),
       listTerminalActivityContributions: () => this.listTerminalActivityContributions(),

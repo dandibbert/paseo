@@ -1183,6 +1183,13 @@ export const ru: TranslationResources = {
     },
   },
   sidebar: {
+    projectSources: {
+      label: "Расположения проекта",
+      hosts: "На {{count}} хостах",
+      shared:
+        "Эти расположения имеют общую идентичность проекта. Совпадения имён недостаточно для объединения.",
+      distinct: "У проекта своя идентичность. Совпадения имён недостаточно для объединения.",
+    },
     statusGroupAccessibility: "Группа «{{label}}»",
     statusBucket: {
       needsInput: "Ожидает ввода",
@@ -1191,11 +1198,21 @@ export const ru: TranslationResources = {
       working: "В работе",
       done: "Готово",
     },
+    activityFilter: { all: "Все", running: "В работе", attention: "Требует внимания" },
+    activitySource: {
+      prompt: "Сообщение пользователя",
+      agent: "Действия агента",
+      terminal: "Операция терминала",
+      file: "Файл сохранён",
+      created: "Создание рабочей области",
+    },
     display: {
       showBackground: "Показать фоновые пространства",
       trigger: "Настройки отображения",
       heading: "Отображение",
+      sections: { main: "Основное", location: "Расположение", work: "Рабочая информация" },
       sort: {
+        activity: "Недавняя активность",
         label: "Сортировка",
         created: "Дата создания",
         manual: "Вручную",
@@ -1203,6 +1220,7 @@ export const ru: TranslationResources = {
         updateHost: "Обновите хосты для сортировки рабочих пространств",
       },
       grouping: {
+        host: "Хост → Проект",
         label: "Группировка",
         project: "Проект",
         status: "Статус",
@@ -1214,7 +1232,11 @@ export const ru: TranslationResources = {
         branch: "Имя ветки",
       },
       show: {
-        label: "Показывать",
+        directory: "Рабочий каталог",
+        activityTime: "Время активности",
+        activitySource: "Источник активности",
+        both: "Изменения и длительность",
+        label: "Показывать информацию",
         branch: "Ветка",
         project: "Проект",
         host: "Хост",
@@ -1223,7 +1245,7 @@ export const ru: TranslationResources = {
         services: "Сервисы",
         labels: "Метки",
         diff: "Статистика изменений",
-        timestamp: "Последняя активность",
+        timestamp: "Длительность состояния",
       },
       checks: {
         iconAndText: "Значок и текст",

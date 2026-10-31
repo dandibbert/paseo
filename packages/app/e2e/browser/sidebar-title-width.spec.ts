@@ -47,7 +47,7 @@ async function titleWidth(row: Locator) {
     .evaluate((element) => element.getBoundingClientRect().width);
 }
 
-async function toggleTrailing(page: Page, label: "Diff stats" | "Last activity", touch = false) {
+async function toggleTrailing(page: Page, label: "Diff stats" | "Status duration", touch = false) {
   await openSidebarDisplayPage(page, "sidebar-display-show");
   await page.getByRole("menuitem", { name: label, exact: true }).click();
   if (touch) {
@@ -69,7 +69,7 @@ async function expectTouchTitleWidth(page: Page) {
   await toggleTrailing(page, "Diff stats", true);
   const withoutStats = await titleWidth(row);
   expect(withDiff).toBeCloseTo(withoutStats, 0);
-  await toggleTrailing(page, "Last activity", true);
+  await toggleTrailing(page, "Status duration", true);
   expect(await titleWidth(row)).toBeCloseTo(withoutStats, 0);
   await toggleTrailing(page, "Diff stats", true);
 }

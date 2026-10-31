@@ -101,10 +101,12 @@ test("projects and pinned chats reorder while ordinary workspaces stay newest fi
 
     const firstProjectTestId = `sidebar-project-row-${projectEquivalenceViewKey(firstProject.projectKey)}`;
     const secondProjectTestId = `sidebar-project-row-${projectEquivalenceViewKey(secondProject.projectKey)}`;
+    await selectWorkspaceSort(page, "Manual");
     await quickDragFirstRowAfterSecond(
       page.locator(`[data-testid="${firstProjectTestId}"], [data-testid="${secondProjectTestId}"]`),
       pressProjectRow,
     );
+    await selectWorkspaceSort(page, "Created");
     const firstWorkspaceTestId = `sidebar-workspace-row-${getServerId()}:${firstProject.workspaceId}`;
     const secondWorkspaceTestId = `sidebar-workspace-row-${getServerId()}:${secondWorkspace.workspace.id}`;
     const ordinaryRows = page.locator(
@@ -130,7 +132,10 @@ test("projects and pinned chats reorder while ordinary workspaces stay newest fi
   }
 });
 
-async function selectWorkspaceSort(page: Page, name: "Manual" | "Created" | "Last prompt") {
+async function selectWorkspaceSort(
+  page: Page,
+  name: "Manual" | "Created" | "Last prompt" | "Recent activity",
+) {
   await page.getByLabel("Display preferences", { exact: true }).click();
   await page.getByRole("menuitem", { name: /^Sort/ }).click();
   await page.getByRole("menuitem", { name, exact: true }).click();
@@ -180,6 +185,7 @@ test("Created stays stable, Last prompt follows human submissions and survives t
     });
     await gotoAppShell(page);
     await waitForSidebarHydration(page);
+    await selectWorkspaceSort(page, "Created");
     const oldId = `sidebar-workspace-row-${getServerId()}:${seed.workspaceId}`;
     const newId = `sidebar-workspace-row-${getServerId()}:${newer.workspace.id}`;
     const rows = page.locator(`[data-testid="${oldId}"], [data-testid="${newId}"]`);
@@ -359,6 +365,7 @@ test("compact groups retain active overflow and reveal the current ordered rows"
   try {
     await gotoAppShell(page);
     await waitForSidebarHydration(page);
+    await selectWorkspaceSort(page, "Created");
     await test.step("Active overflow appears without intervening Done rows", () =>
       expectActiveOverflowTransitions(page, fixture));
     await test.step("Reveal follows current sort and survives collapse", () =>
@@ -424,5 +431,80 @@ test("Manual restores pre-beta order and keeps drag order across sorting and rel
     await expect.poll(() => rowTestIds(rows)).toEqual(ids);
   } finally {
     await seed.cleanup();
+  }
+});
+
+test("Recent activity orders project groups, Host preserves projects, and information stays optional", async ({
+  page,
+}, testInfo) => {
+  test.setTimeout(120_000);
+  const alpha = await seedWorkspace({ repoPrefix: "sidebar-activity-alpha-", title: "Alpha work" });
+  const beta = await seedWorkspace({ repoPrefix: "sidebar-activity-beta-", title: "Beta work" });
+  try {
+    const agent = await alpha.client.createAgent({
+      provider: "mock",
+      cwd: alpha.repoPath,
+      workspaceId: alpha.workspaceId,
+      modeId: "load-test",
+      model: "e2e-fast-stream",
+      title: "Activity check",
+    });
+    await gotoAppShell(page);
+    await waitForSidebarHydration(page);
+    const alphaProject = `sidebar-project-row-${projectEquivalenceViewKey(alpha.projectKey)}`;
+    const betaProject = `sidebar-project-row-${projectEquivalenceViewKey(beta.projectKey)}`;
+    const projectRows = page.locator(
+      `[data-testid="${alphaProject}"], [data-testid="${betaProject}"]`,
+    );
+    await selectWorkspaceSort(page, "Created");
+    await expect.poll(() => rowTestIds(projectRows)).toEqual([betaProject, alphaProject]);
+    await selectWorkspaceSort(page, "Recent activity");
+    await promptWorkspace(alpha, agent.id);
+    await expect.poll(() => rowTestIds(projectRows)).toEqual([alphaProject, betaProject]);
+    await beta.client.renameProject(beta.projectId, "Matching project");
+    await alpha.client.renameProject(alpha.projectId, "Matching project");
+    await expect.poll(() => rowTestIds(projectRows)).toEqual([alphaProject, betaProject]);
+    const sources = page.getByTestId(
+      `sidebar-project-sources-${projectEquivalenceViewKey(alpha.projectKey)}`,
+    );
+    await sources.click();
+    await expect(
+      page.getByText(
+        "This project has its own identity. Matching names alone do not merge projects.",
+      ),
+    ).toBeVisible();
+    await page.keyboard.press("Escape");
+    await page.getByTestId("sidebar-activity-filter-running").click();
+    await expect(page.getByTestId("sidebar-filter-empty-state")).toBeVisible();
+    await expect(page.getByTestId("sidebar-display-preferences-menu")).toBeVisible();
+    await page.getByRole("button", { name: "Clear filters", exact: true }).click();
+    await expect.poll(() => rowTestIds(projectRows)).toEqual([alphaProject, betaProject]);
+    await page.getByLabel("Display preferences", { exact: true }).click();
+    await page.getByRole("menuitem", { name: /^Group/ }).click();
+    await page.getByTestId("sidebar-grouping-host").click();
+    await expect(page.getByTestId(`sidebar-host-group-${getServerId()}`)).toBeVisible();
+    await expect.poll(() => rowTestIds(projectRows)).toEqual([alphaProject, betaProject]);
+    await page.screenshot({ path: testInfo.outputPath("sidebar-host-view.png") });
+    await page.getByLabel("Display preferences", { exact: true }).click();
+    await page.getByTestId("sidebar-display-show").click();
+    for (const item of ["directory", "activityTime", "activitySource"]) {
+      await page.getByTestId(`sidebar-row-item-${item}`).click();
+    }
+    await page.getByTestId("sidebar-workspace-trailing-both").click();
+    await expect(page.getByTestId("sidebar-row-item-services")).toBeVisible();
+    await expect(page.getByTestId("sidebar-row-item-labels")).toBeVisible();
+    await page.screenshot({ path: testInfo.outputPath("sidebar-information-menu.png") });
+    await page.keyboard.press("Escape");
+    const row = page.getByTestId(`sidebar-workspace-row-${getServerId()}:${alpha.workspaceId}`);
+    await expect(row.getByText(alpha.repoPath, { exact: true })).toBeVisible();
+    await expect(row.getByText("Agent activity", { exact: true })).toBeVisible();
+    await page.screenshot({ path: testInfo.outputPath("sidebar-expanded-information.png") });
+    await selectProjectGrouping(page);
+    await expect(page.getByTestId(`sidebar-host-group-${getServerId()}`)).toHaveCount(0);
+    await expect.poll(() => rowTestIds(projectRows)).toEqual([alphaProject, betaProject]);
+    await page.screenshot({ path: testInfo.outputPath("sidebar-project-view.png") });
+  } finally {
+    await alpha.cleanup();
+    await beta.cleanup();
   }
 });

@@ -1199,6 +1199,12 @@ export const zhCN: TranslationResources = {
     },
   },
   sidebar: {
+    projectSources: {
+      label: "项目来源",
+      hosts: "跨 {{count}} 台主机",
+      shared: "这些位置具有相同的项目身份，因此聚合显示；仅名称相同不会自动合并。",
+      distinct: "这是独立的项目身份；仅名称相同不会自动合并。",
+    },
     statusGroupAccessibility: "{{label}} 分组",
     statusBucket: {
       needsInput: "需要输入",
@@ -1207,11 +1213,21 @@ export const zhCN: TranslationResources = {
       working: "运行中",
       done: "已完成",
     },
+    activityFilter: { all: "全部", running: "运行中", attention: "需关注" },
+    activitySource: {
+      prompt: "人工消息",
+      agent: "Agent 活动",
+      terminal: "终端操作",
+      file: "文件保存",
+      created: "工作区创建",
+    },
     display: {
       showBackground: "显示后台工作区",
       trigger: "显示偏好",
       heading: "显示",
+      sections: { main: "主要信息", location: "位置", work: "工作信息" },
       sort: {
+        activity: "最近活动",
         label: "排序",
         created: "创建时间",
         manual: "手动",
@@ -1219,6 +1235,7 @@ export const zhCN: TranslationResources = {
         updateHost: "请更新主机以排序工作区",
       },
       grouping: {
+        host: "主机 → 项目",
         label: "分组",
         project: "项目",
         status: "状态",
@@ -1230,7 +1247,11 @@ export const zhCN: TranslationResources = {
         branch: "分支名称",
       },
       show: {
-        label: "显示",
+        directory: "工作目录",
+        activityTime: "活动时间",
+        activitySource: "活动来源",
+        both: "差异与状态时长",
+        label: "显示信息",
         branch: "分支",
         project: "项目",
         host: "主机",
@@ -1239,7 +1260,7 @@ export const zhCN: TranslationResources = {
         services: "服务",
         labels: "标签",
         diff: "差异统计",
-        timestamp: "最近活动",
+        timestamp: "状态持续时间",
       },
       checks: {
         iconAndText: "图标和文字",

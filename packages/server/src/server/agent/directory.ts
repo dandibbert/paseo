@@ -1,3 +1,4 @@
+import type { WorkspaceActivity } from "../workspace-directory.js";
 import type { AgentSnapshotPayload } from "../messages.js";
 import type { WorkspaceRegistry } from "../workspace-registry.js";
 import type { AgentManager, ManagedAgent } from "./agent-manager.js";
@@ -33,6 +34,41 @@ export class AgentDirectory {
     }
     for (const agent of live) {
       if (!agent.internal) record(agent.workspaceId, agent.lastUserMessageAt?.toISOString());
+    }
+    return times;
+  }
+
+  async workspaceActivityTimes(): Promise<Map<string, WorkspaceActivity>> {
+    const times = new Map<string, WorkspaceActivity>();
+    const live = this.deps.manager.listAgents();
+    const liveIds = new Set(live.map((agent) => agent.id));
+    const record = (
+      workspaceId: string | undefined,
+      at: string,
+      source: WorkspaceActivity["source"],
+    ) => {
+      if (!workspaceId) return;
+      const previous = times.get(workspaceId);
+      if (!previous || at > previous.at) times.set(workspaceId, { at, source });
+    };
+    // COMPAT(workspaceActivity): pre-v0.14 records have prompt/creation times only; remove after 2027-05-01.
+    for (const agent of await this.deps.storage.list()) {
+      if (!agent.internal && !liveIds.has(agent.id))
+        record(
+          agent.workspaceId,
+          agent.workspaceActivityAt ?? agent.lastUserMessageAt ?? agent.createdAt,
+          agent.workspaceActivitySource ?? (agent.lastUserMessageAt ? "prompt" : "created"),
+        );
+    }
+    for (const agent of live) {
+      if (!agent.internal)
+        record(
+          agent.workspaceId,
+          agent.workspaceActivityAt?.toISOString() ??
+            agent.lastUserMessageAt?.toISOString() ??
+            agent.createdAt.toISOString(),
+          agent.workspaceActivitySource ?? (agent.lastUserMessageAt ? "prompt" : "created"),
+        );
     }
     return times;
   }

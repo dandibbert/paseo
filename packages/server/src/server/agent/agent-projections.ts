@@ -90,6 +90,8 @@ export function toStoredAgentRecord(
     createdAt,
     updatedAt: agent.updatedAt.toISOString(),
     lastActivityAt: agent.updatedAt.toISOString(),
+    workspaceActivityAt: agent.workspaceActivityAt?.toISOString(),
+    workspaceActivitySource: agent.workspaceActivitySource,
     lastUserMessageAt: agent.lastUserMessageAt ? agent.lastUserMessageAt.toISOString() : null,
     title: options?.title ?? null,
     labels: agent.labels,

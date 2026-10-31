@@ -909,7 +909,11 @@ describe("terminal-session-controller backpressure snapshot fallback", () => {
   });
 });
 
-function exitFixture(readSnapshot: () => Promise<TerminalStateSnapshot | null>, backedUp = false) {
+function exitFixture(
+  readSnapshot: () => Promise<TerminalStateSnapshot | null>,
+  backedUp = false,
+  onWorkspaceInput?: TerminalSessionControllerOptions["onWorkspaceInput"],
+) {
   const outputs = new Set<(message: ServerMessage) => void>();
   const exits = new Set<Parameters<TerminalSession["onExit"]>[0]>();
   const terminal: TerminalSession = {
@@ -979,6 +983,7 @@ function exitFixture(readSnapshot: () => Promise<TerminalStateSnapshot | null>, 
   );
   const controller = new TerminalSessionController({
     terminalManager: manager,
+    onWorkspaceInput,
     emit: (message) => {
       delivery.reply(message);
     },
@@ -1347,3 +1352,29 @@ test.each([false, true])(
     }
   },
 );
+
+test("binary terminal input records owned activity but resize and output do not", async () => {
+  const activity = vi.fn();
+  const fixture = exitFixture(
+    async () => ({ state: terminalState(""), revision: 0 }),
+    false,
+    activity,
+  );
+  try {
+    const source = {};
+    const { slot } = await fixture.subscribe(source, true, "activity-stream");
+    fixture.controller.handleBinaryFrame(
+      { opcode: TerminalStreamOpcode.Input, slot, payload: Buffer.from("echo hello\r") },
+      source,
+    );
+    expect(activity).toHaveBeenCalledExactlyOnceWith("workspace", "/unused");
+    fixture.controller.handleBinaryFrame(
+      { opcode: TerminalStreamOpcode.Input, slot, payload: Buffer.alloc(0) },
+      source,
+    );
+    fixture.output("background output", 1);
+    expect(activity).toHaveBeenCalledTimes(1);
+  } finally {
+    await fixture.delivery.close();
+  }
+});

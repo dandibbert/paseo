@@ -431,6 +431,8 @@ interface ManagedAgentBase {
   runtimeInfo?: AgentRuntimeInfo;
   createdAt: Date;
   updatedAt: Date;
+  workspaceActivityAt?: Date;
+  workspaceActivitySource?: "prompt" | "agent";
   availableModes: AgentMode[];
   features?: AgentFeature[];
   currentModeId: string | null;
@@ -1481,6 +1483,8 @@ export class AgentManager {
     options?: {
       createdAt?: Date;
       updatedAt?: Date;
+      workspaceActivityAt?: Date;
+      workspaceActivitySource?: "prompt" | "agent";
       lastUserMessageAt?: Date | null;
       labels?: Record<string, string>;
       workspaceId?: string;
@@ -1513,6 +1517,8 @@ export class AgentManager {
     options?: {
       createdAt?: Date;
       updatedAt?: Date;
+      workspaceActivityAt?: Date;
+      workspaceActivitySource?: "prompt" | "agent";
       lastUserMessageAt?: Date | null;
       labels?: Record<string, string>;
       workspaceId?: string;
@@ -1581,6 +1587,7 @@ export class AgentManager {
     await this.requireExternalMcpSupport(session, providerLaunchConfig, launchContext);
     return this.registerSession(session, storedConfig, resolvedAgentId, {
       ...options,
+      ...restoredWorkspaceActivity(record, options),
       launchEnv,
       persistence: handle,
       restoring: true,
@@ -1784,6 +1791,8 @@ export class AgentManager {
         launchEnv: existing.launchEnv,
         createdAt: existing.createdAt,
         updatedAt: existing.updatedAt,
+        workspaceActivityAt: existing.workspaceActivityAt,
+        workspaceActivitySource: existing.workspaceActivitySource,
         lastUserMessageAt: existing.lastUserMessageAt,
         historyPrimed: rehydrateFromDisk ? false : preservedHistoryPrimed,
         lastUsage: preservedLastUsage,
@@ -2229,6 +2238,10 @@ export class AgentManager {
         unsubscribeSession: null,
         persistence: record.persistence ?? null,
         historyPrimed: true,
+        workspaceActivitySource: record.workspaceActivitySource,
+        workspaceActivityAt: new Date(
+          record.workspaceActivityAt ?? record.lastUserMessageAt ?? record.createdAt,
+        ),
         lastUserMessageAt: record.lastUserMessageAt ? new Date(record.lastUserMessageAt) : null,
         lastUsage: undefined,
         lastError: record.lastError ?? undefined,
@@ -3823,6 +3836,8 @@ export class AgentManager {
     options?: {
       createdAt?: Date;
       updatedAt?: Date;
+      workspaceActivityAt?: Date;
+      workspaceActivitySource?: "prompt" | "agent";
       lastUserMessageAt?: Date | null;
       labels?: Record<string, string>;
       timeline?: AgentTimelineItem[];
@@ -4020,6 +4035,8 @@ export class AgentManager {
       | {
           createdAt?: Date;
           updatedAt?: Date;
+          workspaceActivityAt?: Date;
+          workspaceActivitySource?: "prompt" | "agent";
           lastUserMessageAt?: Date | null;
           labels?: Record<string, string>;
           historyPrimed?: boolean;
@@ -4048,6 +4065,7 @@ export class AgentManager {
       lifecycle: "initializing",
       createdAt: options?.createdAt ?? now,
       updatedAt: options?.updatedAt ?? now,
+      ...initialWorkspaceActivity(options, now),
       availableModes: [],
       currentModeId: null,
       pendingPermissions: new Map<string, AgentPermissionRequest>(),
@@ -4234,6 +4252,9 @@ export class AgentManager {
     event: AgentStreamEvent,
   ): Promise<void> {
     if (event.type === "provider_subagent") {
+      const previous = this.providerSubagents.get(agent.id, event.event.id);
+      if (recordSubagentWorkspaceActivity(agent, event.event, previous))
+        await this.persistSnapshot(agent);
       const update = this.providerSubagents.apply(agent.id, event.provider, event.event);
       this.dispatch({ type: "provider_subagent", event: update });
       return;
@@ -4585,6 +4606,7 @@ export class AgentManager {
 
     // Only update timestamp for live events, not history replay
     if (!options?.fromHistory) {
+      recordLiveWorkspaceActivity(agent, event);
       this.touchUpdatedAt(agent);
       if (this.agentStreamCoalescer.handle(agent.id, event)) {
         this.traceCoalescerBuffered(agent, event, eventTurnId);
@@ -5110,7 +5132,11 @@ export class AgentManager {
     )
       return;
     this.touchUpdatedAt(agent);
-    if (item.type === "user_message") agent.lastUserMessageAt = new Date();
+    if (item.type === "user_message") {
+      agent.lastUserMessageAt = new Date();
+      agent.workspaceActivityAt = agent.lastUserMessageAt;
+      agent.workspaceActivitySource = "prompt";
+    }
     this.recordAndDispatchTimelineItem(agent.id, item, agent.provider, options?.turnId, options);
   }
 
@@ -5847,4 +5873,65 @@ export function commandMayHaveChangedExternalState(command: string): boolean {
     // ahead/behind counts can drift stale until the next refresh.
     /\bgit\s+fetch\b/.test(normalized)
   );
+}
+
+interface AgentWorkspaceActivity {
+  workspaceActivityAt?: Date;
+  workspaceActivitySource?: "prompt" | "agent";
+}
+function initialWorkspaceActivity(
+  options:
+    | (AgentWorkspaceActivity & { lastUserMessageAt?: Date | null; createdAt?: Date })
+    | undefined,
+  now: Date,
+): AgentWorkspaceActivity {
+  return {
+    workspaceActivityAt:
+      options?.workspaceActivityAt ?? options?.lastUserMessageAt ?? options?.createdAt ?? now,
+    workspaceActivitySource: options?.workspaceActivitySource,
+  };
+}
+function restoredWorkspaceActivity(
+  record: StoredAgentRecord | null,
+  options: AgentWorkspaceActivity | undefined,
+): AgentWorkspaceActivity {
+  if (!record) return options ?? {};
+  // COMPAT(workspaceActivity): pre-v0.14 records contain only prompt/creation recency; remove after 2027-05-01.
+  return {
+    workspaceActivityAt: new Date(
+      record.workspaceActivityAt ?? record.lastUserMessageAt ?? record.createdAt,
+    ),
+    workspaceActivitySource: record.workspaceActivitySource,
+  };
+}
+function recordLiveWorkspaceActivity(agent: ManagedAgent, event: AgentStreamEvent): void {
+  const meaningful =
+    event.type === "timeline" ||
+    event.type === "turn_completed" ||
+    event.type === "turn_failed" ||
+    event.type === "turn_canceled" ||
+    event.type === "permission_requested";
+  if (!meaningful) return;
+  const now = Date.now();
+  const terminal = event.type !== "timeline";
+  if (!terminal && now - (agent.workspaceActivityAt?.getTime() ?? 0) < 10_000) return;
+  agent.workspaceActivityAt = new Date(now);
+  agent.workspaceActivitySource = "agent";
+}
+
+function recordSubagentWorkspaceActivity(
+  agent: ManagedAgent,
+  event: import("./provider-subagents/store.js").ProviderSubagentInputEvent,
+  previous: import("./provider-subagents/store.js").ProviderSubagentDescriptor | null,
+): boolean {
+  const changedStatus =
+    event.type === "upsert" && event.status !== undefined && event.status !== previous?.status;
+  if (event.type !== "timeline" && !changedStatus) return false;
+  const now = Date.now();
+  const at = "timestamp" in event && event.timestamp ? Date.parse(event.timestamp) : now;
+  const previousAt = agent.workspaceActivityAt?.getTime() ?? 0;
+  if (at <= previousAt || (!changedStatus && at - previousAt < 10_000)) return false;
+  agent.workspaceActivityAt = new Date(at);
+  agent.workspaceActivitySource = "agent";
+  return true;
 }

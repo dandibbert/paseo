@@ -20,10 +20,11 @@ export function useFileHandle(input: {
   const fileByteWrites = useSessionStore(
     (state) => state.sessions[serverId]?.serverInfo?.features?.fileByteWrites === true,
   );
+  const workspaceId = target?.workspaceId;
   const cwd = target?.cwd ?? null;
   const path = target?.path ?? null;
   const [handle, setHandle] = useState<{ key: string; handle: FileHandle } | null>(null);
-  const key = client && cwd && path ? `${cwd}:${path}` : null;
+  const key = client && cwd && path ? `${workspaceId}:${cwd}:${path}` : null;
 
   useEffect(() => {
     if (!client || !cwd || !path) {
@@ -31,10 +32,10 @@ export function useFileHandle(input: {
       return;
     }
     const session = createDaemonFileSession(client, { workspaceFileEditing, fileByteWrites });
-    const next = new FileHandle(session, { cwd, path }, absolutePath);
-    setHandle({ key: `${cwd}:${path}`, handle: next });
+    const next = new FileHandle(session, { cwd, path, workspaceId }, absolutePath);
+    setHandle({ key: `${workspaceId}:${cwd}:${path}`, handle: next });
     return () => next.dispose();
-  }, [absolutePath, client, cwd, fileByteWrites, path, workspaceFileEditing]);
+  }, [absolutePath, client, cwd, fileByteWrites, path, workspaceFileEditing, workspaceId]);
 
   const current = handle?.key === key ? handle.handle : null;
   useEffect(() => {

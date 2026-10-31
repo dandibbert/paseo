@@ -1,3 +1,9 @@
+import { useSidebarModel } from "@/components/sidebar/sidebar-model";
+import { SidebarProjectLocations } from "@/components/sidebar/project-locations";
+import {
+  groupSidebarProjectsByHost,
+  projectLocationSummary,
+} from "@/components/sidebar/sidebar-order";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import {
   View,
@@ -17,6 +23,7 @@ import {
   useEffect,
   useRef,
   type ReactElement,
+  type ReactNode,
   type MutableRefObject,
   type Ref,
   type ComponentProps,
@@ -244,6 +251,7 @@ interface SidebarWorkspaceListProps {
 interface ProjectHeaderRowProps {
   project: SidebarProjectEntry;
   displayName: string;
+  locationSummary?: string | null;
   iconDataUri: string | null;
   statusBucket: SidebarStateBucket | null;
   selected?: boolean;
@@ -255,7 +263,7 @@ interface ProjectHeaderRowProps {
   onWorktreeCreated?: (workspaceId: string) => void;
   shortcutNumber?: number | null;
   showShortcutBadge?: boolean;
-  drag: () => void;
+  drag?: () => void;
   isDragging: boolean;
   isArchiving?: boolean;
   menuController: ReturnType<typeof useContextMenu> | null;
@@ -852,6 +860,7 @@ function NewWorkspaceGhostRow({
 function ProjectHeaderRow({
   project,
   displayName,
+  locationSummary,
   iconDataUri,
   statusBucket,
   selected = false,
@@ -960,6 +969,9 @@ function ProjectHeaderRow({
           <Text style={styles.projectTitle} numberOfLines={1}>
             {displayName}
           </Text>
+          {locationSummary ? (
+            <SidebarProjectLocations project={project} summary={locationSummary} />
+          ) : null}
         </View>
       </View>
       <ProjectRowTrailingActions
@@ -1545,6 +1557,7 @@ function ProjectBlock({
   workspaceEntriesByKey,
   collapsed,
   displayName,
+  locationSummary,
   iconDataUri,
   selectionEnabled,
   showShortcutBadges,
@@ -1571,6 +1584,7 @@ function ProjectBlock({
   workspaceEntriesByKey: ReadonlyMap<string, SidebarWorkspaceEntry>;
   collapsed: boolean;
   displayName: string;
+  locationSummary?: string | null;
   iconDataUri: string | null;
   selectionEnabled: boolean;
   showShortcutBadges: boolean;
@@ -1583,7 +1597,7 @@ function ProjectBlock({
   dragGestureHostActive?: boolean;
   manualSort: boolean;
   onWorktreeCreated?: (workspaceId: string) => void;
-  drag: () => void;
+  drag?: () => void;
   isDragging: boolean;
   dragHandleProps?: DraggableListDragHandleProps;
   creatingWorkspaceIds: ReadonlySet<string>;
@@ -1816,6 +1830,7 @@ function ProjectBlock({
       <ProjectHeaderRow
         project={project}
         displayName={displayName}
+        locationSummary={locationSummary}
         iconDataUri={iconDataUri}
         statusBucket={aggregateStatusBucket}
         selected={false}
@@ -1850,6 +1865,7 @@ function areProjectBlockPropsEqual(previous: ProjectBlockProps, next: ProjectBlo
     projectWorkspaceEntriesEqual(previous, next) &&
     previous.collapsed === next.collapsed &&
     previous.displayName === next.displayName &&
+    previous.locationSummary === next.locationSummary &&
     previous.iconDataUri === next.iconDataUri &&
     previous.selectionEnabled === next.selectionEnabled &&
     previous.showShortcutBadges === next.showShortcutBadges &&
@@ -2006,7 +2022,7 @@ export function SidebarWorkspaceList({
   // list of grouped rows, so a new mode lands in the grouped branch rather than silently in this
   // one's `else`.
   const content =
-    groupMode !== "project" ? (
+    groupMode === "status" ? (
       <SidebarGroupedModeList
         workspaceGroups={workspaceGroups}
         pinnedGroups={pinnedGroups}
@@ -2174,6 +2190,9 @@ function ProjectModeList({
     (state) => state.togglePinnedCollapsed,
   );
 
+  const { effectiveWorkspaceSort: workspaceSort } = useSidebarModel();
+  const groupMode = useSidebarViewStore((state) => state.groupMode);
+  const hosts = useHosts();
   const manualSort = useSidebarViewStore((state) => state.workspaceSort === "manual");
   const getWorkspaceOrder = useSidebarOrderStore((state) => state.getWorkspaceOrder);
   const setWorkspaceOrder = useSidebarOrderStore((state) => state.setWorkspaceOrder);
@@ -2330,7 +2349,7 @@ function ProjectModeList({
     (
       item: SidebarProjectEntry,
       dragState: {
-        drag: () => void;
+        drag?: () => void;
         isDragging: boolean;
         dragHandleProps?: DraggableRenderItemInfo<SidebarProjectEntry>["dragHandleProps"];
       },
@@ -2342,6 +2361,7 @@ function ProjectModeList({
           workspaceEntriesByKey={workspaceEntriesByKey}
           collapsed={collapsedProjectKeys.has(item.viewKey)}
           displayName={item.projectName}
+          locationSummary={projectLocationSummary(item, projects)}
           iconDataUri={projectIconByProjectViewKey.get(item.viewKey) ?? null}
           selectionEnabled={selectionEnabled}
           showShortcutBadges={showShortcutBadges}
@@ -2354,9 +2374,11 @@ function ProjectModeList({
           useNestable={platformIsNative}
           dragGestureHostActive={dragGestureHostActive}
           onWorktreeCreated={handleWorktreeCreated}
-          drag={dragState.drag}
+          drag={manualSort && groupMode === "project" ? dragState.drag : undefined}
           isDragging={dragState.isDragging}
-          dragHandleProps={dragState.dragHandleProps}
+          dragHandleProps={
+            manualSort && groupMode === "project" ? dragState.dragHandleProps : undefined
+          }
           creatingWorkspaceIds={creatingWorkspaceIds}
           activeWorkspaceSelection={activeWorkspaceSelection}
           hostBadgeByServerId={hostBadgeByServerId}
@@ -2368,6 +2390,8 @@ function ProjectModeList({
     },
     [
       collapsedProjectKeys,
+      projects,
+      groupMode,
       activeWorkspaceSelection,
       handleWorktreeCreated,
       manualSort,
@@ -2441,10 +2465,34 @@ function ProjectModeList({
     ],
   );
 
-  const projectBody =
-    projects.length === 0 ? (
+  const renderStaticProject = (item: SidebarProjectEntry) =>
+    renderProjectBlock(item, { isDragging: false });
+  const hostGroups =
+    groupMode === "host"
+      ? groupSidebarProjectsByHost(unpinnedProjects, workspaceEntriesByKey, workspaceSort)
+      : [];
+  const staticProjectBody =
+    groupMode === "host"
+      ? hostGroups.map((group) => (
+          <View key={group.serverId} testID={`sidebar-host-group-${group.serverId}`}>
+            <SidebarSectionHeader
+              title={
+                hosts.find((host) => host.serverId === group.serverId)?.label || group.serverId
+              }
+            />
+            {group.projects.map(renderStaticProject)}
+          </View>
+        ))
+      : unpinnedProjects.map(renderStaticProject);
+  let projectBody: ReactNode;
+  if (projects.length === 0) {
+    projectBody = (
       <SidebarProjectEmptyState onAddProject={onAddProject} onImportSession={onImportSession} />
-    ) : (
+    );
+  } else if (!manualSort || groupMode === "host") {
+    projectBody = <View testID="sidebar-project-list">{staticProjectBody}</View>;
+  } else {
+    projectBody = (
       <DraggableList
         testID="sidebar-project-list"
         data={unpinnedProjects}
@@ -2460,6 +2508,7 @@ function ProjectModeList({
         containerStyle={styles.projectListContainer}
       />
     );
+  }
 
   const content = (
     <>
@@ -2652,8 +2701,8 @@ const styles = StyleSheet.create((theme) => ({
     minWidth: 0,
   },
   projectTitleGroup: {
-    flexDirection: "row",
-    alignItems: "center",
+    flexDirection: "column",
+    alignItems: "stretch",
     gap: theme.spacing[1],
     flex: 1,
     minWidth: 0,

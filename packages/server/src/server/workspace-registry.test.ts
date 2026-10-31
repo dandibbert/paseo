@@ -7,6 +7,7 @@ import { beforeEach, afterEach, describe, expect, test } from "vitest";
 import { createTestLogger } from "../test-utils/test-logger.js";
 import { writeJsonFileAtomic } from "./atomic-file.js";
 import {
+  recordWorkspaceInteraction,
   createPersistedProjectRecord,
   createPersistedWorkspaceRecord,
   FileBackedProjectRegistry,
@@ -80,6 +81,53 @@ describe("workspace registries", () => {
 
   afterEach(() => {
     rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  test("owned activity is persisted and coalesced without promoting same-cwd siblings", async () => {
+    const cwd = path.join(tmpDir, "repo");
+    await workspaceRegistry.initialize();
+    for (const workspaceId of ["owner", "sibling"])
+      await workspaceRegistry.upsert(
+        createPersistedWorkspaceRecord({
+          workspaceId,
+          projectId: "p",
+          cwd,
+          kind: "directory",
+          displayName: workspaceId,
+          createdAt: "2026-01-01",
+          updatedAt: "2026-01-01",
+        }),
+      );
+    const input = {
+      registry: workspaceRegistry,
+      workspaceId: "owner",
+      cwd,
+      source: "terminal" as const,
+      at: Date.parse("2026-03-01"),
+    };
+    await recordWorkspaceInteraction(input);
+    await recordWorkspaceInteraction({ ...input, at: input.at + 1000 });
+    expect((await workspaceRegistry.get("owner"))?.activity).toEqual({
+      at: new Date(input.at).toISOString(),
+      source: "terminal",
+    });
+    expect((await workspaceRegistry.get("sibling"))?.activity).toBeUndefined();
+    await recordWorkspaceInteraction({
+      ...input,
+      cwd: path.join(tmpDir, "elsewhere"),
+      at: input.at + 20000,
+    });
+    expect((await workspaceRegistry.get("owner"))?.activity?.at).toBe(
+      new Date(input.at).toISOString(),
+    );
+    const reload = new FileBackedWorkspaceRegistry(
+      path.join(tmpDir, "projects", "workspaces.json"),
+      logger,
+    );
+    await reload.initialize();
+    expect((await reload.get("owner"))?.activity).toEqual(
+      (await workspaceRegistry.get("owner"))?.activity,
+    );
   });
 
   test("creates, updates, archives, deletes, and lists project records", async () => {

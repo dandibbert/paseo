@@ -9,6 +9,7 @@ import type { FileVersion, FileWriteResult } from "@getpaseo/protocol/messages";
 import { decodeUtf8 } from "@/utils/decode-utf8";
 
 export interface FileTarget {
+  workspaceId?: string;
   cwd: string;
   path: string;
 }

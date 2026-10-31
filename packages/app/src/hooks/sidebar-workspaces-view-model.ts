@@ -39,6 +39,10 @@ export interface SidebarStatusWorkspacePlacement extends SidebarWorkspacePlaceme
 }
 
 export interface SidebarWorkspaceEntry extends SidebarStatusWorkspacePlacement {
+  activityAt?: Date | null;
+  activitySource?: WorkspaceDescriptor["activitySource"];
+  createdAt?: Date | null;
+  lastUserMessageAt?: Date | null;
   workspaceDirectory: string;
   workspaceDirectoryLabel: string;
   // Raw user-set title (null when the name is derived from branch/directory).
@@ -165,6 +169,10 @@ export function createSidebarWorkspaceEntry(input: {
     background: input.workspace.background,
     name: input.workspace.name,
     title: input.workspace.title ?? null,
+    activityAt: input.workspace.activityAt ?? null,
+    activitySource: input.workspace.activitySource,
+    createdAt: input.workspace.createdAt,
+    lastUserMessageAt: input.workspace.lastUserMessageAt,
     pinnedAt: input.workspace.pinnedAt,
     labels: input.workspace.labels ?? EMPTY_WORKSPACE_LABELS,
     currentBranch: normalizeCurrentBranch(input.workspace.gitRuntime?.currentBranch),

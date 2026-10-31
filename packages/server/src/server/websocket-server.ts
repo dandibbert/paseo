@@ -1,3 +1,4 @@
+import { recordWorkspaceInteraction } from "./workspace-registry.js";
 import { type WorkspaceRuntimeStore } from "./workspace-runtime-store/index.js";
 import {
   createAgentMessageDelivery,
@@ -838,6 +839,26 @@ export class VoiceAssistantWebSocketServer {
     this.terminalManager = params.terminalManager ?? null;
     if (this.terminalManager) {
       this.unsubscribeTerminalActivity = this.terminalManager.subscribeTerminalActivity((event) => {
+        // Focus clears attention without changing execution; it must not promote a workspace.
+        if (
+          event.activity &&
+          (event.activity.state !== event.previous?.state ||
+            (event.activity.attentionReason === "needs_input" &&
+              event.previous?.attentionReason !== "needs_input"))
+        ) {
+          void recordWorkspaceInteraction({
+            registry: this.workspaceRegistry,
+            workspaceId: event.workspaceId,
+            cwd: event.cwd,
+            source: "terminal",
+            at: event.activity.changedAt,
+          }).catch((err) =>
+            this.logger.warn(
+              { err, workspaceId: event.workspaceId },
+              "Failed to persist terminal activity",
+            ),
+          );
+        }
         const reason = resolveTerminalAttentionReason({
           attentionReason: event.activity?.attentionReason,
           previousState: event.previous?.state ?? null,
@@ -1969,6 +1990,7 @@ export class VoiceAssistantWebSocketServer {
         workspaceSetupRun: true,
         workspaceSetupObservation: true,
         workspaceSortTimes: true,
+        workspaceActivity: true,
         // COMPAT(providersSnapshot): keep optional until all clients rely on snapshot flow.
         providersSnapshot: true,
         // COMPAT(providersSnapshotCwd): added in v0.3.2, remove gate after 2027-02-10.

@@ -32,7 +32,8 @@ function createMemoryStorage(entries: Record<string, string | null>): MemoryStor
 describe("sidebar view store", () => {
   beforeEach(() => {
     useSidebarViewStore.setState({
-      workspaceSort: "created",
+      workspaceSort: "activity",
+      activityFilter: "all",
       showBackground: false,
       groupMode: "project",
       hostFilters: [],
@@ -86,7 +87,8 @@ describe("sidebar view store", () => {
         },
       }),
     ).toEqual({
-      workspaceSort: "created",
+      workspaceSort: "activity",
+      activityFilter: "all",
       showBackground: false,
       groupMode: "status",
       hostFilters: [],
@@ -102,7 +104,8 @@ describe("sidebar view store", () => {
         hostFilter: "host-a",
       }),
     ).toEqual({
-      workspaceSort: "created",
+      workspaceSort: "activity",
+      activityFilter: "all",
       showBackground: false,
       groupMode: "status",
       hostFilters: ["host-a"],
@@ -118,7 +121,8 @@ describe("sidebar view store", () => {
         hostFilters: ["host-a", "host-b"],
       }),
     ).toEqual({
-      workspaceSort: "created",
+      workspaceSort: "activity",
+      activityFilter: "all",
       showBackground: false,
       groupMode: "status",
       hostFilters: ["host-a", "host-b"],
@@ -230,7 +234,8 @@ describe("sidebar view store", () => {
         projectFilters: ["project-a", "project-b"],
       }),
     ).toEqual({
-      workspaceSort: "created",
+      workspaceSort: "activity",
+      activityFilter: "all",
       showBackground: false,
       groupMode: "project",
       hostFilters: ["host-a"],
@@ -241,7 +246,8 @@ describe("sidebar view store", () => {
 
   it("never keeps project filters from state the schema rejects", () => {
     expect(migrateSidebarViewState({ projectFilters: "project-a" })).toEqual({
-      workspaceSort: "created",
+      workspaceSort: "activity",
+      activityFilter: "all",
       showBackground: false,
       groupMode: "project",
       hostFilters: [],
@@ -294,8 +300,8 @@ describe("sidebar view store", () => {
   });
 });
 
-it("defaults to Created and persists the Last prompt choice across migration", () => {
-  expect(migrateSidebarViewState({}).workspaceSort).toBe("created");
+it("defaults to Recent activity and persists the Last prompt choice across migration", () => {
+  expect(migrateSidebarViewState({}).workspaceSort).toBe("activity");
   expect(
     migrateSidebarViewState({ workspaceSort: "lastPrompt", groupMode: "status" }),
   ).toMatchObject({ workspaceSort: "lastPrompt", groupMode: "status" });
@@ -303,4 +309,14 @@ it("defaults to Created and persists the Last prompt choice across migration", (
 
 it("retains the manual sorting preference on reload", () => {
   expect(migrateSidebarViewState({ workspaceSort: "manual" }).workspaceSort).toBe("manual");
+});
+
+it("preserves explicit Created sorting and migrates host and quick-filter preferences", () => {
+  expect(
+    migrateSidebarViewState({
+      workspaceSort: "created",
+      groupMode: "host",
+      activityFilter: "running",
+    }),
+  ).toMatchObject({ workspaceSort: "created", groupMode: "host", activityFilter: "running" });
 });

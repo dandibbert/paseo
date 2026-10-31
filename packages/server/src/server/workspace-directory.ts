@@ -77,6 +77,7 @@ export interface WorkspaceDirectoryDeps {
     list(): Promise<PersistedWorkspaceRecord[]>;
   };
   listAgentPayloads(): Promise<AgentSnapshotPayload[]>;
+  workspaceActivityTimes?(): Promise<ReadonlyMap<string, WorkspaceActivity>>;
   workspaceLastUserMessageTimes(): Promise<ReadonlyMap<string, string>>;
   listProviderSubagentActivity(): Promise<ProviderSubagentWorkspaceActivity[]>;
   listTerminalActivityContributions(): Promise<
@@ -220,6 +221,7 @@ export class WorkspaceDirectory {
     const [
       agents,
       lastUserMessageTimes,
+      activityTimes,
       providerSubagentActivity,
       persistedWorkspaces,
       persistedProjects,
@@ -227,6 +229,7 @@ export class WorkspaceDirectory {
     ] = await Promise.all([
       this.deps.listAgentPayloads(),
       this.deps.workspaceLastUserMessageTimes(),
+      this.deps.workspaceActivityTimes?.() ?? Promise.resolve(new Map<string, WorkspaceActivity>()),
       this.deps.listProviderSubagentActivity(),
       this.deps.workspaceRegistry.list(),
       this.deps.projectRegistry.list(),
@@ -262,11 +265,15 @@ export class WorkspaceDirectory {
       descriptorsByWorkspaceId.set(workspaceId, {
         ...workspaceDescriptors[i],
         createdAt: includedWorkspaces[i].createdAt,
+        ...resolveWorkspaceActivity(
+          includedWorkspaces[i],
+          activityTimes.get(workspaceId),
+          lastUserMessageTimes.get(workspaceId),
+        ),
         lastUserMessageAt: lastUserMessageTimes.get(workspaceId) ?? null,
         archivingAt: this.archivingByWorkspaceId.get(workspaceId) ?? null,
       });
     }
-
     const activeAgents = agents.filter(
       (agent) => !agent.archivedAt && this.deps.isProviderVisibleToClient(agent.provider),
     );
@@ -759,4 +766,21 @@ export function resolveWorkspaceRootAgent(
     seen.add(parentAgentId);
     current = parent;
   }
+}
+
+export interface WorkspaceActivity {
+  at: string;
+  source: NonNullable<WorkspaceDescriptorPayload["activitySource"]>;
+}
+function resolveWorkspaceActivity(
+  workspace: PersistedWorkspaceRecord,
+  agentActivity: WorkspaceActivity | undefined,
+  lastPrompt: string | undefined,
+): Pick<WorkspaceDescriptorPayload, "activityAt" | "activitySource"> {
+  let activity = agentActivity ?? {
+    at: lastPrompt ?? workspace.createdAt,
+    source: lastPrompt ? ("prompt" as const) : ("created" as const),
+  };
+  if (workspace.activity && workspace.activity.at > activity.at) activity = workspace.activity;
+  return { activityAt: activity.at, activitySource: activity.source };
 }

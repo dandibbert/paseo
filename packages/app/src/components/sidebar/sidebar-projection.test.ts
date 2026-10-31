@@ -1,3 +1,9 @@
+import {
+  orderSidebarProjects,
+  groupSidebarProjectsByHost,
+  matchesSidebarActivity,
+  projectLocationSummary,
+} from "./sidebar-order";
 import { i18n } from "@/i18n/i18next";
 import { describe, expect, it } from "vitest";
 import type {
@@ -175,4 +181,96 @@ describe("buildSidebarProjection", () => {
       { serverId: "srv", workspaceId: "unpinned" },
     ]);
   });
+});
+
+function timed(id: string, project: string, serverId: string, age: number) {
+  const row = makeWorkspace(id, "done", [], project);
+  const workspaceKey = `${serverId}:${id}`;
+  row.placement = { ...row.placement, serverId, workspaceKey };
+  row.entry = {
+    ...row.entry,
+    serverId,
+    workspaceKey,
+    activityAt: new Date(age),
+    createdAt: new Date(1),
+  };
+  return row;
+}
+it("moves a whole project by its most recent visible workspace and orders its children", () => {
+  const old = timed("old", "a", "srv", 10);
+  const fresh = timed("fresh", "a", "srv", 100);
+  const middle = timed("middle", "b", "srv", 50);
+  const projects = [
+    makeProject([middle.placement], "b"),
+    makeProject([old.placement, fresh.placement], "a"),
+  ];
+  const entries = new Map([old, fresh, middle].map((row) => [row.entry.workspaceKey, row.entry]));
+  const ordered = orderSidebarProjects(projects, entries, "activity");
+  expect(ordered.map((project) => project.viewKey)).toEqual(["a", "b"]);
+  expect(ordered[0].workspaces.map((row) => row.workspaceId)).toEqual(["fresh", "old"]);
+  const filtered = projects.map((project) => ({
+    ...project,
+    workspaces: project.workspaces.filter((row) => row.workspaceId !== "fresh"),
+  }));
+  expect(
+    orderSidebarProjects(filtered, entries, "activity").map((project) => project.viewKey),
+  ).toEqual(["b", "a"]);
+  expect(orderSidebarProjects(projects, entries, "manual")).toEqual(projects);
+  expect(projects[1].workspaces.map((row) => row.workspaceId)).toEqual(["old", "fresh"]);
+});
+it("does not let a pinned row promote its ordinary project", () => {
+  const pinned = timed("pinned", "a", "srv", 100);
+  pinned.entry.pinnedAt = new Date(10).toISOString();
+  const ordinary = timed("ordinary", "b", "srv", 50);
+  const projects = [makeProject([pinned.placement], "a"), makeProject([ordinary.placement], "b")];
+  const entries = new Map([pinned, ordinary].map((row) => [row.entry.workspaceKey, row.entry]));
+  expect(
+    orderSidebarProjects(projects, entries, "activity").map((project) => project.viewKey),
+  ).toEqual(["b", "a"]);
+});
+it("splits a shared project by host without changing identity or duplicating shortcuts", () => {
+  const older = timed("old", "shared", "host-a", 10);
+  const recent = timed("new", "shared", "host-b", 100);
+  const shared = makeProject([older.placement, recent.placement], "shared");
+  shared.hosts = [
+    { ...shared.hosts[0], serverId: "host-a" },
+    { ...shared.hosts[0], serverId: "host-b" },
+  ];
+  const entries = new Map([older, recent].map((row) => [row.entry.workspaceKey, row.entry]));
+  const groups = groupSidebarProjectsByHost([shared], entries, "activity");
+  expect(groups.map((group) => group.serverId)).toEqual(["host-b", "host-a"]);
+  expect(groups.flatMap((group) => group.projects.map((project) => project.viewKey))).toEqual([
+    "shared",
+    "shared",
+  ]);
+  const projection = buildSidebarProjection({
+    ...projectionInput(),
+    projects: [shared],
+    workspaceEntriesByKey: entries,
+    pinnedKeys: { pinnedWorkspaceKeys: [], pinnedAtByKey: {} },
+    groupMode: "host",
+    workspaceSort: "activity",
+  });
+  expect(projection.shortcutModel.shortcutTargets).toEqual([
+    { serverId: "host-b", workspaceId: "new" },
+    { serverId: "host-a", workspaceId: "old" },
+  ]);
+  expect(
+    buildSidebarProjection({
+      ...projectionInput(),
+      projects: [shared],
+      workspaceEntriesByKey: entries,
+      groupMode: "host",
+      collapsedProjectKeys: new Set(["shared"]),
+    }).shortcutModel.shortcutTargets,
+  ).toEqual([]);
+});
+it("filters status without replacing project identity and distinguishes matching names", () => {
+  expect(matchesSidebarActivity(makeWorkspace("r", "running").entry, "running")).toBe(true);
+  expect(matchesSidebarActivity(makeWorkspace("f", "failed").entry, "attention")).toBe(true);
+  expect(matchesSidebarActivity(makeWorkspace("d", "done").entry, "running")).toBe(false);
+  const a = makeProject([], "a");
+  const b = makeProject([], "b");
+  expect(projectLocationSummary(a, [a])).toBeNull();
+  expect(projectLocationSummary(a, [a, b])).toBe("/repo/a");
 });

@@ -1195,6 +1195,13 @@ export const fr: TranslationResources = {
     },
   },
   sidebar: {
+    projectSources: {
+      label: "Emplacements du projet",
+      hosts: "Sur {{count}} hôtes",
+      shared:
+        "Ces emplacements partagent une identité de projet. Le nom seul ne fusionne pas les projets.",
+      distinct: "Ce projet a sa propre identité. Le nom seul ne fusionne pas les projets.",
+    },
     statusGroupAccessibility: "Groupe {{label}}",
     statusBucket: {
       needsInput: "Attend une réponse",
@@ -1203,11 +1210,21 @@ export const fr: TranslationResources = {
       working: "En cours",
       done: "Terminé",
     },
+    activityFilter: { all: "Tous", running: "En cours", attention: "À surveiller" },
+    activitySource: {
+      prompt: "Message utilisateur",
+      agent: "Activité de l’agent",
+      terminal: "Opération du terminal",
+      file: "Fichier enregistré",
+      created: "Espace créé",
+    },
     display: {
       showBackground: "Afficher les espaces en arrière-plan",
       trigger: "Préférences d’affichage",
       heading: "Affichage",
+      sections: { main: "Principal", location: "Emplacement", work: "Informations de travail" },
       sort: {
+        activity: "Activité récente",
         label: "Tri",
         created: "Création",
         manual: "Manuel",
@@ -1215,6 +1232,7 @@ export const fr: TranslationResources = {
         updateHost: "Mettez les hôtes à jour pour trier les espaces de travail",
       },
       grouping: {
+        host: "Hôte → Projet",
         label: "Regroupement",
         project: "Projet",
         status: "Statut",
@@ -1226,7 +1244,11 @@ export const fr: TranslationResources = {
         branch: "Nom de branche",
       },
       show: {
-        label: "Afficher",
+        directory: "Dossier de travail",
+        activityTime: "Heure d’activité",
+        activitySource: "Source d’activité",
+        both: "Différences et durée de l’état",
+        label: "Informations affichées",
         branch: "Branche",
         project: "Projet",
         host: "Hôte",
@@ -1235,7 +1257,7 @@ export const fr: TranslationResources = {
         services: "Services",
         labels: "Libellés",
         diff: "Statistiques du diff",
-        timestamp: "Dernière activité",
+        timestamp: "Durée de l’état",
       },
       checks: {
         iconAndText: "Icône et texte",
