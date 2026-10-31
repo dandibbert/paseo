@@ -325,6 +325,9 @@ test.describe("Terminal protocol queries", () => {
         "Failed to paste file: Host is not connected",
       );
 
+      // The failure toast precedes reconnection; typing before the terminal is restored
+      // races the transport, rather than testing whether cancelling the paste left input usable.
+      await expect.poll(() => upload.isTerminalRestored(terminal.id)).toBe(true);
       await typeLine(page, "after");
       await expectTerminalOutput(terminal.id, "TYPED:after");
       expect(await terminalOutput(terminal.id)).not.toContain(fileRead(pngBytes(8), "upload"));
