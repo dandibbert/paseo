@@ -3654,7 +3654,8 @@ test("subdirectory agents contribute to their owning workspace descriptor", asyn
   expect(result.entries[0]).toMatchObject({
     id: "ws-repo-subdir",
     status: "running",
-    activityAt: null,
+    activityAt: "2026-03-01T12:00:00.000Z",
+    activitySource: "created",
   });
 });
 
@@ -6425,7 +6426,13 @@ test("listWorkspaceDescriptorsSnapshot keeps git workspaces on the baseline desc
   expect(describeWorkspaceRecord).toHaveBeenCalledWith(workspace, project);
   expect(describeWorkspaceRecordWithGitData).not.toHaveBeenCalled();
   expect(descriptors).toEqual([
-    { ...baselineDescriptor, createdAt: workspace.createdAt, lastUserMessageAt: null },
+    {
+      ...baselineDescriptor,
+      createdAt: workspace.createdAt,
+      activityAt: workspace.createdAt,
+      activitySource: "created",
+      lastUserMessageAt: null,
+    },
   ]);
 });
 
