@@ -21,6 +21,8 @@ async function createQuestionHarness() {
     location: runtime.info.location,
     data: [{ id: "test", name: "Test", activation: "enabled", package: "test" }],
   });
+  // The daemon installs its instructions before the permission scenario starts.
+  runtime.api.session.instructions.entry.put = async () => undefined;
   let form: FormInfo | null = null;
   const answers: Array<Record<string, unknown>> = [];
   runtime.api.session.form.list = async () => (form ? [form] : []);

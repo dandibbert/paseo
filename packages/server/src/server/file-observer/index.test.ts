@@ -138,7 +138,8 @@ test("survives atomic replacement and remains observable", async () => {
   const target = join(root, "target.txt");
   await writeFile(target, "before");
   const events: FileChange[] = [];
-  const subscription = await subscribeToFileChanges(root, (error, batch) => {
+  const observer = createObserver();
+  const subscription = await observer.subscribe(root, (error, batch) => {
     expect(error).toBeNull();
     events.push(...batch);
   });
@@ -146,11 +147,20 @@ test("survives atomic replacement and remains observable", async () => {
   const replacement = join(root, "replacement.txt");
   await writeFile(replacement, "after");
   await rename(replacement, target);
-  await expect.poll(() => events.map((event) => event.path)).toContain(target);
+  try {
+    await expect.poll(() => events.map((event) => event.path)).toContain(target);
 
-  events.length = 0;
-  await writeFile(target, "again");
-  await expect.poll(() => events.map((event) => event.path)).toContain(target);
+    events.length = 0;
+    await writeFile(target, "again");
+    await expect.poll(() => events.map((event) => event.path)).toContain(target);
+  } catch (cause) {
+    throw new Error(
+      `Atomic replacement observation: ${JSON.stringify(observer.getDiagnostics())}`,
+      {
+        cause,
+      },
+    );
+  }
   await subscription.unsubscribe();
 });
 
