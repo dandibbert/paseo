@@ -291,7 +291,7 @@ export function AgentHistoryActions({
           >
             {state.error}
           </Text>
-          <Button variant="ghost" size="xs" onPress={dismissError}>
+          <Button variant="ghost" size="sm" onPress={dismissError}>
             {t("common.actions.dismiss")}
           </Button>
         </View>

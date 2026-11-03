@@ -269,7 +269,7 @@ function CardActions({ input }: { input: RenderUiInput }) {
       <View style={styles.actions}>
         <Button
           variant="ghost"
-          size="xs"
+          size="sm"
           onPress={handleCopy}
           textStyle={styles.actionText}
           testID="genui-copy"
@@ -278,7 +278,7 @@ function CardActions({ input }: { input: RenderUiInput }) {
         </Button>
         <Button
           variant="ghost"
-          size="xs"
+          size="sm"
           onPress={toggleData}
           accessibilityState={dataButtonState}
           textStyle={styles.actionText}

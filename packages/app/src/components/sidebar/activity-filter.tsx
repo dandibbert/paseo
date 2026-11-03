@@ -21,7 +21,7 @@ export function SidebarActivityFilterControl() {
   return (
     <ScrollView horizontal showsHorizontalScrollIndicator={false}>
       <SegmentedControl
-        size="xs"
+        size="sm"
         value={selected}
         onValueChange={setValue}
         options={options}

@@ -1,3 +1,5 @@
+import { mkdir, mkdtemp, writeFile, readFile, rm } from "node:fs/promises";
+import path from "node:path";
 import type { ChildProcessWithoutNullStreams } from "node:child_process";
 import { EventEmitter } from "node:events";
 import { PassThrough } from "node:stream";
@@ -544,4 +546,207 @@ describe("PiCliRuntime", () => {
 
     await expect(session.abort()).resolves.toBeUndefined();
   });
+});
+
+async function createHistoryTestDirectory(prefix: string): Promise<string> {
+  const artifacts = path.resolve(".artifacts/pi-timeline");
+  await mkdir(artifacts, { recursive: true });
+  return mkdtemp(path.join(artifacts, prefix));
+}
+
+test("reads complete persisted history instead of compacted RPC context", async () => {
+  const root = await createHistoryTestDirectory("runtime-");
+  const file = path.join(root, "session.jsonl");
+  const records = [
+    { type: "session", version: 3, id: "session" },
+    {
+      type: "message",
+      id: "old-user",
+      parentId: "system",
+      message: { role: "user", content: "before compaction" },
+    },
+    {
+      type: "message",
+      id: "old-answer",
+      parentId: "old-user",
+      message: { role: "assistant", content: [{ type: "text", text: "old answer" }] },
+    },
+    { type: "compaction", id: "compact", parentId: "old-answer", summary: "summary" },
+    {
+      type: "message",
+      id: "new-user",
+      parentId: "compact",
+      message: { role: "user", content: "after compaction" },
+    },
+  ];
+  records.splice(1, 0, {
+    type: "message",
+    id: "system",
+    parentId: null,
+    message: { role: "system", content: "private instructions" },
+  });
+  const contents = records.map((row) => JSON.stringify(row)).join("\n");
+  await writeFile(file, contents);
+  const child = createPiChild();
+  onPiCommand(child, (command) =>
+    writePiResponse(
+      child,
+      command,
+      command.type === "get_state" ? { sessionFile: file } : { messages: [records[5].message] },
+    ),
+  );
+  const runtime = await createRuntime(child).startSession({ cwd: root });
+  try {
+    const history = await runtime.getHistory();
+    expect(history.userEntries.map((entry) => entry.id)).toEqual(["old-user", "new-user"]);
+    expect(history.messages).toEqual([records[2].message, records[3].message, records[5].message]);
+    expect(await readFile(file, "utf8")).toBe(contents);
+    await writeFile(
+      file,
+      contents +
+        '\n{"type":"custom","id":"rewind","parentId":"old-answer","customType":"paseo_rewind"}',
+    );
+    expect((await runtime.getHistory()).userEntries.map((entry) => entry.id)).toEqual(["old-user"]);
+    await writeFile(
+      file,
+      contents + '\n{"type":"custom","id":"rewind","parentId":null,"customType":"paseo_rewind"}',
+    );
+    expect((await runtime.getHistory()).messages).toEqual([]);
+    await writeFile(file, contents + '\n{"type":"custom","id":"bad","parentId":"missing"}');
+    await expect(runtime.getHistory()).rejects.toThrow("Missing Pi transcript ancestor");
+  } finally {
+    await runtime.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("keeps extension history anchors across compaction without replaying abandoned branches", async () => {
+  const root = await createHistoryTestDirectory("extension-anchors-");
+  const file = path.join(root, "session.jsonl");
+  const records = [
+    { type: "session", version: 3, id: "session" },
+    {
+      type: "custom",
+      id: "leading",
+      parentId: null,
+      customType: "subagents:record",
+      data: { id: "native-1", status: "running", startedAt: 50, result: "private report" },
+    },
+    {
+      type: "message",
+      id: "call",
+      parentId: "leading",
+      message: {
+        role: "assistant",
+        content: [{ type: "toolCall", id: "call-1", name: "subagent", arguments: {} }],
+      },
+    },
+    {
+      type: "message",
+      id: "result",
+      parentId: "call",
+      message: { role: "toolResult", toolCallId: "call-1", toolName: "subagent", content: [] },
+    },
+    {
+      type: "custom",
+      id: "done",
+      parentId: "result",
+      customType: "subagents:record",
+      data: { id: "native-1", status: "completed", startedAt: 100, result: "private report" },
+    },
+    {
+      type: "custom",
+      id: "abandoned",
+      parentId: "result",
+      customType: "subagents:record",
+      data: { id: "wrong-branch", status: "completed", startedAt: 200 },
+    },
+    { type: "compaction", id: "compact", parentId: "done", summary: "summary" },
+    {
+      type: "message",
+      id: "call-after",
+      parentId: "compact",
+      message: {
+        role: "assistant",
+        content: [{ type: "toolCall", id: "call-2", name: "subagent", arguments: {} }],
+      },
+    },
+    {
+      type: "custom",
+      id: "call-entry",
+      parentId: "call-after",
+      customType: "subagents:record",
+      data: { id: "native-2", status: "running", startedAt: 300 },
+    },
+    {
+      type: "custom",
+      id: "unknown",
+      parentId: "call-entry",
+      customType: "other-extension",
+      data: { secret: true },
+    },
+    {
+      type: "message",
+      id: "after",
+      parentId: "unknown",
+      message: { role: "user", content: "after compaction" },
+    },
+  ];
+  const contents = records.map((record) => JSON.stringify(record)).join("\n");
+  await writeFile(file, contents);
+  const child = createPiChild();
+  onPiCommand(child, (command) => writePiResponse(child, command, { sessionFile: file }));
+  const runtime = await createRuntime(child).startSession({ cwd: root });
+  try {
+    const history = await runtime.getHistory();
+    expect(Reflect.get(history, "customEntries")).toEqual([
+      {
+        customType: "subagents:record",
+        data: { id: "native-1", status: "running", startedAt: 50 },
+        after: null,
+      },
+      {
+        customType: "subagents:record",
+        data: { id: "native-1", status: "completed", startedAt: 100 },
+        after: { toolCallId: "call-1", phase: "result" },
+      },
+      {
+        customType: "subagents:record",
+        data: { id: "native-2", status: "running", startedAt: 300 },
+        after: { toolCallId: "call-2", phase: "call" },
+      },
+    ]);
+    expect(history.userEntries).toEqual([{ id: "after", text: "after compaction" }]);
+    expect(await readFile(file, "utf8")).toBe(contents);
+  } finally {
+    await runtime.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("permits the unpersisted empty new session but refuses a missing resumed transcript", async () => {
+  const root = await createHistoryTestDirectory("empty-");
+  const file = path.join(root, "not-created.jsonl");
+  const child = createPiChild();
+  onPiCommand(child, (command) =>
+    writePiResponse(child, command, { sessionFile: file, messageCount: 0 }),
+  );
+  const runtime = createRuntime(child);
+  const fresh = await runtime.startSession({ cwd: root });
+  try {
+    expect(await fresh.getHistory()).toEqual({ messages: [], userEntries: [], customEntries: [] });
+  } finally {
+    await fresh.close();
+  }
+  const resumedChild = createPiChild();
+  onPiCommand(resumedChild, (command) =>
+    writePiResponse(resumedChild, command, { sessionFile: file, messageCount: 0 }),
+  );
+  const resumed = await createRuntime(resumedChild).startSession({ cwd: root, session: file });
+  try {
+    await expect(resumed.getHistory()).rejects.toThrow("ENOENT");
+  } finally {
+    await resumed.close();
+    await rm(root, { recursive: true, force: true });
+  }
 });
