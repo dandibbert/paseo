@@ -89,6 +89,7 @@ import {
 } from "./terminal-resize-debouncer";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { isNative } from "@/constants/platform";
+import { useKeyboardFocusSurface } from "@/keyboard";
 import {
   applyTerminalRendererReadyChange,
   resolveTerminalStreamTarget,
@@ -467,6 +468,8 @@ export function TerminalPane({
       requestTerminalFocus();
     }
   }, [isMobile, isPaneFocused, isWorkspaceFocused, requestTerminalFocus, scopeKey, terminalId]);
+
+  useKeyboardFocusSurface("terminal", isTerminalPresented && isPaneFocused && terminalId != null);
 
   useEffect(() => {
     const canRequest = canRequestFocusClaim({
@@ -1197,17 +1200,12 @@ export function TerminalPane({
     <Animated.View style={containerStyle}>
       <FileDropZone style={styles.outputContainer}>
         <TerminalFileDropSink onFiles={handleDroppedFiles} />
-        {isTerminalPresented && isPaneFocused ? (
-          <Pressable
-            style={styles.secureInputTrigger}
-            onPress={openSecureInput}
-            accessibilityRole="button"
-            accessibilityLabel={t("workspace.terminal.secureInput.open")}
-            testID="terminal-secure-input-open"
-          >
-            <LockKeyhole size={17} color={theme.colors.foregroundMuted} />
-          </Pressable>
-        ) : null}
+        <SecureInputTrigger
+          visible={isTerminalPresented && isPaneFocused}
+          label={t("workspace.terminal.secureInput.open")}
+          color={theme.colors.foregroundMuted}
+          onPress={openSecureInput}
+        />
         <View style={styles.terminalGestureContainer}>
           <TerminalEmulator
             ref={emulatorRef}
@@ -1302,6 +1300,31 @@ export function TerminalPane({
         />
       ) : null}
     </Animated.View>
+  );
+}
+
+function SecureInputTrigger({
+  visible,
+  label,
+  color,
+  onPress,
+}: {
+  visible: boolean;
+  label: string;
+  color: string;
+  onPress: () => void;
+}) {
+  if (!visible) return null;
+  return (
+    <Pressable
+      style={styles.secureInputTrigger}
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      testID="terminal-secure-input-open"
+    >
+      <LockKeyhole size={17} color={color} />
+    </Pressable>
   );
 }
 

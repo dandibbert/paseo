@@ -26,7 +26,7 @@ import {
   SheetHandle,
 } from "@/components/adaptive-modal-sheet";
 import { OverlayLayerProvider, useOverlayLayer } from "@/lib/overlay-root";
-import { useMenuWebOverlayRegistration } from "./menu-keyboard";
+import { useMenuOverlayRegistration } from "./menu-keyboard";
 import { SPACING, type Theme } from "@/styles/theme";
 import { useRetainedPanelActive } from "@/components/retained-panel";
 import { useMenuContext, MenuContextProvider } from "./menu-context";
@@ -377,7 +377,7 @@ function MenuSheetSurface({
   );
 
   const handleClose = useCallback(() => menu.setOpen(false), [menu]);
-  const setWebOverlayScope = useMenuWebOverlayRegistration({
+  const setWebOverlayScope = useMenuOverlayRegistration({
     visible: menu.open,
     layer: sheetLayer,
     onClose: handleClose,

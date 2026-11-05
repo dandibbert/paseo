@@ -9,7 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MenuRoot, MenuTrigger } from "./menu-root";
 import { MenuSurface } from "./menu-surface";
 import { MenuItem } from "./menu-item";
-import { useWebOverlayRegistration } from "@/lib/overlay-root";
+import { useOverlayRegistration, type KeyboardInputEvent } from "@/keyboard";
 
 beforeEach(() => vi.stubGlobal("React", React));
 
@@ -80,7 +80,7 @@ function CompactMenuFixture({ onSelect }: { onSelect: () => void }) {
 
 function HigherOverlay({ onClose }: { onClose: () => void }) {
   const close = React.useCallback(
-    (event: KeyboardEvent) => {
+    (event: KeyboardInputEvent) => {
       if (event.key !== "Escape") return false;
       event.preventDefault();
       onClose();
@@ -88,7 +88,12 @@ function HigherOverlay({ onClose }: { onClose: () => void }) {
     },
     [onClose],
   );
-  const scope = useWebOverlayRegistration({ active: true, layer: 40, onKeyDown: close });
+  const scope = useOverlayRegistration({
+    active: true,
+    layer: 40,
+    keys: ["Escape"],
+    onKeyDown: close,
+  });
   return (
     <div ref={scope} tabIndex={-1}>
       <button type="button">Dialog action</button>

@@ -35,7 +35,7 @@ import {
   type Size,
 } from "../anchor";
 
-import { useMenuWebOverlayRegistration } from "./menu-keyboard";
+import { useMenuOverlayRegistration } from "./menu-keyboard";
 
 const SCROLL_CONTENT_STYLE = { flexGrow: 1 } as const;
 const CONTENT_ENTERING_DURATION_MS = 150;
@@ -402,7 +402,7 @@ export function MenuOverlay({
 }): ReactElement | null {
   const floatingLayer = useOverlayLayer("floating");
 
-  const setWebOverlayScope = useMenuWebOverlayRegistration({
+  const setOverlayScope = useMenuOverlayRegistration({
     visible,
     layer: floatingLayer,
     onClose,
@@ -417,7 +417,7 @@ export function MenuOverlay({
         {...{
           onContextMenu: (event: { preventDefault?: () => void }) => event.preventDefault?.(),
         }}
-        ref={setWebOverlayScope}
+        ref={setOverlayScope}
         collapsable={false}
         style={[
           styles.overlay,
