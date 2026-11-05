@@ -41,6 +41,12 @@ describe("Paseo tool display", () => {
       "/a.png +1",
     ],
     ["browser_resize", { width: 800, height: 600 }, "Resize browser", "800×600"],
+    [
+      "copy_file",
+      { source: { path: "/tmp/build/app.tgz" }, destination: { serverId: "srv", path: "~/in/" } },
+      "Copy file",
+      "app.tgz → in",
+    ],
   ])("presents %s with a fixed label and its context", (tool, input, label, summary) => {
     expect(display(`mcp__paseo__${tool}`, input)).toEqual({ displayName: label, summary });
   });

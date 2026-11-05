@@ -1,3 +1,4 @@
+import { createFileCommand } from "./commands/file/index.js";
 import { createHostCommand } from "./commands/host/index.js";
 import { pairCommand } from "./commands/daemon/pair.js";
 import { Command, Option } from "commander";
@@ -60,6 +61,7 @@ export function createCli(): Command {
   addDaemonHostOption(program);
 
   program.addCommand(createHostCommand());
+  program.addCommand(createFileCommand());
 
   // Primary agent commands (top-level)
   addJsonAndDaemonHostOptions(addLsOptions(program.command("ls"))).action(withOutput(runLsCommand));

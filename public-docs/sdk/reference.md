@@ -263,6 +263,34 @@ Registration and host acquisition failures expose a stable `code`: `host_unknown
 unchanged. Multiplexing is a transport; consumers use the same client/API operations and lifecycle.
 Discovery does not grant execution authority.
 
+## `client.files`
+
+Read, write, and list files on the bound daemon. Through `client.hosts.client(serverId)`, the same calls reach a
+connected host over its saved connection, including a relay connection.
+
+```ts
+import { toDaemonFileLocation } from "@getpaseo/client";
+
+const remote = await client.hosts.client("srv_build_box");
+try {
+  const file = await remote.files.read(toDaemonFileLocation("~/build/app.tgz"));
+  await client.files.write({
+    ...toDaemonFileLocation("/srv/releases/app.tgz"),
+    bytes: file.bytes,
+    createParents: true,
+  });
+} finally {
+  await remote.dispose();
+}
+```
+
+A location is a `cwd` and a `path` resolved against it; neither call leaves `cwd`. `toDaemonFileLocation` scopes an
+absolute path to its filesystem root and a `~` or relative path to the daemon user's home directory.
+
+`write` streams the bytes and replaces the target only after all of them arrive. It keeps an existing file unless
+`overwrite` is set, rejecting with `PaseoFileError` code `exists`. A daemon without `server_info.features.filePut`
+rejects with code `unsupported`. `read` accepts `maxBytes` and `timeoutMs`; reads have no timeout by default.
+
 ## Errors and cleanup
 
 Connection, validation, rejection, and timeout failures reject their promise. Turn outcomes are returned through `PaseoAgentRunResult.status` because permission and provider errors are expected agent states.

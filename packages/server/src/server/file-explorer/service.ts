@@ -556,6 +556,212 @@ export async function writeExplorerFile({
   }
 }
 
+export interface PreparedFilePut {
+  /** Path relative to `root`, as the explorer reports it. */
+  path: string;
+  /** Final target, after resolving symlinks in its parent. */
+  resolvedPath: string;
+  /** Mode to give a replacement, or `null` for a new file. */
+  existingMode: number | null;
+}
+
+export type FilePutPreparation =
+  | { status: "ready"; target: PreparedFilePut }
+  | { status: "exists"; error: string }
+  | { status: "error"; error: string };
+
+/**
+ * Resolves a put target inside `root`. With `createParents`, missing parent directories are created
+ * first, then the path is resolved again so a symlinked parent cannot escape the root.
+ */
+export async function prepareExplorerFilePut({
+  root,
+  relativePath,
+  overwrite,
+  createParents,
+}: ReadFileParams & {
+  overwrite: boolean;
+  createParents: boolean;
+}): Promise<FilePutPreparation> {
+  try {
+    const filePath = await resolveScopedPath({ root, relativePath });
+    const requestedParent = path.dirname(filePath.requestedPath);
+    // A missing target resolves to its unresolved path, so canonicalize the parent itself: a
+    // symlinked parent directory must not lead outside the root.
+    const canonicalRoot = await fs.realpath(expandUserPath(root));
+    const canonicalParent = await canonicalDirectory({
+      directory: requestedParent,
+      root: canonicalRoot,
+      create: createParents,
+    });
+    if (canonicalParent === null) {
+      return { status: "error", error: "Parent directory does not exist" };
+    }
+    const resolvedPath = path.join(canonicalParent, path.basename(filePath.requestedPath));
+    const existing = await fs.lstat(resolvedPath).catch((error) => {
+      if (isMissingEntryError(error)) return null;
+      throw error;
+    });
+    if (existing?.isDirectory()) {
+      return { status: "error", error: "Target is a directory" };
+    }
+    if (existing && !existing.isFile()) {
+      return { status: "error", error: "Target is not a regular file" };
+    }
+    if (existing && !overwrite) {
+      return { status: "exists", error: "Target file already exists" };
+    }
+    return {
+      status: "ready",
+      target: {
+        path: normalizeRelativePath({ root, targetPath: filePath.requestedPath }),
+        resolvedPath,
+        existingMode: existing ? existing.mode & 0o7777 : null,
+      },
+    };
+  } catch (error) {
+    return { status: "error", error: error instanceof Error ? error.message : String(error) };
+  }
+}
+
+/**
+ * Returns the directory's real path inside `root`, or `null` when it is missing. With `create`, the
+ * missing suffix is created below the deepest existing ancestor only after that ancestor's real
+ * path is checked against `root`, so `mkdir` never follows a symlink out of the root.
+ */
+async function canonicalDirectory({
+  directory,
+  root,
+  create,
+}: {
+  directory: string;
+  root: string;
+  create: boolean;
+}): Promise<string | null> {
+  const missing: string[] = [];
+  let current = directory;
+  for (;;) {
+    try {
+      const canonical = await fs.realpath(current);
+      assertWithinWorkspace(root, canonical);
+      if (!(await fs.stat(canonical)).isDirectory()) {
+        throw new Error("Parent path is not a directory");
+      }
+      if (missing.length === 0) return canonical;
+      if (!create) return null;
+      const created = path.join(canonical, ...missing.toReversed());
+      await fs.mkdir(created, { recursive: true });
+      return fs.realpath(created);
+    } catch (error) {
+      if (!isMissingEntryError(error)) throw error;
+      const parent = path.dirname(current);
+      if (parent === current) return null;
+      missing.push(path.basename(current));
+      current = parent;
+    }
+  }
+}
+
+export interface WrittenFilePut {
+  path: string;
+  absolutePath: string;
+  size: number;
+  modifiedAt: string;
+  revision: string;
+}
+
+export type FilePutCommit = { status: "written"; file: WrittenFilePut } | { status: "exists" };
+
+/** Opens the hidden temporary file that receives a put beside its target. */
+export async function openFilePutTemporary(
+  target: PreparedFilePut,
+): Promise<{ handle: FileHandle; temporaryPath: string }> {
+  const temporaryPath = path.join(
+    path.dirname(target.resolvedPath),
+    `.paseo-put-${randomUUID()}.tmp`,
+  );
+  const handle = await fs.open(temporaryPath, "wx", target.existingMode ?? 0o666);
+  try {
+    if (target.existingMode !== null && process.platform !== "win32") {
+      await handle.chmod(target.existingMode);
+    }
+  } catch (error) {
+    await handle.close().catch(() => undefined);
+    await fs.unlink(temporaryPath).catch(() => undefined);
+    throw error;
+  }
+  return { handle, temporaryPath };
+}
+
+/**
+ * Moves a completed temporary file onto its target. Without `overwrite`, `link()` makes the
+ * no-clobber check atomic, so a target created during the transfer is never replaced. The
+ * temporary file is always removed.
+ */
+export async function commitFilePut({
+  temporaryPath,
+  target,
+  overwrite,
+}: {
+  temporaryPath: string;
+  target: PreparedFilePut;
+  overwrite: boolean;
+}): Promise<FilePutCommit> {
+  try {
+    if (overwrite) {
+      await fs.rename(temporaryPath, target.resolvedPath);
+    } else {
+      try {
+        await fs.link(temporaryPath, target.resolvedPath);
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === "EEXIST") return { status: "exists" };
+        throw error;
+      }
+    }
+  } finally {
+    await fs.unlink(temporaryPath).catch(() => undefined);
+  }
+  const stats = await fs.stat(target.resolvedPath, { bigint: true });
+  return {
+    status: "written",
+    file: {
+      path: target.path,
+      absolutePath: target.resolvedPath,
+      size: Number(stats.size),
+      modifiedAt: stats.mtime.toISOString(),
+      revision: fileRevision(stats),
+    },
+  };
+}
+
+/** Writes bytes already in memory with the same guarantees as a streamed put. */
+export async function putExplorerFileBytes({
+  root,
+  relativePath,
+  bytes,
+  overwrite,
+  createParents,
+}: ReadFileParams & {
+  bytes: Uint8Array;
+  overwrite: boolean;
+  createParents: boolean;
+}): Promise<FilePutCommit | { status: "error"; error: string }> {
+  const prepared = await prepareExplorerFilePut({ root, relativePath, overwrite, createParents });
+  if (prepared.status === "exists") return { status: "exists" };
+  if (prepared.status === "error") return prepared;
+  const { handle, temporaryPath } = await openFilePutTemporary(prepared.target);
+  try {
+    await handle.writeFile(bytes);
+    await handle.sync();
+  } catch (error) {
+    await handle.close().catch(() => undefined);
+    await fs.unlink(temporaryPath).catch(() => undefined);
+    throw error;
+  }
+  await handle.close();
+  return commitFilePut({ temporaryPath, target: prepared.target, overwrite });
+}
+
 export async function getDownloadableFileInfo({ root, relativePath }: ReadFileParams): Promise<{
   path: string;
   absolutePath: string;

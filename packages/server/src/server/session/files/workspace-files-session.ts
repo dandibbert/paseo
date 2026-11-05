@@ -15,6 +15,7 @@ import type {
   FileEntryRenameRequest,
   FileExplorerRequest,
   FileUploadRequest,
+  FilePutRequest,
   FileSubscribeRequest,
   FileUnsubscribeRequest,
   FileWriteRequest,
@@ -22,6 +23,7 @@ import type {
   SessionOutboundMessage,
 } from "../../messages.js";
 import { FileUploadStore } from "../../file-upload/index.js";
+import { FilePutStore } from "../../file-put/index.js";
 import type { DownloadTokenStore } from "../../file-download/token-store.js";
 import {
   createExplorerEntry,
@@ -70,6 +72,7 @@ export class WorkspaceFilesSession {
   private readonly downloadTokenStore: DownloadTokenStore;
   private readonly logger: pino.Logger;
   private readonly fileUploads: FileUploadStore;
+  private readonly filePuts = new FilePutStore();
   private readonly fileObserver: FileObserver;
 
   constructor(options: WorkspaceFilesSessionOptions) {
@@ -392,7 +395,26 @@ export class WorkspaceFilesSession {
     });
   }
 
+  handleFilePutRequest(request: FilePutRequest, ownership: SessionDelivery): void {
+    let cancel: (() => Promise<void>) | undefined;
+    const operation = ownership.operation(
+      (message) =>
+        message.type === "fs.file.put.response" && message.payload.requestId === request.requestId,
+      () => cancel?.(),
+    );
+    cancel = this.filePuts.begin(request, operation.source, (response) => {
+      if (response) operation.emit(response);
+      void operation
+        .release()
+        .catch((error) => this.logger.error({ err: error }, "File put cleanup failed"));
+    });
+  }
+
   async handleFileTransferFrame(frame: FileTransferFrame, source: object): Promise<void> {
+    if (this.filePuts.owns(frame, source)) {
+      await this.filePuts.receiveFrame(frame, source);
+      return;
+    }
     await this.fileUploads.receiveFrame(frame, source);
   }
 

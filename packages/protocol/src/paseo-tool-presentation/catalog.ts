@@ -106,6 +106,18 @@ function workspaceContext(): PaseoToolContext {
     [input.title, input.branchName, input.branch, baseName(input.path)].find(isPresent);
 }
 
+function copyFileContext(): PaseoToolContext {
+  return (input) => {
+    const endpoint = (value: unknown) =>
+      typeof value === "object" && value !== null && "path" in value
+        ? baseName((value as { path: unknown }).path)
+        : undefined;
+    const from = endpoint(input.source);
+    const to = endpoint(input.destination);
+    return from && to ? `${from} → ${to}` : (to ?? from);
+  };
+}
+
 function viewportContext(): PaseoToolContext {
   return (input) =>
     typeof input.width === "number" && typeof input.height === "number"
@@ -222,6 +234,15 @@ export const PASEO_TOOL_CATALOG = {
     detail: { inputOrder: WORKSPACE_FIELDS, outputFields: ["workspaceId", "projectId"] },
   },
   list_hosts: { label: "List hosts", completedLabel: "Listed hosts" },
+  copy_file: {
+    label: "Copy file",
+    completedLabel: "Copied file",
+    context: copyFileContext(),
+    detail: {
+      inputOrder: ["source", "destination", "overwrite", "createParents", "maxBytes"],
+      outputFields: ["destination", "size"],
+    },
+  },
   list_workspaces: { label: "List workspaces", completedLabel: "Listed workspaces" },
   rename_workspace: {
     label: "Rename workspace",

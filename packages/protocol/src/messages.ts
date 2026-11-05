@@ -3057,6 +3057,21 @@ export const FileUploadRequestSchema = z.object({
   requestId: z.string(),
 });
 
+/**
+ * Streams bytes to a file path. The client sends FileBegin/FileChunk/FileEnd frames with the same
+ * `requestId` after this request. Unlike `fs.file.write.request`, the target may be missing and has
+ * no editor size cap. Requires `server_info.features.filePut`.
+ */
+export const FilePutRequestSchema = z.object({
+  type: z.literal("fs.file.put.request"),
+  cwd: z.string(),
+  path: z.string(),
+  size: z.number().int().nonnegative(),
+  overwrite: z.boolean().optional(),
+  createParents: z.boolean().optional(),
+  requestId: z.string(),
+});
+
 export const ClearAgentAttentionMessageSchema = z.object({
   type: z.literal("clear_agent_attention"),
   agentId: z.union([z.string(), z.array(z.string())]),
@@ -3600,6 +3615,7 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   ProjectIconGetRequestSchema,
   FileDownloadTokenRequestSchema,
   FileUploadRequestSchema,
+  FilePutRequestSchema,
   ClearAgentAttentionMessageSchema,
   ClientHeartbeatMessageSchema,
   PingMessageSchema,
@@ -3943,6 +3959,8 @@ export const ServerInfoStatusPayloadSchema = z
         workspaceFileEditing: z.boolean().optional(),
         // COMPAT(fileByteWrites): added in v0.13.0, remove gate after 2027-04-20.
         fileByteWrites: z.boolean().optional(),
+        // COMPAT(filePut): added in v0.15.0, remove gate after 2027-05-05.
+        filePut: z.boolean().optional(),
         // COMPAT(providerUsageList): added in v0.1.98, drop the gate when daemon floor >= v0.1.98.
         providerUsageList: z.boolean().optional(),
         // COMPAT(agentDetach): added in v0.1.98, remove gate after 2026-12-19 once daemon floor >= v0.1.98.
@@ -6472,6 +6490,27 @@ export const FileUploadResponseSchema = z.object({
   }),
 });
 
+export const FilePutResponseSchema = z.object({
+  type: z.literal("fs.file.put.response"),
+  payload: z.object({
+    requestId: z.string(),
+    cwd: z.string(),
+    path: z.string(),
+    file: z
+      .object({
+        path: z.string(),
+        absolutePath: z.string(),
+        size: z.number(),
+        modifiedAt: z.string(),
+        revision: z.string(),
+      })
+      .nullable(),
+    error: z.string().nullable(),
+    /** `exists` when the target exists and `overwrite` was not set. Other values may be added. */
+    errorCode: z.string().nullable(),
+  }),
+});
+
 export const ListProviderModelsResponseMessageSchema = z.object({
   type: z.literal("list_provider_models_response"),
   payload: z.object({
@@ -7494,6 +7533,7 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   ProjectIconGetResponseSchema,
   FileDownloadTokenResponseSchema,
   FileUploadResponseSchema,
+  FilePutResponseSchema,
   ListProviderModelsResponseMessageSchema,
   ListProviderModesResponseMessageSchema,
   ListProviderFeaturesResponseMessageSchema,
@@ -7958,6 +7998,8 @@ export type FileDownloadTokenRequest = z.infer<typeof FileDownloadTokenRequestSc
 export type FileDownloadTokenResponse = z.infer<typeof FileDownloadTokenResponseSchema>;
 export type FileUploadRequest = z.infer<typeof FileUploadRequestSchema>;
 export type FileUploadResponse = z.infer<typeof FileUploadResponseSchema>;
+export type FilePutRequest = z.infer<typeof FilePutRequestSchema>;
+export type FilePutResponse = z.infer<typeof FilePutResponseSchema>;
 export type RestartServerRequestMessage = z.infer<typeof RestartServerRequestMessageSchema>;
 export type ShutdownServerRequestMessage = z.infer<typeof ShutdownServerRequestMessageSchema>;
 export type ClearAgentAttentionMessage = z.infer<typeof ClearAgentAttentionMessageSchema>;

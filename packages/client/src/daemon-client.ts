@@ -52,6 +52,7 @@ import type {
   CreatePaseoWorktreeRequest,
   FileDownloadTokenResponse,
   FileUploadResponse,
+  FilePutResponse,
   FileExplorerResponse,
   FileVersion,
   FileWriteResult,
@@ -166,6 +167,7 @@ import {
   FileTransferOpcode,
   TerminalStreamOpcode,
   type FileTransferFrame,
+  type FileBegin,
   assertPluginWireValue,
   decodePluginFrame,
   encodePluginInputFrame,
@@ -603,6 +605,18 @@ export interface FileUploadInput {
   chunkSize?: number;
 }
 export type FileUploadResult = FileUploadResponse["payload"];
+export interface FilePutInput {
+  cwd: string;
+  path: string;
+  bytes: Uint8Array | ArrayBuffer;
+  /** Replace an existing file. Without it, an existing target fails with `errorCode: "exists"`. */
+  overwrite?: boolean;
+  /** Create missing parent directories inside `cwd`. */
+  createParents?: boolean;
+  requestId?: string;
+  chunkSize?: number;
+}
+export type FilePutResult = FilePutResponse["payload"];
 type FileDownloadTokenPayload = FileDownloadTokenResponse["payload"];
 type ListProviderFeaturesPayload = ListProviderFeaturesResponseMessage["payload"];
 type ListProviderModelsPayload = ListProviderModelsResponseMessage["payload"];
@@ -5388,6 +5402,83 @@ export class DaemonClient {
       options: { skipQueue: true },
     });
 
+    return this.streamFileFrames({
+      requestId: resolvedRequestId,
+      transport: uploadTransport,
+      bytes,
+      metadata: {
+        mime: input.mimeType,
+        size: bytes.byteLength,
+        encoding: "binary",
+        modifiedAt,
+        fileName: input.fileName,
+      },
+      chunkSize: input.chunkSize,
+      responsePromise,
+    });
+  }
+
+  /**
+   * Streams bytes to a path on the daemon. Requires `server_info.features.filePut`. The daemon
+   * writes to a temporary file and replaces the target only after every byte arrives.
+   */
+  async putFile(input: FilePutInput): Promise<FilePutResult> {
+    const bytes = asUint8Array(input.bytes);
+    if (!bytes) {
+      throw new Error("File bytes are required.");
+    }
+    await this.whenConnected();
+    const resolvedRequestId = this.createRequestId(input.requestId);
+    const serverInfo = this.getLastServerInfoMessage();
+    if (serverInfo?.features?.filePut !== true) {
+      return {
+        requestId: resolvedRequestId,
+        cwd: input.cwd,
+        path: input.path,
+        file: null,
+        error: `Update the Paseo daemon on ${serverInfo?.hostname ?? serverInfo?.serverId ?? "this host"} to write files remotely.`,
+        errorCode: "unsupported",
+      };
+    }
+    const putTransport = this.transport;
+    const responsePromise = this.sendCorrelatedRequest({
+      requestId: resolvedRequestId,
+      message: {
+        type: "fs.file.put.request",
+        cwd: input.cwd,
+        path: input.path,
+        size: bytes.byteLength,
+        ...(input.overwrite ? { overwrite: true } : {}),
+        ...(input.createParents ? { createParents: true } : {}),
+        requestId: resolvedRequestId,
+      },
+      responseType: "fs.file.put.response",
+      options: { skipQueue: true },
+    });
+    return this.streamFileFrames({
+      requestId: resolvedRequestId,
+      transport: putTransport,
+      bytes,
+      metadata: {
+        mime: "application/octet-stream",
+        size: bytes.byteLength,
+        encoding: "binary",
+        modifiedAt: new Date().toISOString(),
+      },
+      chunkSize: input.chunkSize,
+      responsePromise,
+    });
+  }
+
+  private async streamFileFrames<T>(input: {
+    requestId: string;
+    transport: DaemonTransport | null;
+    bytes: Uint8Array;
+    metadata: FileBegin["metadata"];
+    chunkSize?: number;
+    responsePromise: Promise<T>;
+  }): Promise<T> {
+    const { requestId, bytes, responsePromise } = input;
     let settled = false;
     void responsePromise.then(
       () => {
@@ -5405,14 +5496,8 @@ export class DaemonClient {
       await sendFrame(
         encodeFileTransferFrame({
           opcode: FileTransferOpcode.FileBegin,
-          requestId: resolvedRequestId,
-          metadata: {
-            mime: input.mimeType,
-            size: bytes.byteLength,
-            encoding: "binary",
-            modifiedAt,
-            fileName: input.fileName,
-          },
+          requestId,
+          metadata: input.metadata,
         }),
       );
 
@@ -5423,13 +5508,13 @@ export class DaemonClient {
         // incoming messages run between bounded pieces on every platform.
         await new Promise<void>((resolve) => setTimeout(resolve, 0));
         if (settled) return await responsePromise;
-        if (this.transport !== uploadTransport || this.connectionState.status !== "connected") {
+        if (this.transport !== input.transport || this.connectionState.status !== "connected") {
           throw new DaemonConnectionError("Connection changed during file upload");
         }
         await sendFrame(
           encodeFileTransferFrame({
             opcode: FileTransferOpcode.FileChunk,
-            requestId: resolvedRequestId,
+            requestId,
             payload: bytes.subarray(offset, Math.min(offset + chunkSize, bytes.byteLength)),
           }),
         );
@@ -5438,12 +5523,12 @@ export class DaemonClient {
       await sendFrame(
         encodeFileTransferFrame({
           opcode: FileTransferOpcode.FileEnd,
-          requestId: resolvedRequestId,
+          requestId,
         }),
       );
     } catch (error) {
       this.rejectWaitersForRequestId(
-        resolvedRequestId,
+        requestId,
         error instanceof Error ? error : new Error(String(error)),
       );
       throw error;

@@ -81,6 +81,9 @@ paseo --host localhost:6767 host rm hst_123
 ```
 
 Add accepts TCP/host-and-port, `ws://`/`wss://`, local socket/pipe, SSH, and relay/pairing URLs.
+To connect through a relay, including a self-hosted one, run `paseo daemon pair --relay` on the destination and add the
+printed pairing link. Every routed call and file transfer then uses that relay, end-to-end encrypted. Add `?password=...`
+to a `relay://` URI when the destination daemon requires a password.
 SSH connects to an already running daemon. Add `?password=...` to an SSH URI when that daemon requires a password (`&password=...` after `daemonPort`). Unreachable targets remain saved and retry automatically.
 `ls` includes disabled and failed hosts. `inspect` includes safe connection details and recovery guidance.
 JSON output never includes connection credentials.
@@ -88,6 +91,26 @@ JSON output never includes connection credentials.
 `update --meta` replaces supplied keys; `--remove-meta` removes keys. Replacing a connection retains
 the pinned daemon identity. Add `--replace-identity` with `--connection` only after verifying a changed
 destination. `rm` removes the saved connection; agents and workspaces on that host keep running.
+
+## Copying files
+
+`paseo file cp` copies one file between this machine and the hosts connected to the selected daemon:
+
+```sh
+paseo file cp ./dist/app.tgz mac-2:~/inbox/
+paseo file cp mac-2:/Users/me/report.pdf studio:~/Desktop/report.pdf --overwrite
+paseo file cp self:/var/log/app.log ./app.log
+```
+
+Write a host path as `<host>:<path>`, where `<host>` is a label, server ID, or registration ID from `paseo host ls`,
+or `self` for the selected daemon. Unprefixed paths are on the machine running the CLI. Relative host paths start at
+that daemon user's home directory. A destination ending in `/` keeps the source file name.
+
+The selected daemon relays the bytes, so a copy between two hosts works even though routing allows one hop, and
+it travels over each host's saved connection. An existing destination is kept unless you pass `--overwrite`;
+`-p`/`--parents` creates missing directories. The destination file appears only after every byte arrives.
+Files are held in memory during the copy and are capped by `--max-bytes` (default 512 MiB). Writing to a host requires
+that daemon to support `filePut`; older hosts report that they need an update.
 
 ## Provider diagnostics
 

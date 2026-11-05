@@ -10,6 +10,13 @@ import {
 } from "../host-operations/index.js";
 import { AgentDirectory } from "../directory.js";
 import { stat } from "node:fs/promises";
+import { homedir } from "node:os";
+import { toDaemonFileLocation, type DaemonFileLocation } from "@getpaseo/protocol/file-location";
+import {
+  getDownloadableFileInfo,
+  putExplorerFileBytes,
+  readExplorerFileBytes,
+} from "../../file-explorer/service.js";
 import { z } from "zod";
 import { ensureValidJson } from "../../json-utils.js";
 import type { Logger } from "pino";
@@ -573,6 +580,22 @@ function resolveChildAgentCwd(params: {
   return resolvePathFromBase(params.parentCwd, requestedCwd);
 }
 
+const COPY_FILE_DEFAULT_MAX_BYTES = 512 * 1024 * 1024;
+const CopyFileEndpointSchema = z.object({
+  serverId: z.string().min(1).optional().describe("Server ID from list_hosts; omit for this host."),
+  path: z.string().min(1).describe("Absolute, ~/, or relative file path on that host."),
+});
+type CopyFileEndpoint = z.infer<typeof CopyFileEndpointSchema>;
+interface ResolvedCopyEndpoint {
+  serverId: string;
+  /** The path as reported back to the caller. */
+  path: string;
+  location: DaemonFileLocation;
+}
+function copyTooLarge(size: number, limit: number): string {
+  return `File is ${size} bytes, larger than maxBytes (${limit})`;
+}
+
 const TerminalSummarySchema = z.object({
   id: z.string(),
   name: z.string(),
@@ -747,6 +770,78 @@ function createToolCatalog(
       listAgents: (args, context) => localHostOperations.get("list_agents")!(args, context),
     },
   });
+  const selfServerId = options.serverId ?? "self";
+  function resolveCopyEndpoint(endpoint: CopyFileEndpoint): ResolvedCopyEndpoint {
+    const serverId = endpoint.serverId ?? selfServerId;
+    const lockedCwd = callerContext?.lockedCwd?.trim();
+    if (serverId !== selfServerId) {
+      if (lockedCwd)
+        throw new PaseoToolInputError("This caller is restricted to its local working directory");
+      return { serverId, path: endpoint.path, location: toDaemonFileLocation(endpoint.path) };
+    }
+    if (lockedCwd) {
+      return { serverId, path: endpoint.path, location: { cwd: lockedCwd, path: endpoint.path } };
+    }
+    const base = resolveCallerAgent()?.cwd ?? homedir();
+    const absolute = resolvePathFromBase(base, endpoint.path);
+    return { serverId, path: absolute, location: toDaemonFileLocation(absolute) };
+  }
+  async function withCopyHost<T>(
+    serverId: string,
+    action: (client: Parameters<Parameters<ToolHosts["use"]>[1]>[0]) => Promise<T>,
+  ): Promise<T> {
+    if (!options.hosts) throw new PaseoToolInputError("Connected hosts are not configured");
+    return options.hosts().use(serverId, action);
+  }
+  async function readCopySource(from: ResolvedCopyEndpoint, limit: number): Promise<Uint8Array> {
+    if (from.serverId === selfServerId) {
+      const info = await getDownloadableFileInfo({
+        root: from.location.cwd,
+        relativePath: from.location.path,
+      });
+      if (info.size > limit) throw new PaseoToolInputError(copyTooLarge(info.size, limit));
+      const file = await readExplorerFileBytes({
+        root: from.location.cwd,
+        relativePath: from.location.path,
+      });
+      return file.bytes;
+    }
+    return withCopyHost(from.serverId, async (client) => {
+      const file = await client.readFile(
+        from.location.cwd,
+        from.location.path,
+        undefined,
+        limit,
+        0,
+      );
+      return file.bytes;
+    });
+  }
+  async function writeCopyDestination(
+    to: ResolvedCopyEndpoint,
+    bytes: Uint8Array,
+    flags: { overwrite: boolean; createParents: boolean },
+  ): Promise<{ absolutePath: string; size: number; modifiedAt: string }> {
+    if (to.serverId === selfServerId) {
+      const result = await putExplorerFileBytes({
+        root: to.location.cwd,
+        relativePath: to.location.path,
+        bytes,
+        ...flags,
+      });
+      if (result.status === "exists")
+        throw new PaseoToolInputError(`${to.path} already exists; pass overwrite to replace it`);
+      if (result.status === "error") throw new PaseoToolInputError(result.error);
+      return result.file;
+    }
+    return withCopyHost(to.serverId, async (client) => {
+      const result = await client.putFile({ ...to.location, bytes, ...flags });
+      if (result.file) return result.file;
+      if (result.errorCode === "exists")
+        throw new PaseoToolInputError(`${to.path} already exists; pass overwrite to replace it`);
+      throw new PaseoToolInputError(result.error ?? "File write failed");
+    });
+  }
   const registerTool = (
     name: string,
     config: PaseoToolConfig,
@@ -1402,6 +1497,48 @@ function createToolCatalog(
       content: [],
       structuredContent: ensureValidJson(await hostResolver.directory()),
     }),
+  );
+  registerTool(
+    "copy_file",
+    {
+      title: "Copy file",
+      description:
+        "Copy one file between hosts from list_hosts, or within a host. Bytes travel over the same connection as the other fleet tools, so a host added by relay pairing link copies through the relay. Relative paths resolve against your cwd on this host and the home directory on another host. Existing targets are kept unless overwrite is true.",
+      inputSchema: {
+        source: CopyFileEndpointSchema.describe("File to read."),
+        destination: CopyFileEndpointSchema.describe("File path to write, including file name."),
+        overwrite: z.boolean().optional().describe("Replace an existing destination file."),
+        createParents: z
+          .boolean()
+          .optional()
+          .describe("Create missing destination parent directories."),
+        maxBytes: z
+          .number()
+          .int()
+          .positive()
+          .optional()
+          .describe(`Refuse larger files. Defaults to ${COPY_FILE_DEFAULT_MAX_BYTES} bytes.`),
+      },
+    },
+    async ({ source, destination, overwrite, createParents, maxBytes }) => {
+      const limit = maxBytes ?? COPY_FILE_DEFAULT_MAX_BYTES;
+      const from = resolveCopyEndpoint(source);
+      const to = resolveCopyEndpoint(destination);
+      const bytes = await readCopySource(from, limit);
+      const written = await writeCopyDestination(to, bytes, {
+        overwrite: overwrite === true,
+        createParents: createParents === true,
+      });
+      return {
+        content: [],
+        structuredContent: ensureValidJson({
+          source: { serverId: from.serverId, path: from.path },
+          destination: { serverId: to.serverId, path: written.absolutePath },
+          size: written.size,
+          modifiedAt: written.modifiedAt,
+        }),
+      };
+    },
   );
 
   registerTool(

@@ -2430,3 +2430,135 @@ test.each([false, true])(
       .toEqual([]);
   },
 );
+
+test("agent MCP copies files between hosts without replacing existing targets", async () => {
+  const a = await daemon();
+  const b = await daemon();
+  const { paseo } = await api(a);
+  await paseo.hosts.add({ connection: `127.0.0.1:${b.port}`, label: "Files B" });
+  const directory = await online(paseo);
+  const serverId = directory.hosts[0]!.serverId!;
+  const workspace = await paseo.workspaces.create({
+    source: { kind: "directory", path: a.staticDir },
+  });
+  const parent = await workspace.agents.create({
+    config: { provider: "claude/claude-test" },
+    title: "File parent",
+  });
+  const mcp = new Client({ name: "fleet-files", version: "1" });
+  cleanup.push(() => mcp.close());
+  await mcp.connect(
+    new StreamableHTTPClientTransport(
+      new URL(`http://127.0.0.1:${a.port}/mcp/agents?callerAgentId=${parent.id}`),
+    ),
+  );
+  const remoteDir = await mkdtemp(join(tmpdir(), "paseo-copy-b-"));
+  cleanup.push(() => rm(remoteDir, { recursive: true, force: true }));
+  const bytes = Uint8Array.from({ length: 300 * 1024 + 7 }, (_, index) => (index * 7) % 256);
+  await writeFile(join(a.staticDir, "source.bin"), bytes);
+
+  const pushed = await mcp.callTool({
+    name: "copy_file",
+    arguments: {
+      source: { path: "source.bin" },
+      destination: { serverId, path: join(remoteDir, "nested", "copy.bin") },
+      createParents: true,
+    },
+  });
+  expect(pushed.isError, JSON.stringify(pushed)).not.toBe(true);
+  expect(pushed.structuredContent).toMatchObject({
+    source: { serverId: directory.self.serverId, path: join(a.staticDir, "source.bin") },
+    destination: { serverId, path: join(remoteDir, "nested", "copy.bin") },
+    size: bytes.byteLength,
+  });
+  expect((await readFile(join(remoteDir, "nested", "copy.bin"))).equals(bytes)).toBe(true);
+  expect(await readdir(join(remoteDir, "nested"))).toEqual(["copy.bin"]);
+
+  await writeFile(join(a.staticDir, "pulled.bin"), "keep me");
+  const refused = await mcp.callTool({
+    name: "copy_file",
+    arguments: {
+      source: { serverId, path: join(remoteDir, "nested", "copy.bin") },
+      destination: { path: "pulled.bin" },
+    },
+  });
+  expect(refused.isError).toBe(true);
+  expect(JSON.stringify(refused.content)).toContain("already exists");
+  expect(await readFile(join(a.staticDir, "pulled.bin"), "utf8")).toBe("keep me");
+
+  const pulled = await mcp.callTool({
+    name: "copy_file",
+    arguments: {
+      source: { serverId, path: join(remoteDir, "nested", "copy.bin") },
+      destination: { path: "pulled.bin" },
+      overwrite: true,
+    },
+  });
+  expect(pulled.isError, JSON.stringify(pulled)).not.toBe(true);
+  expect((await readFile(join(a.staticDir, "pulled.bin"))).equals(bytes)).toBe(true);
+
+  const tooLarge = await mcp.callTool({
+    name: "copy_file",
+    arguments: {
+      source: { serverId, path: join(remoteDir, "nested", "copy.bin") },
+      destination: { path: "small.bin" },
+      maxBytes: 1024,
+    },
+  });
+  expect(tooLarge.isError).toBe(true);
+  await expect(stat(join(a.staticDir, "small.bin"))).rejects.toMatchObject({ code: "ENOENT" });
+});
+
+test("CLI file cp moves files between this machine, the selected daemon and its hosts", async () => {
+  const a = await daemon();
+  const b = await daemon();
+  const { paseo } = await api(a);
+  await paseo.hosts.add({ connection: `127.0.0.1:${b.port}`, label: "cp-b" });
+  await online(paseo);
+  const local = await mkdtemp(join(tmpdir(), "paseo-cp-local-"));
+  const remote = await mkdtemp(join(tmpdir(), "paseo-cp-remote-"));
+  cleanup.push(() => rm(local, { recursive: true, force: true }));
+  cleanup.push(() => rm(remote, { recursive: true, force: true }));
+  const cp = async (...args: string[]) =>
+    JSON.parse(
+      (
+        await promisify(execFile)(
+          process.execPath,
+          [
+            "--conditions=source",
+            "--import",
+            "tsx",
+            fileURLToPath(new URL("../../../../cli/src/index.ts", import.meta.url)),
+            "--host",
+            `127.0.0.1:${a.port}`,
+            "file",
+            "cp",
+            ...args,
+            "--json",
+          ],
+          { timeout: 20000 },
+        )
+      ).stdout,
+    );
+  const bytes = Uint8Array.from({ length: 200 * 1024 + 3 }, (_, index) => (index * 13) % 256);
+  await writeFile(join(local, "app.bin"), bytes);
+
+  expect(await cp(join(local, "app.bin"), `cp-b:${remote}/drop/`, "--parents")).toMatchObject({
+    destination: `cp-b:${join(remote, "drop", "app.bin")}`,
+    size: bytes.byteLength,
+  });
+  expect((await readFile(join(remote, "drop", "app.bin"))).equals(bytes)).toBe(true);
+
+  await cp(`cp-b:${join(remote, "drop", "app.bin")}`, `self:${join(local, "via-a.bin")}`);
+  expect((await readFile(join(local, "via-a.bin"))).equals(bytes)).toBe(true);
+
+  const refused = await cp(
+    `cp-b:${join(remote, "drop", "app.bin")}`,
+    join(local, "via-a.bin"),
+  ).catch((error: unknown) => error);
+  expect((refused as { stderr: string }).stderr).toContain("--overwrite");
+
+  await cp(`cp-b:${join(remote, "drop", "app.bin")}`, `${local}/`, "--overwrite");
+  expect((await readFile(join(local, "app.bin"))).equals(bytes)).toBe(true);
+  expect((await readdir(local)).sort()).toEqual(["app.bin", "via-a.bin"]);
+}, 60000);

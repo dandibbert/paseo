@@ -33,7 +33,8 @@ Trusted server plugins retain the authority of their runtime; they are not sandb
 
 Agent MCP discovers destination IDs with `list_hosts`. `create_workspace`, `list_workspaces`,
 `create_agent`, `send_agent_prompt`, `get_agent_status`, `get_agent_activity`, and `list_agents`
-accept `serverId`; omission selects the calling daemon. Remote creation requires a
+accept `serverId`; omission selects the calling daemon. `copy_file` takes a `serverId` for each end,
+so the calling daemon relays a copy between two destinations without a second hop. Remote creation requires a
 destination workspace and explicit provider/model. Caller filesystem defaults apply only on the
 calling daemon. Prompting a remote child acknowledges acceptance and uses the existing idle wait for
 finish notifications. Remote agent lists have no caller-directory default; pass `cwd` to filter them.
@@ -63,6 +64,19 @@ Remote creation and local subscription persistence are separate commits. A faile
 failure even if the destination already created the child; inspect it before retrying creation.
 See [finish notification lifetime](agent-lifecycle.md#relationships) for registration, acknowledgment,
 and duplicate-delivery semantics. Concurrent prompts gain no turn attribution.
+
+## File transfer
+
+`fs.file.put.request` streams a file to a path, using the same `FileBegin`/`FileChunk`/`FileEnd`
+frames as uploads, so routed puts cross relays and host links without base64. Gate on
+`server_info.features.filePut`. The daemon writes a hidden temporary file beside the target and links
+or renames it only after the declared size arrives; without `overwrite`, `link()` makes the existing-file
+check atomic. A missing target resolves to its unresolved path, so put targets are scoped by the real path of
+their parent directory, checked before `createParents` runs `mkdir`.
+
+`paseo file cp` and MCP `copy_file` hold the whole file in memory on the relaying daemon or CLI and cap it
+at 512 MiB by default. Streaming a read directly into a put needs flow control between two routes that
+the client does not have yet.
 
 ## Connections and recovery
 

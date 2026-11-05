@@ -23,7 +23,7 @@ import path from "node:path";
 import { spawn, type ChildProcess } from "node:child_process";
 import { Buffer } from "node:buffer";
 import { createHash, randomBytes } from "node:crypto";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 
 import { generateLocalPairingOffer } from "../pairing-offer.js";
@@ -542,6 +542,76 @@ async function waitForCapturedLog(
     },
     120000,
   );
+
+  test("connected hosts write and read files through the local E2EE relay", async () => {
+    let a: Awaited<ReturnType<typeof createTestPaseoDaemon>> | undefined;
+    let b: Awaited<ReturnType<typeof createTestPaseoDaemon>> | undefined;
+    let origin: ReturnType<typeof createHostClient> | undefined;
+    let api: PaseoApi | undefined;
+    let remote: PaseoApi | undefined;
+    let remoteDir: string | undefined;
+    try {
+      await startRelay({ useLocalRelay: true });
+      b = await createTestPaseoDaemon({
+        relayEnabled: true,
+        relayEndpoint: `127.0.0.1:${relayPort}`,
+        relayUseTls: false,
+        relayPublicUseTls: false,
+      });
+      a = await createTestPaseoDaemon();
+      origin = createHostClient(`127.0.0.1:${a.port}`, { clientId: crypto.randomUUID() });
+      await origin.connect();
+      api = createPaseoApi(origin);
+      const offerUrl = await getPairingOfferUrl({
+        paseoHome: b.paseoHome,
+        relayEnabled: true,
+        relayEndpoint: b.config.relayEndpoint,
+      });
+      const { serverId, daemonPublicKeyB64 } = decodeOfferFromFragmentUrl(offerUrl);
+      const connection = new URL(`relay://127.0.0.1:${relayPort}/${serverId}`);
+      connection.searchParams.set("key", daemonPublicKeyB64);
+      await api.hosts.add({ connection: connection.toString() });
+      await expect
+        .poll(async () => (await api!.hosts.list()).hosts[0]?.status, { timeout: 20000 })
+        .toBe("online");
+      remote = await api.hosts.client(serverId);
+      remoteDir = await mkdtemp(path.join(os.tmpdir(), "paseo-relay-put-"));
+      const bytes = randomBytes(3 * FILE_EXPLORER_STREAM_CHUNK_BYTES + 17);
+
+      const written = await remote.files.write({
+        cwd: remoteDir,
+        path: "nested/copy.bin",
+        bytes,
+        createParents: true,
+      });
+      expect(written).toMatchObject({ path: "nested/copy.bin", size: bytes.byteLength });
+      expect(sha256(await readFile(path.join(remoteDir, "nested", "copy.bin")))).toBe(
+        sha256(bytes),
+      );
+      await expect(
+        remote.files.write({ cwd: remoteDir, path: "nested/copy.bin", bytes: randomBytes(8) }),
+      ).rejects.toMatchObject({ code: "exists" });
+
+      const replacement = randomBytes(FILE_EXPLORER_STREAM_CHUNK_BYTES + 5);
+      await remote.files.write({
+        cwd: remoteDir,
+        path: "nested/copy.bin",
+        bytes: replacement,
+        overwrite: true,
+      });
+      const read = await remote.files.read({ cwd: remoteDir, path: "nested/copy.bin" });
+      expect(sha256(read.bytes)).toBe(sha256(replacement));
+      expect(await readdir(path.join(remoteDir, "nested"))).toEqual(["copy.bin"]);
+    } finally {
+      await remote?.dispose().catch(() => undefined);
+      await api?.dispose().catch(() => undefined);
+      await origin?.close().catch(() => undefined);
+      await a?.close();
+      await b?.close();
+      await stopRelay();
+      if (remoteDir) await rm(remoteDir, { recursive: true, force: true });
+    }
+  }, 120000);
 
   test("password-protected daemon refuses a relay client without the password", async () => {
     let daemon: Awaited<ReturnType<typeof createTestPaseoDaemon>> | undefined;

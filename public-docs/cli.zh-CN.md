@@ -78,6 +78,7 @@ paseo --host localhost:6767 host rm hst_123
 ```
 
 `add` 接受 TCP/主机和端口、`ws://`/`wss://`、本地 socket/管道、SSH，以及 relay/配对 URL。
+要通过 relay（包括自建 relay）连接，在目标机器上运行 `paseo daemon pair --relay`，再添加它打印的配对链接。之后所有转发调用和文件传输都走这个 relay，并且端到端加密。目标 daemon 需要密码时，在 `relay://` URI 中添加 `?password=...`。
 SSH 连接到已经运行的 daemon。如果该 daemon 需要密码，在 SSH URI 中添加 `?password=...`（已有 `daemonPort` 时使用 `&password=...`）。无法访问的目标仍会保存，并自动重试。
 `ls` 包括已禁用和连接失败的主机。`inspect` 包括不含凭据的连接详情和恢复说明。
 JSON 输出不会包含连接凭据。
@@ -85,6 +86,20 @@ JSON 输出不会包含连接凭据。
 `update --meta` 替换指定的键；`--remove-meta` 删除键。替换连接会保留已固定的 daemon 身份。
 只有确认目标已改变后，才应同时使用 `--replace-identity` 和 `--connection`。
 `rm` 删除已保存的连接；该主机上的 Agent 和工作区会继续运行。
+
+## 复制文件 {#copying-files}
+
+`paseo file cp` 在本机和所选 daemon 已连接的主机之间复制单个文件：
+
+```sh
+paseo file cp ./dist/app.tgz mac-2:~/inbox/
+paseo file cp mac-2:/Users/me/report.pdf studio:~/Desktop/report.pdf --overwrite
+paseo file cp self:/var/log/app.log ./app.log
+```
+
+主机上的路径写成 `<host>:<path>`。`<host>` 是 `paseo host ls` 里的标签、server ID 或注册 ID，`self` 表示所选 daemon 本身。不带前缀的路径在运行 CLI 的机器上。主机上的相对路径从该 daemon 用户的主目录开始。目标以 `/` 结尾时保留源文件名。
+
+字节由所选 daemon 中转，所以即使路由只允许一跳，两台主机之间也能复制，数据走各主机已保存的连接。目标文件已存在时不会被替换，除非传 `--overwrite`；`-p`/`--parents` 会创建缺失的目录。全部字节到达后目标文件才会出现。复制时文件放在内存中，大小受 `--max-bytes` 限制（默认 512 MiB）。写入某台主机需要该 daemon 支持 `filePut`；旧版本主机会提示需要更新。
 
 ## Provider 诊断 {#provider-diagnostics}
 

@@ -3,6 +3,15 @@ import type { AgentAddress } from "@getpaseo/protocol/addresses";
 import { parentAddressLabels } from "@getpaseo/protocol/agent-labels";
 export type { AgentAddress } from "@getpaseo/protocol/addresses";
 import { createHostActions, type PaseoHostActions } from "./hosts/index.js";
+import { createFileActions, type PaseoFileActions } from "./files/index.js";
+export { toDaemonFileLocation } from "@getpaseo/protocol/file-location";
+export {
+  PaseoFileError,
+  type PaseoFileActions,
+  type PaseoFileLocation,
+  type PaseoFileReadOptions,
+  type PaseoFileWriteOptions,
+} from "./files/index.js";
 export type { PaseoHostActions } from "./hosts/index.js";
 export type { HostAdd, HostUpdate, HostSummary, HostDirectory } from "@getpaseo/protocol/hosts";
 import type { OwnedSubscription } from "./connection/index.js";
@@ -506,6 +515,7 @@ export interface PaseoApi {
   readonly agents: PaseoAgentActions;
   readonly providers: PaseoProviderActions;
   readonly config: PaseoConfigActions;
+  readonly files: PaseoFileActions;
 }
 
 export interface PaseoClient extends PaseoApi {
@@ -798,6 +808,7 @@ export function createPaseoApi(
       get: (requestId) => daemonClient.getDaemonConfig(requestId),
       patch: (patch, requestId) => daemonClient.patchDaemonConfig(patch, requestId),
     },
+    files: createFileActions(daemonClient),
   };
 }
 
