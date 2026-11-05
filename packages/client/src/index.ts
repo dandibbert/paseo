@@ -44,7 +44,13 @@ import type {
   WorkspaceDescriptorPayload,
   WorkspaceCreateRequest,
 } from "@getpaseo/protocol/messages";
-import { DaemonClient, type CreateAgentRequestOptions } from "./daemon-client.js";
+import {
+  DaemonClient,
+  type CreateAgentRequestOptions,
+  type DaemonInstallUpdateOptions,
+  type DaemonInstallUpdateResult,
+} from "./daemon-client.js";
+export type { DaemonInstallUpdateOptions, DaemonInstallUpdateResult } from "./daemon-client.js";
 import {
   createTerminalActions,
   type PaseoTerminalActions,
@@ -524,6 +530,18 @@ export interface PaseoApi {
   readonly providers: PaseoProviderActions;
   readonly config: PaseoConfigActions;
   readonly files: PaseoFileActions;
+  readonly daemon: PaseoDaemonActions;
+}
+
+export interface PaseoDaemonActions {
+  /**
+   * Updates the bound daemon's installation: Paseo Desktop, a headless release, or an npm global
+   * install. Refuses while agents run unless `force` is set. Reached through
+   * `hosts.client(serverId)`, it updates a connected host.
+   */
+  installUpdate(options?: DaemonInstallUpdateOptions): Promise<DaemonInstallUpdateResult>;
+  /** Whether the bound daemon supports `installUpdate`. */
+  supportsInstallUpdate(): boolean;
 }
 
 export interface PaseoClient extends PaseoApi {
@@ -819,6 +837,11 @@ export function createPaseoApi(
       patch: (patch, requestId) => daemonClient.patchDaemonConfig(patch, requestId),
     },
     files: createFileActions(daemonClient),
+    daemon: {
+      installUpdate: (options) => daemonClient.installUpdate(options),
+      supportsInstallUpdate: () =>
+        daemonClient.getLastServerInfoMessage()?.features?.installUpdate === true,
+    },
   };
 }
 

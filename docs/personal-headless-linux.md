@@ -117,7 +117,14 @@ SSH host or your private Tailscale/Relay connection.
 
 ## Routine upgrades without interrupting Agents
 
-As dev, stage the latest published release. This downloads both assets, verifies SHA256 and checks
+From any machine whose daemon has this host saved, run `paseo host upgrade <host>`
+([CLI reference](../public-docs/cli.md#upgrading-hosts)). The daemon runs the helper shipped in
+its own release: it stages and activates the latest release from inside the service, then exits
+with code 75 so `Restart=on-failure` starts the new `current` link. A daemon not started by
+systemd (no `INVOCATION_ID`) installs the release but stays on the old one until you restart it.
+Releases built before the helper was bundled need one manual upgrade below.
+
+To upgrade by hand instead, as dev, stage the latest published release. This downloads both assets, verifies SHA256 and checks
 the embedded commit before changing any symlink:
 
 ```bash

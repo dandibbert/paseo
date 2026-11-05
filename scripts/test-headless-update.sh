@@ -31,5 +31,18 @@ if bash "$installer" activate headless-invalid >/dev/null 2>&1; then
   exit 1
 fi
 
+# A running service blocks activation unless the daemon itself performs the swap.
+mkdir -p "$tmp/fake-bin"
+printf '#!/bin/sh\n[ "$1" = is-active ] && exit 0\nexit 1\n' > "$tmp/fake-bin/systemctl"
+chmod +x "$tmp/fake-bin/systemctl"
+if PATH="$tmp/fake-bin:$PATH" bash "$installer" activate headless-222222222222 >/dev/null 2>&1; then
+  echo "Activation proceeded while the service was active" >&2
+  exit 1
+fi
+[[ "$(readlink "$tmp/current")" == "$tmp/releases/headless-111111111111" ]]
+PATH="$tmp/fake-bin:$PATH" PASEO_HEADLESS_LIVE_ACTIVATE=1 \
+  bash "$installer" activate headless-222222222222
+[[ "$(readlink "$tmp/current")" == "$tmp/releases/headless-222222222222" ]]
+
 bash "$installer" status
 echo "Headless update/rollback helper passed."

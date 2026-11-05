@@ -87,6 +87,26 @@ JSON 输出不会包含连接凭据。
 只有确认目标已改变后，才应同时使用 `--replace-identity` 和 `--connection`。
 `rm` 删除已保存的连接；该主机上的 Agent 和工作区会继续运行。
 
+## 升级主机 {#upgrading-hosts}
+
+`paseo host upgrade` 通过已保存的连接，更新所选 daemon 已连接主机上的 Paseo：
+
+```sh
+paseo host upgrade --all --check
+paseo host upgrade mac-2 studio --channel beta
+paseo host upgrade linux self --force
+```
+
+主机名与 `paseo host ls` 一致，`self` 表示所选 daemon，`--all` 表示所有已启用的已连接主机。`--check` 只报告已安装版本和可用版本，不安装。每台主机更新自己的安装：
+
+| 安装方式            | 会发生什么                                                                                                                                                     |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Paseo Desktop       | 该主机上的桌面 App 检查更新源，然后退出、安装并重新打开。`--channel stable\|beta` 覆盖 App 自己的通道。该主机上必须开着桌面窗口。                              |
+| Headless Linux 版本 | 安装最新的 headless 版本，然后退出，由 systemd 启动新版本。见 [headless 指南](https://github.com/dandibbert/paseo/blob/main/docs/personal-headless-linux.md)。 |
+| npm 全局安装        | 更新 npm 包并重启。                                                                                                                                            |
+
+主机上有正在运行或等待权限的 agent 时会拒绝升级并列出它们。`--force` 强制升级，并中断它们的当前轮次。命令最多等待 `--timeout` 秒（默认 600）让每台主机重新上线；`--no-wait` 在主机开始重启时就返回。所选 daemon 最后升级，因为重启它会断开本命令的连接。运行不支持远程升级的旧版本的主机会报告 `unsupported`，需要在该主机上手动更新一次。
+
 ## 复制文件 {#copying-files}
 
 `paseo file cp` 在本机和所选 daemon 已连接的主机之间复制单个文件：

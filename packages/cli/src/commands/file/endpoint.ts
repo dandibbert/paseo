@@ -1,4 +1,5 @@
 import type { HostDirectory } from "@getpaseo/client";
+import { resolveHostSelector } from "../host/selector.js";
 
 /** One side of `paseo file cp`. */
 export type FileEndpoint =
@@ -21,8 +22,7 @@ export function splitFileEndpoint(value: string): { host: string | null; path: s
 
 /**
  * Resolves an endpoint argument. Unprefixed paths are on the machine running the CLI, like `scp`.
- * `host:path` selects the daemon itself (its server ID, its label, or `self`) or a saved host by
- * server ID, label, or registration ID.
+ * `host:path` names a daemon as `resolveHostSelector` does.
  */
 export function resolveFileEndpoint(value: string, directory: HostDirectory): FileEndpoint {
   const { host, path } = splitFileEndpoint(value);
@@ -33,49 +33,7 @@ export function resolveFileEndpoint(value: string, directory: HostDirectory): Fi
     } satisfies FileEndpointError;
   }
   if (host === null) return { kind: "local", path };
-  if (host === "self" || host === directory.self.serverId || host === directory.self.label) {
-    return {
-      kind: "host",
-      serverId: directory.self.serverId,
-      label: directory.self.label,
-      self: true,
-      path,
-    };
-  }
-  const matches = directory.hosts.filter(
-    (entry) => entry.serverId === host || entry.registrationId === host || entry.label === host,
-  );
-  const exact = matches.filter((entry) => entry.serverId === host || entry.registrationId === host);
-  const selected = exact.length === 1 ? exact : matches;
-  if (selected.length > 1) {
-    throw {
-      code: "host_ambiguous",
-      message: `"${host}" matches ${selected.length} saved hosts`,
-      details: "Use the server ID or registration ID from: paseo host ls",
-    } satisfies FileEndpointError;
-  }
-  const entry = selected[0];
-  if (!entry) {
-    throw {
-      code: "host_unknown",
-      message: `Unknown host "${host}"`,
-      details: "List saved hosts with: paseo host ls",
-    } satisfies FileEndpointError;
-  }
-  if (!entry.serverId) {
-    throw {
-      code: "host_unknown",
-      message: `Host "${host}" has not connected yet, so its server ID is unknown`,
-      details: `Check its status with: paseo host inspect ${entry.registrationId}`,
-    } satisfies FileEndpointError;
-  }
-  return {
-    kind: "host",
-    serverId: entry.serverId,
-    label: entry.label ?? entry.serverId,
-    self: false,
-    path,
-  };
+  return { kind: "host", ...resolveHostSelector(host, directory), path };
 }
 
 /** Appends the source file name when the destination names a directory with a trailing slash. */

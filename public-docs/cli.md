@@ -92,6 +92,32 @@ JSON output never includes connection credentials.
 the pinned daemon identity. Add `--replace-identity` with `--connection` only after verifying a changed
 destination. `rm` removes the saved connection; agents and workspaces on that host keep running.
 
+## Upgrading hosts
+
+`paseo host upgrade` updates Paseo on the selected daemon's connected hosts, over the same saved
+connection as other routed calls:
+
+```sh
+paseo host upgrade --all --check
+paseo host upgrade mac-2 studio --channel beta
+paseo host upgrade linux self --force
+```
+
+Name hosts as in `paseo host ls`, `self` for the selected daemon, or pass `--all` for every enabled
+connected host. `--check` reports installed and available versions without installing. Each host
+updates its own installation:
+
+| Installation           | What happens                                                                                                                                                                   |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Paseo Desktop          | The desktop app on that host checks its feed, then quits, installs, and relaunches. `--channel stable\|beta` overrides the app's channel. A desktop window must be open there. |
+| Headless Linux release | Installs the latest headless release and exits so systemd starts it. See [the headless guide](https://github.com/dandibbert/paseo/blob/main/docs/personal-headless-linux.md).  |
+| npm global install     | Updates the npm package and restarts.                                                                                                                                          |
+
+A host with running agents, or agents waiting for permission, refuses and lists them. `--force`
+upgrades anyway and interrupts their turns. The command waits up to `--timeout` seconds (default 600) for each host to come back online; `--no-wait` returns once it starts restarting. The
+selected daemon is upgraded last, because restarting it ends the command's connection. A host
+running a Paseo version without remote upgrades reports `unsupported`; update it once on the host.
+
 ## Copying files
 
 `paseo file cp` copies one file between this machine and the hosts connected to the selected daemon:

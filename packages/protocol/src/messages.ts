@@ -2049,6 +2049,44 @@ export const DaemonUpdateRequestMessageSchema = z.object({
   requestId: z.string(),
 });
 
+/** Which build a remote install update installs. Hosts that cannot choose ignore it. */
+export const InstallUpdateChannelSchema = z.enum(["stable", "beta"]);
+
+/**
+ * Updates the daemon's own installation: a Paseo Desktop app, a headless Linux release, or an npm
+ * global install. Requires `server_info.features.installUpdate`. Unlike `daemon.update.request`,
+ * this reports what is installed first and refuses while agents are running unless `force` is set.
+ */
+export const DaemonInstallUpdateRequestSchema = z.object({
+  type: z.literal("daemon.install.update.request"),
+  requestId: z.string(),
+  channel: InstallUpdateChannelSchema.optional(),
+  /** Report the installed and available versions without installing. */
+  checkOnly: z.boolean().optional(),
+  /** Update even while agents are running; their turns are interrupted by the restart. */
+  force: z.boolean().optional(),
+});
+
+/** A Paseo Desktop window volunteers to install app updates for its own daemon. */
+export const DaemonDesktopHostRegisterRequestSchema = z.object({
+  type: z.literal("daemon.desktop_host.register.request"),
+  requestId: z.string(),
+  releaseChannel: InstallUpdateChannelSchema,
+  appVersion: z.string().nullable(),
+});
+
+/** The desktop host's answer to `daemon.desktop_host.update.command`, sent before it quits. */
+export const DaemonDesktopHostUpdateReportRequestSchema = z.object({
+  type: z.literal("daemon.desktop_host.update.report.request"),
+  requestId: z.string(),
+  commandId: z.string(),
+  /** `up_to_date`, `update_available`, `installing`, or `failed`. Other values may be added. */
+  status: z.string(),
+  currentVersion: z.string().nullable(),
+  latestVersion: z.string().nullable(),
+  error: z.string().nullable(),
+});
+
 export const AgentTimelineCursorSchema = z.object({
   epoch: z.string(),
   seq: z.number().int().nonnegative(),
@@ -3562,6 +3600,9 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   ShutdownServerRequestMessageSchema,
   RestartServerRequestMessageSchema,
   DaemonUpdateRequestMessageSchema,
+  DaemonInstallUpdateRequestSchema,
+  DaemonDesktopHostRegisterRequestSchema,
+  DaemonDesktopHostUpdateReportRequestSchema,
   FetchAgentTimelineRequestMessageSchema,
   AgentTimelineSearchRequestMessageSchema,
   AgentTimelineListPromptsRequestMessageSchema,
@@ -3989,6 +4030,8 @@ export const ServerInfoStatusPayloadSchema = z
         fileByteWrites: z.boolean().optional(),
         // COMPAT(filePut): added in v0.15.0, remove gate after 2027-05-05.
         filePut: z.boolean().optional(),
+        // COMPAT(installUpdate): added in v0.15.2, remove gate after 2027-05-05.
+        installUpdate: z.boolean().optional(),
         // COMPAT(providerUsageList): added in v0.1.98, drop the gate when daemon floor >= v0.1.98.
         providerUsageList: z.boolean().optional(),
         // COMPAT(agentDetach): added in v0.1.98, remove gate after 2026-12-19 once daemon floor >= v0.1.98.
@@ -6982,6 +7025,49 @@ export const DaemonUpdateResponseSchema = z.object({
 
 export type DaemonUpdateResponse = z.infer<typeof DaemonUpdateResponseSchema>;
 
+export const DaemonInstallUpdateResponseSchema = z.object({
+  type: z.literal("daemon.install.update.response"),
+  payload: z.object({
+    requestId: z.string(),
+    /** `desktop`, `headless`, `npm`, or `unsupported`. Other values may be added. */
+    installKind: z.string(),
+    /**
+     * `up_to_date`, `update_available` (check only), `updating` (the host restarts next),
+     * `installed` (installed; restart it yourself), `busy`, or `failed`. Other values may be added.
+     */
+    status: z.string(),
+    currentVersion: z.string().nullable(),
+    targetVersion: z.string().nullable(),
+    busyAgents: z
+      .array(z.object({ id: z.string(), title: z.string().nullable(), status: z.string() }))
+      .optional(),
+    error: z.string().nullable(),
+  }),
+});
+
+export type DaemonInstallUpdateResponse = z.infer<typeof DaemonInstallUpdateResponseSchema>;
+
+export const DaemonDesktopHostRegisterResponseSchema = z.object({
+  type: z.literal("daemon.desktop_host.register.response"),
+  payload: z.object({ requestId: z.string(), registered: z.boolean() }),
+});
+
+/** Asks the registered desktop host to check for, or install, an app update. */
+export const DaemonDesktopHostUpdateCommandSchema = z.object({
+  type: z.literal("daemon.desktop_host.update.command"),
+  payload: z.object({
+    commandId: z.string(),
+    /** `null` follows the desktop app's own release channel setting. */
+    releaseChannel: InstallUpdateChannelSchema.nullable(),
+    checkOnly: z.boolean(),
+  }),
+});
+
+export const DaemonDesktopHostUpdateReportResponseSchema = z.object({
+  type: z.literal("daemon.desktop_host.update.report.response"),
+  payload: z.object({ requestId: z.string(), accepted: z.boolean() }),
+});
+
 export const DaemonUpdateProgressMessageSchema = z.object({
   type: z.literal("daemon.update.progress"),
   payload: z.object({
@@ -7616,6 +7702,10 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   LoopStopResponseSchema,
   DaemonUpdateProgressMessageSchema,
   DaemonUpdateResponseSchema,
+  DaemonInstallUpdateResponseSchema,
+  DaemonDesktopHostRegisterResponseSchema,
+  DaemonDesktopHostUpdateCommandSchema,
+  DaemonDesktopHostUpdateReportResponseSchema,
 ]);
 
 export type SessionOutboundMessage = z.infer<typeof SessionOutboundMessageSchema>;

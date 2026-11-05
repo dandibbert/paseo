@@ -400,6 +400,8 @@ export type DaemonLifecycleIntent =
       requestId: string;
       reason: string;
       keepTerminals: boolean;
+      /** Process exit code once shutdown completes; a service manager may restart on it. */
+      exitCode?: number;
     }
   | {
       type: "restart";

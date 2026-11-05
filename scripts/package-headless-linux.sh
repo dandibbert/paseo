@@ -54,7 +54,9 @@ bin_dir="$(cd "$(dirname "$0")" && pwd -P)"
 export PATH="$bin_dir:$PATH"
 exec "$bin_dir/node" "$bin_dir/../lib/node_modules/@getpaseo/cli/bin/paseo" "$@"
 WRAPPER
-chmod 755 "$stage/bin/paseo" "$stage/bin/node"
+# The daemon's remote update runs the helper shipped with the release it is running.
+cp "$repo_root/scripts/paseo-headless-update.sh" "$stage/bin/paseo-headless-update.sh"
+chmod 755 "$stage/bin/paseo" "$stage/bin/node" "$stage/bin/paseo-headless-update.sh"
 
 server="$stage/lib/node_modules/@getpaseo/server/dist/scripts/supervisor-entrypoint.js"
 test -f "$server" || { echo "Daemon runner missing: $server" >&2; exit 1; }

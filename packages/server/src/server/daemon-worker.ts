@@ -15,6 +15,7 @@ type SupervisorLifecycleMessage =
       type: "paseo:shutdown";
       reason: string;
       keepTerminals: boolean;
+      exitCode?: number;
     }
   | {
       type: "paseo:ready";
@@ -232,6 +233,7 @@ async function main() {
         type: "paseo:shutdown",
         reason: intent.reason,
         keepTerminals: intent.keepTerminals,
+        ...(intent.exitCode !== undefined ? { exitCode: intent.exitCode } : {}),
       });
       recordLifecycleIntentDispatched(intent.type, fields);
       if (sent) {
@@ -240,6 +242,7 @@ async function main() {
       beginShutdown("shutdown lifecycle intent", {
         reason: intent.reason,
         keepTerminals: intent.keepTerminals,
+        ...(intent.exitCode !== undefined ? { successExitCode: intent.exitCode } : {}),
       });
       return;
     }

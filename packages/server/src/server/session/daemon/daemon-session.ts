@@ -9,6 +9,10 @@ import {
   type DaemonWebSocketRuntimeDiagnosticSnapshot,
 } from "./diagnostics.js";
 import { DaemonSelfUpdateSessionController } from "./daemon-self-update-session-controller.js";
+import {
+  InstallUpdateSessionController,
+  type InstallUpdateLifecycleIntent,
+} from "./install-update-session-controller.js";
 import type { ManagedAgent } from "../../agent/agent-manager.js";
 import type { PersistedProjectRecord, PersistedWorkspaceRecord } from "../../workspace-registry.js";
 import type { HubRelationshipManagement } from "../../hub/relationship-controller.js";
@@ -31,13 +35,7 @@ export interface DaemonRuntimeConfig {
 
 export interface DaemonSessionHost {
   emit(msg: SessionOutboundMessage): void;
-  emitLifecycleIntent(intent: {
-    type: "restart";
-    clientId: string;
-    requestId: string;
-    reason: string;
-    keepTerminals: boolean;
-  }): void;
+  emitLifecycleIntent(intent: InstallUpdateLifecycleIntent): void;
 }
 
 export interface DaemonSessionOptions {
@@ -83,6 +81,7 @@ export class DaemonSession {
   private readonly getObservationMetrics: DaemonSessionOptions["getObservationMetrics"];
   private readonly logger: pino.Logger;
   private readonly selfUpdate: DaemonSelfUpdateSessionController;
+  private readonly installUpdate: InstallUpdateSessionController;
   private readonly hubRelationships: HubRelationshipManagement | null;
   private readonly reloadConfig: () => Promise<DaemonConfigReloadResult>;
 
@@ -111,6 +110,23 @@ export class DaemonSession {
       emitLifecycleIntent: (intent) => this.host.emitLifecycleIntent(intent),
       sessionLogger: this.logger,
     });
+    this.installUpdate = new InstallUpdateSessionController({
+      clientId: this.clientId,
+      daemonVersion: this.daemonVersion ?? null,
+      desktopManaged: this.daemonRuntimeConfig?.desktopManaged === true,
+      listAgents: this.listAgents,
+      emit: (msg) => this.host.emit(msg),
+      emitLifecycleIntent: (intent) => this.host.emitLifecycleIntent(intent),
+      logger: this.logger,
+    });
+  }
+
+  handleInstallUpdateMessage(msg: SessionInboundMessage): Promise<void> | undefined {
+    return this.installUpdate.dispatch(msg);
+  }
+
+  dispose(): void {
+    this.installUpdate.dispose();
   }
 
   async handleHubRelationshipRequest(

@@ -8,6 +8,7 @@ import {
 } from "../../output/index.js";
 import { addJsonAndDaemonHostOptions, collectMultiple } from "../../utils/command-options.js";
 import { connectToDaemon } from "../../utils/client.js";
+import { addHostUpgradeCommand } from "./upgrade.js";
 
 const schema: OutputSchema<HostSummary> = {
   idField: "registrationId",
@@ -108,6 +109,7 @@ export function createHostCommand(): Command {
   ).action(
     withOutput((id: string, options: Options, _command: Command) => run("update", id, options)),
   );
+  addHostUpgradeCommand(host);
   for (const action of ["inspect", "enable", "disable", "rm"])
     addJsonAndDaemonHostOptions(host.command(action).argument("<registration-id>")).action(
       withOutput((id: string, options: Options, _command: Command) => run(action, id, options)),

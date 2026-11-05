@@ -2159,6 +2159,8 @@ export class VoiceAssistantWebSocketServer {
         fileByteWrites: true,
         // COMPAT(filePut): added in v0.15.0, remove gate after 2027-05-05.
         filePut: true,
+        // COMPAT(installUpdate): added in v0.15.2, remove gate after 2027-05-05.
+        installUpdate: true,
         // COMPAT(providerUsageList): added in v0.1.98, drop the gate when daemon floor >= v0.1.98.
         providerUsageList: true,
         // COMPAT(agentDetach): added in v0.1.98, remove gate after 2026-12-19 once daemon floor >= v0.1.98.

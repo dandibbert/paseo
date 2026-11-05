@@ -14,6 +14,7 @@ Usage: bash paseo-headless-update.sh stage [latest|headless-<12 hex chars>]
        bash paseo-headless-update.sh activate [headless-<12 hex chars>]
        bash paseo-headless-update.sh rollback
        bash paseo-headless-update.sh status
+       bash paseo-headless-update.sh latest-tag
 
 Stage downloads and verifies the release without touching live sessions.
 Before activate/rollback, stop Paseo after all agents are idle:
@@ -61,6 +62,9 @@ update_link() {
   mv -Tf "$tmp" "$root/$1"
 }
 ensure_stopped() {
+  # The daemon's remote update swaps links from inside the service, then exits so
+  # systemd starts the new release; it sets this variable for that one call.
+  [[ "${PASEO_HEADLESS_LIVE_ACTIVATE:-}" == 1 ]] && return 0
   if command -v systemctl >/dev/null && systemctl is-active --quiet "$service"; then
     die "$service is still active; check Agent activity, then: sudo systemctl stop $service"
   fi
@@ -141,6 +145,7 @@ case "$1" in
       echo "Service: $(systemctl is-active "$service" 2>/dev/null || true)"
     fi
     ;;
+  latest-tag) latest_tag ;;
   help|-h|--help) usage ;;
   *) usage; exit 2 ;;
 esac

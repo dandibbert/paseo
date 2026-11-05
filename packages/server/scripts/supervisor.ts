@@ -22,6 +22,8 @@ type WorkerLifecycleMessage =
       type: "paseo:shutdown";
       reason?: string;
       keepTerminals: boolean;
+      /** Exit code after a clean stop, so a service manager can start the new install. */
+      exitCode?: number;
     }
   | {
       type: "paseo:ready";
@@ -83,11 +85,21 @@ function parseLifecycleMessage(msg: unknown): WorkerLifecycleMessage | null {
   }
   const type = (msg as { type?: unknown }).type;
   if (type === "paseo:shutdown") {
-    const { reason, keepTerminals } = msg as { reason?: unknown; keepTerminals?: unknown };
+    const { reason, keepTerminals, exitCode } = msg as {
+      reason?: unknown;
+      keepTerminals?: unknown;
+      exitCode?: unknown;
+    };
     return {
       type: "paseo:shutdown",
       ...(typeof reason === "string" && reason.trim().length > 0 ? { reason } : {}),
       keepTerminals: keepTerminals === true,
+      ...(typeof exitCode === "number" &&
+      Number.isInteger(exitCode) &&
+      exitCode > 0 &&
+      exitCode < 256
+        ? { exitCode }
+        : {}),
     };
   }
   if (type === "paseo:ready") {
@@ -199,6 +211,7 @@ export function runSupervisor(options: SupervisorOptions): SupervisorController 
   // The resolved terminal decision of the pending restart or stop. It survives the force-kill
   // path, so a hung kill restart still closes terminals before the respawn.
   let pendingKeepTerminals = false;
+  let requestedExitCode = 0;
   let exiting = false;
   let lifecycleFailed = false;
   let publication = Promise.resolve();
@@ -394,7 +407,10 @@ export function runSupervisor(options: SupervisorOptions): SupervisorController 
           reason,
           keepTerminals: lifecycleMessage.keepTerminals,
         });
-        requestShutdown(reason, { keepTerminals: lifecycleMessage.keepTerminals });
+        requestShutdown(reason, {
+          keepTerminals: lifecycleMessage.keepTerminals,
+          exitCode: lifecycleMessage.exitCode,
+        });
         return;
       }
 
@@ -434,7 +450,7 @@ export function runSupervisor(options: SupervisorOptions): SupervisorController 
 
         if (shuttingDown) {
           log(`Worker exited (${exitDescriptor}). Supervisor shutting down.`);
-          exitSupervisor(0, { keepTerminals: pendingKeepTerminals });
+          exitSupervisor(requestedExitCode, { keepTerminals: pendingKeepTerminals });
           return;
         }
 
@@ -520,13 +536,17 @@ export function runSupervisor(options: SupervisorOptions): SupervisorController 
     scheduleForceKill(reason);
   };
 
-  const requestShutdown = (reason: string, shutdownOptions: { keepTerminals?: boolean } = {}) => {
+  const requestShutdown = (
+    reason: string,
+    shutdownOptions: { keepTerminals?: boolean; exitCode?: number } = {},
+  ) => {
     if (shuttingDown) {
       return;
     }
     shuttingDown = true;
     restarting = false;
     pendingKeepTerminals = shutdownOptions.keepTerminals === true;
+    requestedExitCode = shutdownOptions.exitCode ?? 0;
     writeLifecycleLog("Supervisor shutdown requested", {
       reason,
       keepTerminals: pendingKeepTerminals,
@@ -534,7 +554,9 @@ export function runSupervisor(options: SupervisorOptions): SupervisorController 
     log(`${reason}. Stopping worker...`);
     if (!child) {
       void publication.then(() => {
-        exitSupervisor(lifecycleFailed ? 1 : 0, { keepTerminals: pendingKeepTerminals });
+        exitSupervisor(lifecycleFailed ? 1 : requestedExitCode, {
+          keepTerminals: pendingKeepTerminals,
+        });
         return;
       });
       return;

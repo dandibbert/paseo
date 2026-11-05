@@ -2644,3 +2644,52 @@ test("CLI file cp moves files between this machine, the selected daemon and its 
   expect((await readFile(join(local, "app.bin"))).equals(bytes)).toBe(true);
   expect((await readdir(local)).sort()).toEqual(["app.bin", "via-a.bin"]);
 }, 60000);
+
+test("CLI host upgrade asks each connected host for its own install and reports it", async () => {
+  const a = await daemon();
+  const b = await daemon();
+  const { paseo } = await api(a);
+  await paseo.hosts.add({ connection: `127.0.0.1:${b.port}`, label: "upgrade-b" });
+  const directory = await online(paseo);
+  const upgrade = async (...args: string[]) =>
+    JSON.parse(
+      (
+        await promisify(execFile)(
+          process.execPath,
+          [
+            "--conditions=source",
+            "--import",
+            "tsx",
+            fileURLToPath(new URL("../../../../cli/src/index.ts", import.meta.url)),
+            "--host",
+            `127.0.0.1:${a.port}`,
+            "host",
+            "upgrade",
+            ...args,
+            "--json",
+          ],
+          { timeout: 30000 },
+        )
+      ).stdout,
+    );
+  // Test daemons run from source: neither a desktop, headless, nor npm global install.
+  expect(await upgrade("upgrade-b", "self", "--check")).toEqual([
+    expect.objectContaining({
+      host: "upgrade-b",
+      serverId: directory.hosts[0]!.serverId,
+      installKind: "unsupported",
+      status: "failed",
+      detail: expect.stringContaining("not a Paseo Desktop, headless release, or npm global"),
+    }),
+    expect.objectContaining({
+      host: `${directory.self.label} (self)`,
+      serverId: directory.self.serverId,
+      installKind: "unsupported",
+    }),
+  ]);
+  expect(await upgrade("--all", "--check")).toEqual([
+    expect.objectContaining({ host: "upgrade-b", installKind: "unsupported" }),
+  ]);
+  const unknown = await upgrade("nope").catch((error: unknown) => error);
+  expect((unknown as { stderr: string }).stderr).toContain("host_unknown");
+}, 60000);

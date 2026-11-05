@@ -120,3 +120,26 @@ test("requested shutdown before first readiness exits successfully", async () =>
   expect(result.code).toBe(0);
   expect(result.events).toEqual([null]);
 });
+
+test("a requested shutdown exits with the worker's exit code for a service restart", async () => {
+  const result = await runWorker(`
+    process.on("message", message => {
+      if (message.type === "paseo:graceful-shutdown") process.exit(0);
+    });
+    process.send({ type: "paseo:ready", listen: "test-endpoint", serverId: "srv_test" });
+    process.send({ type: "paseo:shutdown", reason: "install_update", exitCode: 75 });
+  `);
+  expect(result.code, result.output).toBe(75);
+  expect(result.output).not.toContain("Restarting worker");
+});
+
+test("a shutdown ignores an exit code outside 1-255", async () => {
+  const result = await runWorker(`
+    process.on("message", message => {
+      if (message.type === "paseo:graceful-shutdown") process.exit(0);
+    });
+    process.send({ type: "paseo:ready", listen: "test-endpoint", serverId: "srv_test" });
+    process.send({ type: "paseo:shutdown", reason: "install_update", exitCode: 999 });
+  `);
+  expect(result.code, result.output).toBe(0);
+});

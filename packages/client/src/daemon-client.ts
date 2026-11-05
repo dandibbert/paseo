@@ -38,6 +38,9 @@ import {
   RestartRequestedStatusPayloadSchema,
   ShutdownRequestedStatusPayloadSchema,
   DaemonUpdateResponseSchema,
+  DaemonInstallUpdateResponseSchema,
+  DaemonDesktopHostRegisterResponseSchema,
+  DaemonDesktopHostUpdateReportResponseSchema,
   SessionInboundMessageSchema,
   type ActiveTurnBehavior,
   type ServerInfoStatusPayload,
@@ -820,6 +823,15 @@ export interface DaemonPairingOfferOptions {
   timeout?: number;
 }
 type DaemonUpdateResponse = z.infer<typeof DaemonUpdateResponseSchema>;
+export type DaemonInstallUpdateResult = z.infer<
+  typeof DaemonInstallUpdateResponseSchema
+>["payload"];
+export interface DaemonInstallUpdateOptions {
+  channel?: "stable" | "beta";
+  checkOnly?: boolean;
+  force?: boolean;
+  requestId?: string;
+}
 type FetchAgentsPayload = Extract<
   SessionOutboundMessage,
   { type: "fetch_agents_response" }
@@ -4318,6 +4330,82 @@ export class DaemonClient {
         return parsed.data.payload;
       },
     });
+  }
+
+  /**
+   * Updates the daemon's own installation. Requires `server_info.features.installUpdate`;
+   * check it first and tell the user to update the host by hand otherwise.
+   */
+  async installUpdate(
+    options: DaemonInstallUpdateOptions = {},
+  ): Promise<DaemonInstallUpdateResult> {
+    const resolvedRequestId = this.createRequestId(options.requestId);
+    return this.sendRequest({
+      requestId: resolvedRequestId,
+      message: SessionInboundMessageSchema.parse({
+        type: "daemon.install.update.request",
+        requestId: resolvedRequestId,
+        ...(options.channel ? { channel: options.channel } : {}),
+        ...(options.checkOnly ? { checkOnly: true } : {}),
+        ...(options.force ? { force: true } : {}),
+      }),
+      // A headless release download or a desktop update check can take minutes.
+      timeout: 20 * 60_000,
+      options: { skipQueue: true },
+      select: (msg) => {
+        const parsed = DaemonInstallUpdateResponseSchema.safeParse(msg);
+        if (!parsed.success || parsed.data.payload.requestId !== resolvedRequestId) return null;
+        return parsed.data.payload;
+      },
+    });
+  }
+
+  /** Paseo Desktop registers itself to install app updates requested for its daemon. */
+  async registerDesktopHost(input: {
+    releaseChannel: "stable" | "beta";
+    appVersion: string | null;
+  }): Promise<boolean> {
+    const requestId = this.createRequestId();
+    const payload = await this.sendRequest({
+      requestId,
+      message: SessionInboundMessageSchema.parse({
+        type: "daemon.desktop_host.register.request",
+        requestId,
+        ...input,
+      }),
+      timeout: 15_000,
+      select: (msg) => {
+        const parsed = DaemonDesktopHostRegisterResponseSchema.safeParse(msg);
+        if (!parsed.success || parsed.data.payload.requestId !== requestId) return null;
+        return parsed.data.payload;
+      },
+    });
+    return payload.registered;
+  }
+
+  async reportDesktopHostUpdate(input: {
+    commandId: string;
+    status: "up_to_date" | "update_available" | "installing" | "failed";
+    currentVersion: string | null;
+    latestVersion: string | null;
+    error: string | null;
+  }): Promise<boolean> {
+    const requestId = this.createRequestId();
+    const payload = await this.sendRequest({
+      requestId,
+      message: SessionInboundMessageSchema.parse({
+        type: "daemon.desktop_host.update.report.request",
+        requestId,
+        ...input,
+      }),
+      timeout: 15_000,
+      select: (msg) => {
+        const parsed = DaemonDesktopHostUpdateReportResponseSchema.safeParse(msg);
+        if (!parsed.success || parsed.data.payload.requestId !== requestId) return null;
+        return parsed.data.payload;
+      },
+    });
+    return payload.accepted;
   }
 
   // ============================================================================

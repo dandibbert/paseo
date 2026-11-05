@@ -606,6 +606,8 @@ export type SessionLifecycleIntent =
       requestId: string;
       reason: string;
       keepTerminals: boolean;
+      /** Process exit code once shutdown completes; a service manager may restart on it. */
+      exitCode?: number;
     }
   | {
       type: "restart";
@@ -3190,7 +3192,8 @@ export class Session {
       case "write_project_config_request":
         return this.projectConfigSession.handleWriteProjectConfigRequest(msg);
       default:
-        return undefined;
+        // daemon.install.update and daemon.desktop_host.*; undefined for anything else.
+        return this.daemonSession.handleInstallUpdateMessage(msg);
     }
   }
 
@@ -9312,6 +9315,7 @@ export class Session {
   public async cleanup(): Promise<void> {
     this.sessionLogger.trace({}, "agent.session.lifecycle.cleanup");
     this.isCleanedUp = true;
+    this.daemonSession.dispose();
     this.unsubscribeSetupObservation();
     await this.delivery.close();
 
