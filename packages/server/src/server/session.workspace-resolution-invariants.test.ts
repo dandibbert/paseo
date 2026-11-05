@@ -119,6 +119,7 @@ function createHarness(input: {
       listActive: async () => [],
       listByWorkspaces: async () => [],
       lastUserMessageAtByWorkspace: async () => new Map<string, string>(),
+      workspaceActivityByWorkspace: async () => new Map(),
       get: async () => null,
     }),
     projectRegistry: createStub<SessionOptions["projectRegistry"]>({

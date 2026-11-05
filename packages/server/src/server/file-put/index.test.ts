@@ -2,6 +2,7 @@ import {
   mkdtempSync,
   readFileSync,
   readdirSync,
+  realpathSync,
   rmSync,
   symlinkSync,
   writeFileSync,
@@ -23,7 +24,8 @@ const tempDirs: string[] = [];
 const source = {};
 
 function makeRoot(): string {
-  const dir = mkdtempSync(join(tmpdir(), "paseo-file-put-"));
+  // The daemon reports real paths; Windows temp paths can contain 8.3 short names.
+  const dir = realpathSync.native(mkdtempSync(join(tmpdir(), "paseo-file-put-")));
   tempDirs.push(dir);
   return dir;
 }

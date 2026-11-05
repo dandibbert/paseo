@@ -58,6 +58,7 @@ export function asAgentStorage(stub: {
       );
     },
     lastUserMessageAtByWorkspace: async () => new Map<string, string>(),
+    workspaceActivityByWorkspace: async () => new Map(),
     listByProviderSession: async () => [],
     listByWorkspace: async () => [],
     ...stub,

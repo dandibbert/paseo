@@ -459,7 +459,17 @@ class RoutePeer {
   }
 }
 
-import { mkdir, writeFile, readFile, chmod, stat, mkdtemp, rm, readdir } from "node:fs/promises";
+import {
+  mkdir,
+  writeFile,
+  readFile,
+  chmod,
+  stat,
+  mkdtemp,
+  rm,
+  readdir,
+  realpath,
+} from "node:fs/promises";
 import { join, dirname, basename } from "node:path";
 import { tmpdir, userInfo } from "node:os";
 import { resolveDaemonVersion } from "../daemon-version.js";
@@ -2523,7 +2533,8 @@ test("agent MCP copies files between hosts without replacing existing targets", 
       new URL(`http://127.0.0.1:${a.port}/mcp/agents?callerAgentId=${parent.id}`),
     ),
   );
-  const remoteDir = await mkdtemp(join(tmpdir(), "paseo-copy-b-"));
+  // Daemons report real paths; Windows temp paths can contain 8.3 short names.
+  const remoteDir = await realpath(await mkdtemp(join(tmpdir(), "paseo-copy-b-")));
   cleanup.push(() => rm(remoteDir, { recursive: true, force: true }));
   const bytes = Uint8Array.from({ length: 300 * 1024 + 7 }, (_, index) => (index * 7) % 256);
   await writeFile(join(a.staticDir, "source.bin"), bytes);
@@ -2587,7 +2598,7 @@ test("CLI file cp moves files between this machine, the selected daemon and its 
   await paseo.hosts.add({ connection: `127.0.0.1:${b.port}`, label: "cp-b" });
   await online(paseo);
   const local = await mkdtemp(join(tmpdir(), "paseo-cp-local-"));
-  const remote = await mkdtemp(join(tmpdir(), "paseo-cp-remote-"));
+  const remote = await realpath(await mkdtemp(join(tmpdir(), "paseo-cp-remote-")));
   cleanup.push(() => rm(local, { recursive: true, force: true }));
   cleanup.push(() => rm(remote, { recursive: true, force: true }));
   const cp = async (...args: string[]) =>

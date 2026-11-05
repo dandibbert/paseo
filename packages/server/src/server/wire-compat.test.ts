@@ -141,6 +141,9 @@ class EmptyAgentStorage {
   async lastUserMessageAtByWorkspace() {
     return new Map<string, string>();
   }
+  async workspaceActivityByWorkspace() {
+    return new Map();
+  }
   async listAll() {
     return [];
   }

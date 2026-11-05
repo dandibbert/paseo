@@ -295,6 +295,7 @@ function buildAgentStorageSpies() {
     listActive: vi.fn().mockResolvedValue([]),
     listByWorkspaces: vi.fn().mockResolvedValue([]),
     lastUserMessageAtByWorkspace: async () => new Map<string, string>(),
+    workspaceActivityByWorkspace: async () => new Map(),
     remove: vi.fn(),
   };
 }
@@ -649,6 +650,9 @@ class BoundaryAgentStorageFake {
   }
   async lastUserMessageAtByWorkspace() {
     return new Map<string, string>();
+  }
+  async workspaceActivityByWorkspace() {
+    return new Map();
   }
   async listAll() {
     return [];

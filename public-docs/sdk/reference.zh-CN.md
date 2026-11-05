@@ -251,6 +251,30 @@ try {
 `self_host` 或 `duplicate_host`。普通 RPC 权限代码（包括 `access_denied`）保持不变。
 多路复用属于传输层；调用方使用相同的客户端/API 操作和生命周期。发现主机不会授予执行权限。
 
+## `client.files` {#clientfiles}
+
+读取、写入和列出所绑定 daemon 上的文件。通过 `client.hosts.client(serverId)`，同样的调用会经由该主机已保存的连接到达已连接主机，包括 relay 连接。
+
+```ts
+import { toDaemonFileLocation } from "@getpaseo/client";
+
+const remote = await client.hosts.client("srv_build_box");
+try {
+  const file = await remote.files.read(toDaemonFileLocation("~/build/app.tgz"));
+  await client.files.write({
+    ...toDaemonFileLocation("/srv/releases/app.tgz"),
+    bytes: file.bytes,
+    createParents: true,
+  });
+} finally {
+  await remote.dispose();
+}
+```
+
+位置由 `cwd` 和相对它解析的 `path` 组成；两个调用都不会离开 `cwd`。`toDaemonFileLocation` 把绝对路径限定在所在文件系统的根目录，把 `~` 路径和相对路径限定在 daemon 用户的主目录。
+
+`write` 以流的方式发送字节，全部到达后才替换目标。除非设置 `overwrite`，否则保留已有文件，并以 `PaseoFileError` 的 `exists` 代码拒绝。daemon 不支持 `server_info.features.filePut` 时以 `unsupported` 代码拒绝。`read` 接受 `maxBytes` 和 `timeoutMs`；读取默认没有超时。
+
 ## 错误与清理 {#errors-and-cleanup}
 
 连接、校验、拒绝和超时失败都会让对应的 promise reject。轮次的结果通过 `PaseoAgentRunResult.status` 返回，因为权限和 Provider 错误是 Agent 预期内的状态。
