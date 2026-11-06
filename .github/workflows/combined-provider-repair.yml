@@ -71,6 +71,37 @@ jobs:
       - name: Regression check for personal signing policy
         run: python3 packages/desktop/scripts/verify-repair-signature.py --self-test
 
+  # When GitHub has no macOS runner for this run after 10 minutes, build the same commit
+  # on the M1 build machine (dandibbert/mac-build-hub) and cancel this run. Needs the
+  # M1_BUILD_HUB_TOKEN secret: Actions read and write on mac-build-hub only.
+  m1-fallback:
+    name: M1 fallback
+    needs: source
+    if: github.repository == 'dandibbert/paseo' && inputs.verify_build_run_id == ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    permissions:
+      contents: read
+      actions: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: scripts
+      - name: Move to the M1 if macOS jobs wait for a runner
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          M1_BUILD_HUB_TOKEN: ${{ secrets.M1_BUILD_HUB_TOKEN }}
+          HUB_REPO: dandibbert/mac-build-hub
+          HUB_WORKFLOW: paseo-macos.yml
+          HUB_INPUTS: '{"publish":"beta"}'
+          PASEO_SHA: ${{ needs.source.outputs.revision }}
+          GUARD_JOB_NAME: M1 fallback
+          EXPECTED_MAC_JOBS: "4"
+          QUEUE_MINUTES: ${{ vars.M1_FALLBACK_QUEUE_MINUTES || '10' }}
+        run: node scripts/m1-queue-fallback.mjs
+
   validate:
     needs: source
     if: inputs.verify_build_run_id == ''

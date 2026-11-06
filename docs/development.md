@@ -8,7 +8,8 @@
 ## iOS test builds
 
 The [iOS Unsigned IPA workflow](../.github/workflows/ios-ipa.yml) runs on a
-GitHub-hosted macOS runner. You can start it from **Actions → iOS Unsigned IPA →
+GitHub-hosted macOS runner, and moves to the [M1 build machine](release.md#m1-fallback)
+when none is free for 10 minutes. You can start it from **Actions → iOS Unsigned IPA →
 Run workflow** on any branch. Trigger policy is in
 [Personal fork Actions](release.md#personal-fork-actions). It uploads
 `Paseo-unsigned.ipa` and `SHA256SUMS.txt` as run artifacts.

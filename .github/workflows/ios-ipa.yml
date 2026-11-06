@@ -11,6 +11,36 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # When GitHub has no macOS runner for this run after 10 minutes, build the same commit
+  # on the M1 build machine (dandibbert/mac-build-hub) and cancel this run. Needs the
+  # M1_BUILD_HUB_TOKEN secret: Actions read and write on mac-build-hub only.
+  m1-fallback:
+    name: M1 fallback
+    if: github.repository == 'dandibbert/paseo'
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    permissions:
+      contents: read
+      actions: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: scripts
+      - name: Move to the M1 if macOS jobs wait for a runner
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          M1_BUILD_HUB_TOKEN: ${{ secrets.M1_BUILD_HUB_TOKEN }}
+          HUB_REPO: dandibbert/mac-build-hub
+          HUB_WORKFLOW: paseo-ios.yml
+          HUB_INPUTS: "{}"
+          PASEO_SHA: ${{ github.sha }}
+          GUARD_JOB_NAME: M1 fallback
+          EXPECTED_MAC_JOBS: "1"
+          QUEUE_MINUTES: ${{ vars.M1_FALLBACK_QUEUE_MINUTES || '10' }}
+        run: node scripts/m1-queue-fallback.mjs
+
   build-unsigned-ipa:
     name: Unsigned iPhoneOS IPA
     runs-on: macos-15

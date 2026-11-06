@@ -23,6 +23,23 @@ Automatic checks cancel superseded runs on the same branch. Manual builds and
 publication use separate concurrency groups, so a new main push cannot interrupt
 an explicit release. Ordinary pushes never deploy a service or publish installers.
 
+### M1 fallback
+
+Personal macOS Release and iOS Unsigned IPA still run on GitHub-hosted Macs. Each
+also starts an Ubuntu `M1 fallback` job. When a macOS job has waited 10 minutes for
+a runner, it starts the matching build in the private `dandibbert/mac-build-hub`
+repository on the M1 Pro and cancels the run; the run summary links the M1 build.
+The M1 builds arm64 only. A macOS build moved there always publishes a
+`personal-test-v*` build to Beta, because a run's dispatch inputs cannot be read
+back. Runs that verify an existing build (`verify_build_run_id`) are not moved.
+
+The job needs the `M1_BUILD_HUB_TOKEN` secret: a fine-grained token for
+`dandibbert/mac-build-hub` only, with Actions read and write. Without it the job
+does nothing and the run stays on GitHub. The repository variable `M1_FALLBACK_QUEUE_MINUTES`
+overrides the 10 minutes; `0` moves every run, for testing the hand-over. Do not route these jobs to
+`self-hosted`: the repository is public, and its jobs must keep running on
+GitHub-hosted runners.
+
 The personal macOS workflow retains its original file ID and artifact names so
 `verify_build_run_id` can reuse existing builds. Select it by its display name in
 Actions. A stable publish still requires green CI for the exact installer source.
