@@ -400,7 +400,7 @@ export class WorkspaceDirectory {
         continue;
       }
       const isWorkspaceRoot = workspaceAgent.id === agent.id;
-      if (!isWorkspaceRoot && agent.status !== "running") {
+      if (!isWorkspaceRoot && agent.status !== "running" && !agent.backgroundWork?.count) {
         continue;
       }
       const bucket = isWorkspaceRoot
@@ -409,6 +409,7 @@ export class WorkspaceDirectory {
             pendingPermissionCount: agent.pendingPermissions?.length ?? 0,
             requiresAttention: agent.requiresAttention,
             attentionReason: agent.attentionReason ?? null,
+            backgroundWork: agent.backgroundWork,
           })
         : "running";
 
@@ -558,6 +559,7 @@ export class WorkspaceDirectory {
           pendingPermissionCount: agent.pendingPermissions?.length ?? 0,
           requiresAttention: agent.requiresAttention,
           attentionReason: agent.attentionReason ?? null,
+          backgroundWork: agent.backgroundWork,
         });
         return derived === winningBucket;
       })
