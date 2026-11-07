@@ -109,8 +109,11 @@ export function TerminalSecureInputSheet({
               testID="terminal-secure-input-field"
               accessibilityLabel={t("workspace.terminal.secureInput.label")}
               onChangeText={setSecret}
+              // Enter sends, like the Send button; the request expires if it waits.
+              onSubmitEditing={handleSendPress}
+              returnKeyType="send"
+              autoFocus
               secureTextEntry
-              contextMenuHidden
               autoComplete="off"
               textContentType="password"
               autoCapitalize="none"

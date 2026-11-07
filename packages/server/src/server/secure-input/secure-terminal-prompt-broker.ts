@@ -22,7 +22,7 @@ export interface SecureTerminalPromptBrokerOptions {
   createId?: () => string;
 }
 
-const DEFAULT_TTL_MS = 10 * 60_000;
+export const SECURE_PROMPT_TTL_MS = 10 * 60_000;
 const MAX_PENDING_PROMPTS = 32;
 
 /**
@@ -39,7 +39,7 @@ export class SecureTerminalPromptBroker {
   constructor(options: SecureTerminalPromptBrokerOptions) {
     this.terminalManager = options.terminalManager;
     this.publish = options.publish;
-    this.ttlMs = options.ttlMs ?? DEFAULT_TTL_MS;
+    this.ttlMs = options.ttlMs ?? SECURE_PROMPT_TTL_MS;
     this.createId = options.createId ?? randomUUID;
   }
 

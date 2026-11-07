@@ -11,6 +11,8 @@ describe("approveAutoApprovedPaseoTools", () => {
     ).toEqual({
       paseo: {
         url: "http://127.0.0.1:6767/mcp/agents",
+        // Outlasts a secure input request, which waits for a human for up to ten minutes.
+        tool_timeout_sec: 660,
         tools: { render_ui: { approval_mode: "approve" } },
       },
       other: { command: "other-mcp" },

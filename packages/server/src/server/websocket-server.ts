@@ -21,7 +21,7 @@ import {
   createWorkspaceBaseBranchService,
   type WorkspaceBaseBranchService,
 } from "./session/workspace-base-branch/service.js";
-import type { CreationSnapshot } from "@getpaseo/protocol/messages";
+import type { CreationSnapshot, TerminalAttentionRequired } from "@getpaseo/protocol/messages";
 import { CreationService } from "./creation/index.js";
 import { MessageReceipts } from "./message-receipts/index.js";
 import { WebSocket, WebSocketServer } from "ws";
@@ -3017,6 +3017,34 @@ export class VoiceAssistantWebSocketServer {
         this.sessions.get(ws)!.session.publishToSource(ws, message.message);
       else this.sendToClient(ws, message);
     }
+  }
+
+  /**
+   * Publishes a secure input request's state. A pending request needs the human before it
+   * expires, so it always goes to the phone as well, whoever is connected.
+   */
+  public publishSecureTerminalPrompt(message: TerminalAttentionRequired): void {
+    const payload = { ...message.payload, serverId: this.serverId };
+    this.broadcast(wrapSessionMessage({ ...message, payload }));
+    if (payload.securePrompt?.state !== "pending") return;
+    void this.pushNotificationSender
+      .send({
+        title: payload.title,
+        body: payload.body,
+        urgent: true,
+        data: {
+          serverId: this.serverId,
+          terminalId: payload.terminalId,
+          cwd: payload.cwd,
+          ...(payload.workspaceId ? { workspaceId: payload.workspaceId } : {}),
+        },
+      })
+      .catch((err) => {
+        this.logger.warn(
+          { err, terminalId: payload.terminalId },
+          "Failed to send secure input push notification",
+        );
+      });
   }
 
   private async broadcastTerminalAttention(params: {

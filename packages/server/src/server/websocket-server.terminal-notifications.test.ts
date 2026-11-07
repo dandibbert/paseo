@@ -502,4 +502,45 @@ describe("VoiceAssistantWebSocketServer terminal attention notifications", () =>
       workspaceId: "ws-1",
     });
   });
+
+  it("pushes a pending secure input request urgently, and not its resolution", async () => {
+    const { manager } = createTerminalManager();
+    const { server, pushNotifications } = createServer(manager);
+    const prompt = {
+      id: "prompt-1",
+      agentId: "agent-1",
+      terminalId: "term-1",
+      terminalName: "bash",
+      cwd: CWD,
+      workspaceId: "ws-1",
+      reason: "sudo needs your password",
+      expiresAt: 600_000,
+    };
+    const message = (state: "pending" | "resolved") => ({
+      type: "terminal_attention_required" as const,
+      payload: {
+        terminalId: "term-1",
+        cwd: CWD,
+        workspaceId: "ws-1",
+        reason: "needs_input" as const,
+        title: "Secure input requested",
+        body: state === "pending" ? prompt.reason : "Secure input request resolved",
+        shouldNotify: state === "pending",
+        securePrompt: { ...prompt, state },
+      },
+    });
+
+    server.publishSecureTerminalPrompt(message("pending"));
+    server.publishSecureTerminalPrompt(message("resolved"));
+    await flushAsync();
+
+    expect(pushNotifications.sent).toEqual([
+      {
+        title: "Secure input requested",
+        body: "sudo needs your password",
+        urgent: true,
+        data: { serverId: "srv-test", terminalId: "term-1", cwd: CWD, workspaceId: "ws-1" },
+      },
+    ]);
+  });
 });

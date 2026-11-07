@@ -47,6 +47,13 @@ pending requests after reconnecting, and a request expires after ten minutes or
 is canceled when the terminal exits or the agent's tool call is aborted. One
 terminal can have at most one pending secret request.
 
+A pending request also goes to every registered phone as a high-priority push,
+even while another client is open, because it expires. An agent's MCP client
+must let the tool call outlast that wait: Codex cancels MCP calls after 60
+seconds by default, so Paseo gives its MCP server a longer `tool_timeout_sec`
+in Codex's config (`packages/server/src/server/agent/providers/codex/options.ts`).
+A canceled call withdraws the request.
+
 The lock icon in a terminal still supports manually sending a one-time secret.
 Neither flow saves a password in the conversation or a temporary file. Neither
 flow guarantees confidentiality against a terminal program or an agent that

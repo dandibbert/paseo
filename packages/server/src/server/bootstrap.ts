@@ -753,7 +753,7 @@ export async function createPaseoDaemon(
   let wsServer: VoiceAssistantWebSocketServer | null = null;
   const secureTerminalPromptBroker = new SecureTerminalPromptBroker({
     terminalManager,
-    publish: (message) => wsServer?.broadcast(wrapSessionMessage(message)),
+    publish: (message) => wsServer?.publishSecureTerminalPrompt(message),
   });
   let serviceProxyListenTarget: ListenTarget | null = null;
   const scriptHealthMonitor = new ScriptHealthMonitor({

@@ -1,6 +1,12 @@
 import type { ProviderOptions, ToolPolicy } from "@getpaseo/protocol/agent-types";
 import { z } from "zod";
 import { AUTO_APPROVED_PASEO_TOOLS, PASEO_MCP_SERVER_NAME } from "../../runtime-mcp-config.js";
+import { SECURE_PROMPT_TTL_MS } from "../../../secure-input/secure-terminal-prompt-broker.js";
+
+// Codex cancels an MCP tool call after 60 seconds unless the server sets tool_timeout_sec.
+// request_secure_terminal_input waits for a human for up to SECURE_PROMPT_TTL_MS, so the
+// Paseo server gets that long plus a minute; a canceled call withdraws the prompt.
+const PASEO_TOOL_TIMEOUT_SEC = SECURE_PROMPT_TTL_MS / 1000 + 60;
 
 const ApprovalPolicySchema = z.union([
   z.enum(["untrusted", "on-request", "never"]),
@@ -101,7 +107,14 @@ export function approveAutoApprovedPaseoTools(
   for (const tool of AUTO_APPROVED_PASEO_TOOLS) {
     tools[tool] = { ...readRecord(tools[tool]), approval_mode: "approve" };
   }
-  return { ...mcpServers, [PASEO_MCP_SERVER_NAME]: { ...serverConfig, tools } };
+  return {
+    ...mcpServers,
+    [PASEO_MCP_SERVER_NAME]: {
+      tool_timeout_sec: PASEO_TOOL_TIMEOUT_SEC,
+      ...serverConfig,
+      tools,
+    },
+  };
 }
 
 function readRecord(value: unknown): Record<string, unknown> {

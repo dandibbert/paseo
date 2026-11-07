@@ -4,6 +4,8 @@ export interface PushPayload {
   title: string;
   body: string;
   data?: Record<string, unknown>;
+  /** Needs the human before it expires: high delivery priority, time-sensitive on iOS. */
+  urgent?: boolean;
 }
 
 interface ExpoPushMessage {
@@ -12,6 +14,8 @@ interface ExpoPushMessage {
   body: string;
   data?: Record<string, unknown>;
   sound?: "default";
+  priority?: "high";
+  interruptionLevel?: "time-sensitive";
 }
 
 interface ExpoPushTicket {
@@ -48,6 +52,8 @@ export class PushService {
       body: payload.body,
       data: payload.data,
       sound: "default",
+      // iOS treats time-sensitive as active when the app lacks the entitlement.
+      ...(payload.urgent ? { priority: "high", interruptionLevel: "time-sensitive" } : {}),
     }));
 
     // Batch tokens (max 100 per request per Expo limits)
