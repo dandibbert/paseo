@@ -81,8 +81,10 @@ async function main() {
   const minutes = Number(env.QUEUE_MINUTES ?? "10");
   const pollMs = Number(env.POLL_SECONDS ?? "60") * 1000;
   const expectedMacJobs = Number(env.EXPECTED_MAC_JOBS);
-  const sha = env.PASEO_SHA;
-  if (!/^[0-9a-f]{40}$/.test(sha ?? "")) throw new Error(`PASEO_SHA is not a commit: ${sha}`);
+  // SOURCE_SHA in projects other than Paseo, which copy this script.
+  const sha = env.SOURCE_SHA ?? env.PASEO_SHA;
+  if (!/^[0-9a-f]{40}$/.test(sha ?? "")) throw new Error(`Commit to build is not a SHA: ${sha}`);
+  const shaInput = env.HUB_SHA_INPUT ?? "paseo_sha";
   const inputs = JSON.parse(env.HUB_INPUTS ?? "{}");
 
   for (;;) {
@@ -111,7 +113,7 @@ async function main() {
         hubToken,
         {
           ref: "main",
-          inputs: { ...inputs, paseo_sha: sha, requested_by: runUrl },
+          inputs: { ...inputs, [shaInput]: sha, requested_by: runUrl },
           return_run_details: true,
         },
       );
