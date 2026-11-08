@@ -1,5 +1,9 @@
 import { memo, useMemo, useState } from "react";
-import { EnrichedMarkdownText, type LinkPressEvent } from "react-native-enriched-markdown";
+import {
+  EnrichedMarkdownText,
+  type LinkLongPressEvent,
+  type LinkPressEvent,
+} from "react-native-enriched-markdown";
 import { withUnistyles } from "react-native-unistyles";
 import {
   useAssistantFileLinkActions,
@@ -9,6 +13,7 @@ import { useStableEvent } from "@/hooks/use-stable-event";
 import { matchCommandLink, useAgentCommandHints, type CommandHints } from "@/agent-commands";
 import { useForgeShorthand } from "@/git/forge-shorthand";
 import { openExternalUrl } from "@/utils/open-external-url";
+import { MarkdownLinkMenu, useOpenLinkMenu } from "./link-menu";
 import { AttachmentLightbox, type ImageLightboxSource } from "@/components/attachment-lightbox";
 import type { Theme } from "@/styles/theme";
 import { isWeb } from "@/constants/platform";
@@ -64,12 +69,20 @@ export const MarkdownRenderer = memo(function MarkdownRenderer(props: MarkdownRe
     [completeLines],
   );
   const Part = props.agentCommands ? CommandMarkdownPart : MarkdownPart;
-  if (!streaming || boundary === 0) return <Part {...props} />;
+  if (!streaming || boundary === 0) {
+    return (
+      <MarkdownLinkMenu>
+        <Part {...props} />
+      </MarkdownLinkMenu>
+    );
+  }
   return (
-    <MarkdownBlockStack>
-      <Part {...props} text={props.text.slice(0, boundary)} />
-      <Part {...props} text={props.text.slice(boundary)} />
-    </MarkdownBlockStack>
+    <MarkdownLinkMenu>
+      <MarkdownBlockStack>
+        <Part {...props} text={props.text.slice(0, boundary)} />
+        <Part {...props} text={props.text.slice(boundary)} />
+      </MarkdownBlockStack>
+    </MarkdownLinkMenu>
   );
 });
 
@@ -123,6 +136,11 @@ const MarkdownPart = memo(function MarkdownPart({
     if (onLinkPress && !actions.canResolveFile(source)) onLinkPress(url);
     else actions.open(source, "preferred");
   });
+  const openLinkMenu = useOpenLinkMenu();
+  // Web opens the menu from the link's own right click (WebLink) with the pointer position.
+  const longPressLink = useStableEvent(({ url }: LinkLongPressEvent) => {
+    openLinkMenu?.({ source: linkSource(url, undefined), point: null });
+  });
   const pressImage = useStableEvent(({ url }: { url: string }) => {
     if (url !== PENDING_MARKDOWN_IMAGE) setImage({ type: "uri", uri: url });
   });
@@ -153,6 +171,7 @@ const MarkdownPart = memo(function MarkdownPart({
               // JS reveal owns pacing; native fade animation is a separate experiment.
               streamingAnimation={false}
               onLinkPress={pressLink}
+              onLinkLongPress={isWeb ? undefined : longPressLink}
               onImagePress={pressImage}
               renderers={isWeb ? WEB_RENDERERS : undefined}
             />

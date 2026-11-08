@@ -16,6 +16,7 @@ import { useSessionStore } from "@/stores/session-store";
 import { buildAbsoluteExplorerPath } from "@/utils/explorer-paths";
 import { formatFileSize } from "@/utils/format-file-size";
 import type { WorkspaceFileLocation } from "@/workspace/file-open";
+import { UnpreviewableFileActions } from "./unpreviewable-file-actions";
 
 /**
  * The file tab: stats the file, picks its panel and mounts it. The panel reads, saves and shows
@@ -101,6 +102,12 @@ export function FilePane({
       <>
         <Text style={styles.mutedText}>{t("panels.file.binaryPreviewUnavailable")}</Text>
         <Text style={styles.mutedText}>{formatFileSize(snapshot.size)}</Text>
+        <UnpreviewableFileActions
+          serverId={serverId}
+          workspaceRoot={root}
+          path={path}
+          absolutePath={absolutePath}
+        />
       </>
     );
   } else {

@@ -178,3 +178,23 @@ it("keeps a later selection when an earlier nested-file lookup finishes last", a
   await earlier;
   expect(opened).toEqual(["guide.md"]);
 });
+
+it("opens an absolute folder outside the workspace as a folder, not a file", async () => {
+  const outside = await mkdtemp(path.join(tmpdir(), "outside-folder-"));
+  roots.push(outside);
+  await writeFile(path.join(outside, "build.zip"), "zip");
+  const client = {
+    listDirectory: async (root: string, entry: string) => readdir(path.join(root, entry)),
+  };
+  await expect(
+    resolveInlinePathOpen({ file: outside, directory: ".", workspaceRoot: "/repo", client }),
+  ).resolves.toEqual({ kind: "outsideDirectory", directoryPath: outside });
+  await expect(
+    resolveInlinePathOpen({
+      file: path.join(outside, "build.zip"),
+      directory: ".",
+      workspaceRoot: "/repo",
+      client,
+    }),
+  ).resolves.toEqual({ kind: "file" });
+});

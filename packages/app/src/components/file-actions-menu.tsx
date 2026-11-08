@@ -22,6 +22,7 @@ import { ICON_SIZE, type Theme } from "@/styles/theme";
 import {
   ContextMenuContent,
   ContextMenuItem,
+  ContextMenuLabel,
   ContextMenuSeparator,
 } from "@/components/ui/context-menu";
 
@@ -50,6 +51,9 @@ function optionalFileAction(
 
 interface FileActionsContextMenuContentProps {
   fileKind: "file" | "directory";
+  /** Shown above the actions, e.g. the full path a chat link points at. */
+  header?: string;
+  onOpenFolder?: () => void;
   fileExists?: boolean;
   onOpenFile?: () => void;
   onOpenInEditor?: () => void;
@@ -77,6 +81,8 @@ interface FileActionsContextMenuContentProps {
  */
 export function FileActionsContextMenuContent({
   fileKind,
+  header,
+  onOpenFolder,
   fileExists = true,
   onOpenFile,
   onOpenInEditor,
@@ -141,6 +147,12 @@ export function FileActionsContextMenuContent({
             onSelect: onCollapseFolder,
           }
         : null,
+      optionalFileAction(fileKind === "directory", onOpenFolder, {
+        key: "open-folder",
+        group: "open",
+        label: t("workspace.fileActions.openFolder"),
+        icon: FolderOpen,
+      }),
       availableFile && onOpenFile
         ? {
             key: "open-file",
@@ -261,6 +273,7 @@ export function FileActionsContextMenuContent({
     onNewFile,
     onNewFolder,
     onOpenFile,
+    onOpenFolder,
     openInEditorAction,
     onOpenToSide,
     onRename,
@@ -280,6 +293,7 @@ export function FileActionsContextMenuContent({
       width={220}
       testID={testIDPrefix ? `${testIDPrefix}-context-menu` : undefined}
     >
+      {header ? <ContextMenuLabel>{header}</ContextMenuLabel> : null}
       {actions.map((action) => (
         <Fragment key={action.key}>
           {action.separatorBefore ? <ContextMenuSeparator /> : null}

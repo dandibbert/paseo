@@ -354,6 +354,11 @@ export const zhCN: TranslationResources = {
     },
   },
   message: {
+    links: {
+      openInBrowser: "在浏览器中打开",
+      copyLinkAddress: "复制链接地址",
+      share: "分享…",
+    },
     diagram: {
       diagram: "图表",
       zoomIn: "放大",
@@ -522,6 +527,7 @@ export const zhCN: TranslationResources = {
       copied: "已复制",
     },
     fileActions: {
+      openFolder: "打开文件夹",
       openFile: "打开文件",
       openIn: "在 {{target}} 中打开",
       openToSide: "在侧边打开",

@@ -332,6 +332,11 @@ export const ptBR: TranslationResources = {
     },
   },
   message: {
+    links: {
+      openInBrowser: "Abrir no navegador",
+      copyLinkAddress: "Copiar endereço do link",
+      share: "Compartilhar…",
+    },
     diagram: {
       diagram: "Diagrama",
       zoomIn: "Aproximar",
@@ -501,6 +506,7 @@ export const ptBR: TranslationResources = {
       copied: "Copiado",
     },
     fileActions: {
+      openFolder: "Abrir pasta",
       openFile: "Abrir arquivo",
       openIn: "Abrir no {{target}}",
       openToSide: "Abrir ao lado",

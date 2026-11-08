@@ -351,6 +351,11 @@ export const en = {
     },
   },
   message: {
+    links: {
+      openInBrowser: "Open in browser",
+      copyLinkAddress: "Copy link address",
+      share: "Share…",
+    },
     diagram: {
       diagram: "Diagram",
       zoomIn: "Zoom in",
@@ -519,6 +524,7 @@ export const en = {
       copied: "Copied",
     },
     fileActions: {
+      openFolder: "Open folder",
       openFile: "Open file",
       openIn: "Open in {{target}}",
       openToSide: "Open to the side",

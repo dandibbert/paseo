@@ -329,6 +329,11 @@ export const ko: TranslationResources = {
     },
   },
   message: {
+    links: {
+      openInBrowser: "브라우저에서 열기",
+      copyLinkAddress: "링크 주소 복사",
+      share: "공유…",
+    },
     diagram: {
       diagram: "다이어그램",
       zoomIn: "확대",
@@ -497,6 +502,7 @@ export const ko: TranslationResources = {
       copied: "복사됨",
     },
     fileActions: {
+      openFolder: "폴더 열기",
       openFile: "파일 열기",
       openIn: "{{target}}에서 열기",
       openToSide: "옆에 열기",

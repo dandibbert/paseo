@@ -33,12 +33,20 @@ export async function resolveInlinePathOpen(input: PathOpenInput): Promise<PathO
       ? { kind: "outsideDirectory", directoryPath: input.directory }
       : { kind: "directory", directoryPath: input.directory };
   }
-  if (
-    input.lineStart !== undefined ||
-    isAbsolutePath(input.file) ||
-    !input.workspaceRoot.trim() ||
-    !input.client
-  ) {
+  if (input.lineStart !== undefined || !input.client) {
+    return { kind: "file" };
+  }
+  // Agents usually write absolute paths. One outside the workspace is a folder when the host
+  // can list it; it opens in the file manager, which can show any folder.
+  if (isAbsolutePath(input.file)) {
+    try {
+      await input.client.listDirectory(input.file, ".");
+    } catch {
+      return { kind: "file" };
+    }
+    return { kind: "outsideDirectory", directoryPath: input.file };
+  }
+  if (!input.workspaceRoot.trim()) {
     return { kind: "file" };
   }
   try {

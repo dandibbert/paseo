@@ -333,6 +333,11 @@ export const es: TranslationResources = {
     },
   },
   message: {
+    links: {
+      openInBrowser: "Abrir en el navegador",
+      copyLinkAddress: "Copiar dirección del enlace",
+      share: "Compartir…",
+    },
     diagram: {
       diagram: "Diagrama",
       zoomIn: "Acercar",
@@ -502,6 +507,7 @@ export const es: TranslationResources = {
       copied: "Copiado",
     },
     fileActions: {
+      openFolder: "Abrir carpeta",
       openFile: "Abrir archivo",
       openIn: "Abrir en {{target}}",
       openToSide: "Abrir al lado",

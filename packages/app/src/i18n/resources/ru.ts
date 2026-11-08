@@ -332,6 +332,11 @@ export const ru: TranslationResources = {
     },
   },
   message: {
+    links: {
+      openInBrowser: "Открыть в браузере",
+      copyLinkAddress: "Копировать адрес ссылки",
+      share: "Поделиться…",
+    },
     diagram: {
       diagram: "Диаграмма",
       zoomIn: "Увеличить масштаб",
@@ -501,6 +506,7 @@ export const ru: TranslationResources = {
       copied: "Скопировано",
     },
     fileActions: {
+      openFolder: "Открыть папку",
       openFile: "Открыть файл",
       openIn: "Открыть в {{target}}",
       openToSide: "Открыть сбоку",

@@ -333,6 +333,11 @@ export const ja: TranslationResources = {
     },
   },
   message: {
+    links: {
+      openInBrowser: "ブラウザで開く",
+      copyLinkAddress: "リンクのアドレスをコピー",
+      share: "共有…",
+    },
     diagram: {
       diagram: "図",
       zoomIn: "拡大",
@@ -502,6 +507,7 @@ export const ja: TranslationResources = {
       copied: "コピーしました",
     },
     fileActions: {
+      openFolder: "フォルダを開く",
       openFile: "ファイルを開く",
       openIn: "{{target}}で開く",
       openToSide: "横に開く",

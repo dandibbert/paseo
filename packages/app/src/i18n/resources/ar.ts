@@ -328,6 +328,11 @@ export const ar: TranslationResources = {
     },
   },
   message: {
+    links: {
+      openInBrowser: "فتح في المتصفح",
+      copyLinkAddress: "نسخ عنوان الرابط",
+      share: "مشاركة…",
+    },
     diagram: {
       diagram: "مخطط",
       zoomIn: "تكبير",
@@ -496,6 +501,7 @@ export const ar: TranslationResources = {
       copied: "تم النسخ",
     },
     fileActions: {
+      openFolder: "فتح المجلد",
       openFile: "افتح الملف",
       openIn: "فتح في {{target}}",
       openToSide: "فتح إلى الجانب",

@@ -1,5 +1,5 @@
 import { Text } from "react-native";
-import { forwardRef, useCallback, useMemo, useState, type ComponentProps } from "react";
+import React, { forwardRef, useCallback, useMemo, useState, type ComponentProps } from "react";
 import type {
   CodeBlockRendererProps,
   LinkRendererProps,
@@ -12,6 +12,8 @@ import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip
 import { HighlightedCodeBlock } from "@/components/highlighted-code-block";
 import type { Theme } from "@/styles/theme";
 import { MermaidFence } from "./fence/mermaid";
+import { isHttpUrl } from "@/utils/http-url";
+import { useOpenLinkMenu } from "./link-menu";
 import { markdownLinkSource } from "./source";
 
 const ThemedCodeBlock = withUnistyles(HighlightedCodeBlock);
@@ -35,10 +37,23 @@ function WebLink({ link, anchorProps, children }: LinkRendererProps) {
   const forgeShorthand = useForgeShorthand();
   // A forge reference like `#12` carries its web URL so hover, copy and new-tab opens work.
   const forgeUrl = link.sourceType === "text" ? forgeShorthand?.resolve(link.url) : null;
-  const { tooltipPath, onHoverIn } = useFileLink(
-    forgeUrl ? markdownLinkSource(forgeUrl) : markdownLinkSource(link.url, link.sourceType),
+  const source = useMemo(
+    () => (forgeUrl ? markdownLinkSource(forgeUrl) : markdownLinkSource(link.url, link.sourceType)),
+    [forgeUrl, link.sourceType, link.url],
   );
-  const tooltip = forgeUrl ?? tooltipPath;
+  const { tooltipPath, onHoverIn } = useFileLink(source);
+  // Web addresses show where they lead, like a browser's status bar.
+  const tooltip = forgeUrl ?? tooltipPath ?? (isHttpUrl(link.url) ? link.url : null);
+  const openLinkMenu = useOpenLinkMenu();
+  const handleContextMenu = useCallback(
+    (event: React.MouseEvent<HTMLAnchorElement>) => {
+      if (!openLinkMenu) return;
+      event.preventDefault();
+      event.stopPropagation();
+      openLinkMenu({ source, point: { x: event.pageX, y: event.pageY } });
+    },
+    [openLinkMenu, source],
+  );
   const [hovered, setHovered] = useState(false);
   const handleMouseEnter = useCallback(() => setHovered(true), []);
   const handleMouseLeave = useCallback(() => setHovered(false), []);
@@ -57,6 +72,7 @@ function WebLink({ link, anchorProps, children }: LinkRendererProps) {
       style={anchorStyle}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
+      onContextMenu={handleContextMenu}
     >
       {children}
     </a>
