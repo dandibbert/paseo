@@ -142,3 +142,16 @@ export function projectLocationSummary(
   );
   return duplicate ? (project.hosts[0]?.iconWorkingDir ?? project.iconWorkingDir) : null;
 }
+
+/**
+ * Whether every reachable host supports a sort. A host that is offline cannot answer what it
+ * supports and is ordered after the online hosts anyway, so it does not switch sorting off.
+ */
+export function onlineHostsSupport(
+  support: ReadonlyMap<string, boolean>,
+  statuses: ReadonlyMap<string, string>,
+): boolean {
+  return [...support].every(
+    ([serverId, supported]) => supported || statuses.get(serverId) !== "online",
+  );
+}

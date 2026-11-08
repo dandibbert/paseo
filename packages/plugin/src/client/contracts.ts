@@ -324,6 +324,20 @@ export interface PluginTimelineFileLinkActions {
     },
     disposition?: "main" | "preferred" | "side",
   ): void;
+  /**
+   * Show Paseo's link menu for a link: its full address, and for a URL open in the
+   * browser / copy / share, for a path open / copy path / reveal / download. Call it from
+   * the link's right click (web, with the pointer's page coordinates) or long press
+   * (native, without a point). Absent on older hosts.
+   */
+  showMenu?(
+    source: {
+      href: string;
+      text?: string;
+      sourceType?: "inline-code";
+    },
+    point?: { x: number; y: number },
+  ): void;
 }
 
 export interface PluginTimelineItemProps<Data = unknown> extends PluginHostProps {

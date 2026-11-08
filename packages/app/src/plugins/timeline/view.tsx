@@ -1,4 +1,5 @@
 import { useAssistantFileLinkActions } from "@/assistant-file-links";
+import { MarkdownLinkMenu, useOpenLinkMenu } from "@/components/markdown/link-menu";
 import { PluginClientStateProvider } from "@getpaseo/plugin/client/host";
 import type { PluginTimelineItemProps } from "@getpaseo/plugin/client";
 import type { PluginTheme } from "@getpaseo/plugin";
@@ -43,20 +44,34 @@ function parseRendererData(
  * resolver, workspace context and panel navigation as host Markdown. Only
  * assistant rows mount the link action hook; tool and reasoning rows do not.
  */
-function PluginAssistantFileLinkBridge({
+function PluginAssistantFileLinkBridge(
+  props: PluginTimelineItemProps & {
+    Component: ComponentType<PluginTimelineItemProps>;
+  },
+) {
+  return (
+    <MarkdownLinkMenu>
+      <PluginAssistantFileLinkActions {...props} />
+    </MarkdownLinkMenu>
+  );
+}
+
+function PluginAssistantFileLinkActions({
   Component,
   ...itemProps
 }: PluginTimelineItemProps & {
   Component: ComponentType<PluginTimelineItemProps>;
 }) {
   const actions = useAssistantFileLinkActions();
+  const openLinkMenu = useOpenLinkMenu();
   // The host action requires a placement; the public plugin API defaults
   // that optional argument to Paseo's preferred pane disposition.
   const fileLinks = useMemo<NonNullable<PluginTimelineItemProps["fileLinks"]>>(
     () => ({
       open: (source, disposition = "preferred") => actions.open(source, disposition),
+      showMenu: (source, point) => openLinkMenu?.({ source, point: point ?? null }),
     }),
-    [actions],
+    [actions, openLinkMenu],
   );
   return <Component {...itemProps} fileLinks={fileLinks} />;
 }

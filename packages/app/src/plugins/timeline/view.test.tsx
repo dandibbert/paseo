@@ -12,6 +12,11 @@ const fileLinkOpener = vi.hoisted(() => vi.fn());
 vi.mock("@/assistant-file-links", () => ({
   useAssistantFileLinkActions: () => ({ open: fileLinkOpener }),
 }));
+const linkMenuOpener = vi.hoisted(() => vi.fn());
+vi.mock("@/components/markdown/link-menu", () => ({
+  MarkdownLinkMenu: ({ children }: { children: React.ReactNode }) => children,
+  useOpenLinkMenu: () => linkMenuOpener,
+}));
 const selectedHost = vi.hoisted(() => ({ client: null as DaemonClient | null }));
 vi.mock("@/runtime/host-runtime", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/runtime/host-runtime")>()),
@@ -69,6 +74,9 @@ const fileLinkBundle = `(function(require) {
       return React.createElement("button", {
         onClick: function() {
           props.fileLinks?.open({ href: "./reports/status.md#L9" }, "preferred");
+        },
+        onContextMenu: function(event) {
+          props.fileLinks?.showMenu?.({ href: "https://example.com/a" }, { x: event.clientX, y: event.clientY });
         },
       }, "Open file");
     }
@@ -192,6 +200,15 @@ describe("PluginTimelineItemView", () => {
     expect(button?.textContent).toBe("Open file");
     await act(async () => button?.click());
     expect(fileLinkOpener).toHaveBeenCalledWith({ href: "./reports/status.md#L9" }, "preferred");
+    await act(async () =>
+      button?.dispatchEvent(
+        new MouseEvent("contextmenu", { bubbles: true, clientX: 4, clientY: 7 }),
+      ),
+    );
+    expect(linkMenuOpener).toHaveBeenCalledWith({
+      source: { href: "https://example.com/a" },
+      point: { x: 4, y: 7 },
+    });
     fileLinkOpener.mockClear();
     await act(async () =>
       root.render(

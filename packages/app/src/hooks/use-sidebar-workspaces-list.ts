@@ -1,5 +1,6 @@
 import type { WorkspaceSort } from "@/projects/workspace-structure";
 import { useHostFeatureMap } from "@/runtime/host-features";
+import { onlineHostsSupport } from "@/components/sidebar/sidebar-order";
 import { useCallback, useEffect, useMemo } from "react";
 import { useStoreWithEqualityFn } from "zustand/traditional";
 import { useCreateFlowStore } from "@/stores/create-flow-store";
@@ -7,7 +8,12 @@ import { useSessionStore } from "@/stores/session-store";
 import { useWorkspaceDirectoryServerIds } from "@/stores/session-store-hooks";
 import { workspaceEqualityFns } from "@/stores/session-store-hooks/selectors";
 import { useWorkspaceStructure } from "@/stores/session-store-hooks";
-import { getHostRuntimeStore, useHostRegistryLoaded, useHosts } from "@/runtime/host-runtime";
+import {
+  getHostRuntimeStore,
+  useHostRegistryLoaded,
+  useHostRuntimeConnectionStatuses,
+  useHosts,
+} from "@/runtime/host-runtime";
 import { useSidebarOrderStore } from "@/stores/sidebar-order-store";
 import { useSidebarViewStore } from "@/stores/sidebar-view-store";
 import {
@@ -147,8 +153,9 @@ export function useSidebarWorkspacesList(options?: {
   const groupMode = useSidebarViewStore((state) => state.groupMode);
   const sortSupport = useHostFeatureMap(directoryServerIds, "workspaceSortTimes");
   const activitySupport = useHostFeatureMap(directoryServerIds, "workspaceActivity");
-  const workspaceActivitySupported = [...activitySupport.values()].every(Boolean);
-  const workspaceSortSupported = [...sortSupport.values()].every(Boolean);
+  const connectionStatuses = useHostRuntimeConnectionStatuses(directoryServerIds);
+  const workspaceActivitySupported = onlineHostsSupport(activitySupport, connectionStatuses);
+  const workspaceSortSupported = onlineHostsSupport(sortSupport, connectionStatuses);
   const sort =
     groupMode !== "status" &&
     (workspaceSort === "manual" ||

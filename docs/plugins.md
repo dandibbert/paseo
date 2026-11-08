@@ -683,6 +683,12 @@ it only in the response to a user click, and retain your fallback for older
 clients. This lets timeline plugins preserve their own Markdown rendering
 rather than yielding whole assistant messages to native Markdown.
 
+`fileLinks?.showMenu(source, point)` opens the same link menu built-in replies show: the full
+address, then open / copy / share for a URL, or open / copy path / reveal / download for a path.
+Call it from your link's `contextmenu` handler on web with the pointer's page coordinates (and
+`preventDefault()` the event, or Electron shows its own Copy / Paste menu), and from a long press on
+native without a point. It is absent on older hosts; keep your own fallback.
+
 `query.itemType` selects one public `AgentTimelineItem.type`. The callback owns any detailed
 recognition and returns plain plugin item objects. `undefined` keeps the source item, `items`
 replaces it, and an empty array removes it. Output `data` must be JSON-compatible. Paseo adds the
