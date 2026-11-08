@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { decide, stuckMacJobs } from "./m1-queue-fallback.mjs";
+import { decide, decideHandover, stuckMacJobs } from "./m1-queue-fallback.mjs";
 
 const now = Date.parse("2026-11-06T12:00:00Z");
 const minutesAgo = (minutes) => new Date(now - minutes * 60_000).toISOString();
@@ -42,4 +42,27 @@ test("stops when the run finished before any macOS job", () => {
     { ...job("validate", ["ubuntu-latest"], "completed", 20), conclusion: "failure" },
   ];
   assert.equal(look(jobs, 4).action, "done");
+});
+
+const m1Job = (status) => ({ name: "Paseo arm64", labels: ["self-hosted", "m1-build"], status });
+const handover = (hubJobs, step, waitedMinutes = 1) =>
+  decideHandover({ hubJobs, step, waitedMs: waitedMinutes * 60_000, limitMs: 15 * 60_000 });
+
+test("hands over once an M1 runner picks the build up", () => {
+  assert.equal(handover([m1Job("in_progress")], { action: "wait" }), "m1");
+});
+
+test("keeps the run on GitHub while the M1 has not picked the build up", () => {
+  assert.equal(handover([m1Job("queued")], { action: "wait" }), "wait");
+  // A hosted job in the hub run does not mean the M1 is online.
+  const hosted = { name: "plan", labels: ["ubuntu-latest"], status: "completed" };
+  assert.equal(handover([hosted, m1Job("queued")], { action: "wait" }), "wait");
+});
+
+test("withdraws the M1 build when a GitHub-hosted Mac starts first", () => {
+  assert.equal(handover([m1Job("queued")], { action: "done", reason: "hosted" }), "github");
+});
+
+test("gives up on an M1 that does not answer", () => {
+  assert.equal(handover([m1Job("queued")], { action: "wait" }, 15), "give-up");
 });
