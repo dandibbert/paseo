@@ -1334,6 +1334,8 @@ function createGeneratedClientId(): string {
   return `paseo-sdk-${randomId}`;
 }
 
+export type { DiffCompare, DiffState, DiffEntry, ResolvedShas } from "./diff/index.js";
+
 interface WorkspaceLabelAssignment {
   client: DaemonClient;
   workspaceId: string;
