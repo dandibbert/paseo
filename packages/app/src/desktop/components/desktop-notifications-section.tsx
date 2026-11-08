@@ -9,6 +9,7 @@ import { Switch } from "@/components/ui/switch";
 import { DesktopPermissionRow } from "@/desktop/components/desktop-permission-row";
 import { useDesktopPermissions } from "@/desktop/permissions/use-desktop-permissions";
 import { useDesktopSettings } from "@/desktop/settings/desktop-settings";
+import { isElectronRuntimeMac } from "@/desktop/host";
 import { SettingsSection } from "@/components/settings/headings/settings-section";
 import { settingsStyles } from "@/styles/settings";
 
@@ -20,6 +21,7 @@ const ThemedRotateCw = withUnistyles(RotateCw, (theme) => ({
 export function DesktopNotificationsSection() {
   const { t } = useTranslation();
   const { settings, isSaving, updateSettings } = useDesktopSettings();
+  const isMac = isElectronRuntimeMac();
   const {
     isDesktopApp,
     snapshot,
@@ -42,6 +44,15 @@ export function DesktopNotificationsSection() {
   const handlePlaySoundChange = useCallback(
     (playSound: boolean) => {
       void updateSettings({ notifications: { playSound } }).catch(() => {
+        // useDesktopSettings owns the user-visible IPC error.
+      });
+    },
+    [updateSettings],
+  );
+
+  const handleNotchPanelChange = useCallback(
+    (notchPanel: boolean) => {
+      void updateSettings({ notifications: { notchPanel } }).catch(() => {
         // useDesktopSettings owns the user-visible IPC error.
       });
     },
@@ -107,6 +118,23 @@ export function DesktopNotificationsSection() {
             testID="desktop-notifications-play-sound-switch"
           />
         </View>
+        {isMac ? (
+          <View style={[settingsStyles.row, settingsStyles.rowBorder]}>
+            <View style={settingsStyles.rowContent}>
+              <Text style={settingsStyles.rowTitle}>{t("settings.notifications.notchPanel")}</Text>
+              <Text style={settingsStyles.rowHint}>
+                {t("settings.notifications.notchPanelHint")}
+              </Text>
+            </View>
+            <Switch
+              value={settings.notifications.notchPanel}
+              onValueChange={handleNotchPanelChange}
+              disabled={isSaving}
+              accessibilityLabel={t("settings.notifications.notchPanel")}
+              testID="desktop-notifications-notch-panel-switch"
+            />
+          </View>
+        ) : null}
         <View style={[settingsStyles.row, settingsStyles.rowBorder]}>
           <View style={settingsStyles.rowContent}>
             <Text style={settingsStyles.rowTitle}>{t("settings.notifications.test")}</Text>

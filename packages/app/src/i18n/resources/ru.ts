@@ -305,6 +305,28 @@ export const ru: TranslationResources = {
       clearSearch: "Очистить поиск",
     },
   },
+  notchPanel: {
+    needsYou: "Нужны вы",
+    running: "Выполняется",
+    finished: "Только что завершено",
+    empty: "Ничего не выполняется",
+    offline: "Не в сети",
+    open: "Открыть",
+    untitled: "Без названия",
+    allow: "Разрешить",
+    deny: "Отклонить",
+    answer: "Ответить",
+    states: {
+      permission: "Одобрение",
+      question: "Вопрос",
+      error: "Ошибка",
+    },
+    actions: {
+      implement: "Выполнить",
+      reject: "Отклонить",
+      dismiss: "Скрыть",
+    },
+  },
   historyTextSearch: {
     scopeSessions: "Чаты",
     scopeMessages: "Сообщения",
@@ -2440,6 +2462,9 @@ export const ru: TranslationResources = {
       refreshAccessibility: "Обновить разрешение на уведомления",
       playSound: "Воспроизводить звук",
       playSoundHint: "Воспроизводит звук при получении уведомления на компьютере",
+      notchPanel: "Панель у выреза",
+      notchPanelHint:
+        "Показывает под вырезом MacBook агентов, которым нужны вы, работающих и только что завершивших. Наведите, чтобы одобрить или перейти.",
       test: "Проверить уведомление",
       testHint: "Отправляет уведомление с текущими настройками",
       permissionRequired: "Разрешите доступ к уведомлениям перед проверкой",

@@ -301,6 +301,28 @@ export const zhCN: TranslationResources = {
       clearSearch: "清除搜索",
     },
   },
+  notchPanel: {
+    needsYou: "需要你",
+    running: "运行中",
+    finished: "刚完成",
+    empty: "没有正在进行的任务",
+    offline: "离线",
+    open: "打开",
+    untitled: "未命名",
+    allow: "允许",
+    deny: "拒绝",
+    answer: "去回答",
+    states: {
+      permission: "待批准",
+      question: "待回答",
+      error: "出错",
+    },
+    actions: {
+      implement: "实施",
+      reject: "拒绝",
+      dismiss: "忽略",
+    },
+  },
   historyTextSearch: {
     scopeSessions: "会话",
     scopeMessages: "消息正文",
@@ -2420,6 +2442,9 @@ export const zhCN: TranslationResources = {
       refreshAccessibility: "刷新通知权限",
       playSound: "播放声音",
       playSoundHint: "收到桌面通知时播放声音",
+      notchPanel: "刘海面板",
+      notchPanelHint:
+        "在 MacBook 刘海下显示需要你处理、正在运行和刚完成的 agent。鼠标移上去即可批准或跳转。",
       test: "测试通知",
       testHint: "使用当前设置发送测试通知",
       permissionRequired: "测试前请允许访问通知",

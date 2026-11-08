@@ -172,8 +172,13 @@ export interface DesktopInvokeBridge {
   invoke?: (command: string, args?: Record<string, unknown>) => Promise<unknown>;
 }
 
+export interface DesktopNotchPanelBridge {
+  publish?: (state: unknown) => Promise<unknown>;
+}
+
 export interface DesktopHostBridge {
   platform?: string;
+  notchPanel?: DesktopNotchPanelBridge;
   windowChromeMode?: string;
   invoke?: DesktopInvokeBridge["invoke"];
   getPendingOpenProject?: () => Promise<string | null>;

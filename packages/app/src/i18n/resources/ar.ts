@@ -301,6 +301,28 @@ export const ar: TranslationResources = {
       clearSearch: "مسح البحث",
     },
   },
+  notchPanel: {
+    needsYou: "يحتاجك",
+    running: "قيد التشغيل",
+    finished: "انتهى للتو",
+    empty: "لا شيء قيد التشغيل",
+    offline: "غير متصل",
+    open: "فتح",
+    untitled: "بلا عنوان",
+    allow: "سماح",
+    deny: "رفض",
+    answer: "أجب",
+    states: {
+      permission: "موافقة",
+      question: "سؤال",
+      error: "خطأ",
+    },
+    actions: {
+      implement: "تنفيذ",
+      reject: "رفض",
+      dismiss: "تجاهل",
+    },
+  },
   historyTextSearch: {
     scopeSessions: "المحادثات",
     scopeMessages: "الرسائل",
@@ -2439,6 +2461,9 @@ export const ar: TranslationResources = {
       refreshAccessibility: "تحديث إذن الإشعارات",
       playSound: "تشغيل صوت",
       playSoundHint: "تشغيل صوت عند وصول إشعار سطح مكتب",
+      notchPanel: "لوحة الشق",
+      notchPanelHint:
+        "تعرض تحت شق MacBook الوكلاء الذين يحتاجونك أو قيد التشغيل أو انتهوا للتو. مرّر المؤشر للموافقة أو الانتقال.",
       test: "اختبار الإشعار",
       testHint: "إرسال إشعار باستخدام هذه الإعدادات",
       permissionRequired: "اسمح بالوصول إلى الإشعارات قبل الاختبار",

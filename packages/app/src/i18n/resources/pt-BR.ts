@@ -306,6 +306,28 @@ export const ptBR: TranslationResources = {
       clearSearch: "Limpar busca",
     },
   },
+  notchPanel: {
+    needsYou: "Precisa de você",
+    running: "Em execução",
+    finished: "Recém-concluído",
+    empty: "Nada em execução",
+    offline: "Offline",
+    open: "Abrir",
+    untitled: "Sem título",
+    allow: "Permitir",
+    deny: "Negar",
+    answer: "Responder",
+    states: {
+      permission: "Aprovação",
+      question: "Pergunta",
+      error: "Erro",
+    },
+    actions: {
+      implement: "Implementar",
+      reject: "Rejeitar",
+      dismiss: "Dispensar",
+    },
+  },
   historyTextSearch: {
     scopeSessions: "Conversas",
     scopeMessages: "Mensagens",
@@ -2439,6 +2461,9 @@ export const ptBR: TranslationResources = {
       refreshAccessibility: "Atualizar permissão de notificações",
       playSound: "Reproduzir som",
       playSoundHint: "Reproduz um som quando chega uma notificação da área de trabalho",
+      notchPanel: "Painel do notch",
+      notchPanelHint:
+        "Mostra sob o notch do MacBook os agentes que precisam de você, em execução ou recém-concluídos. Passe o ponteiro para aprovar ou abrir.",
       test: "Testar notificação",
       testHint: "Envia uma notificação usando estas configurações",
       permissionRequired: "Permita o acesso às notificações antes de testar",

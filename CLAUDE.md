@@ -60,6 +60,7 @@ At the start of non-trivial work, list `docs/` and skim anything relevant to the
 | [docs/genui.md](docs/genui.md)                                       | GenUI chat cards — `render_ui` contract, shared validation, card states, palette exception, mock scenario                      |
 | [docs/native-text-selection.md](docs/native-text-selection.md)       | Native diagram grouping, selection boundaries and leading inline image limitations                                             |
 | [docs/file-observation.md](docs/file-observation.md)                 | Recursive watcher ownership, Linux constraints, teardown invariants, and Parcel comparison                                     |
+| [docs/notch-panel.md](docs/notch-panel.md)                           | macOS notch panel: who builds its content, notch measurement, click-through window, panel-window gotchas                       |
 | [docs/testing.md](docs/testing.md)                                   | TDD workflow, determinism, real dependencies over mocks, test organization                                                     |
 | [docs/qa.md](docs/qa.md)                                             | QA evidence bar for pull requests — platform matrix, version drift, performance, UI proof                                      |
 | [docs/mobile-testing.md](docs/mobile-testing.md)                     | Maestro and mobile test workflows                                                                                              |

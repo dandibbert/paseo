@@ -40,6 +40,9 @@ contextBridge.exposeInMainWorld("paseoDesktop", {
     ipcRenderer.invoke("paseo:get-initial-open-directory-mode") as Promise<
       "workspace" | "terminal"
     >,
+  notchPanel: {
+    publish: (state: unknown) => ipcRenderer.invoke("paseo:notch-panel:publish", state),
+  },
   agentNavigation: {
     ready: () =>
       ipcRenderer.invoke("paseo:agent-navigation:ready") as Promise<{

@@ -298,6 +298,28 @@ export const en = {
       clearSearch: "Clear search",
     },
   },
+  notchPanel: {
+    needsYou: "Needs you",
+    running: "Running",
+    finished: "Just finished",
+    empty: "Nothing is running",
+    offline: "Offline",
+    open: "Open",
+    untitled: "Untitled",
+    allow: "Allow",
+    deny: "Deny",
+    answer: "Answer",
+    states: {
+      permission: "Approval",
+      question: "Question",
+      error: "Error",
+    },
+    actions: {
+      implement: "Implement",
+      reject: "Reject",
+      dismiss: "Dismiss",
+    },
+  },
   historyTextSearch: {
     scopeSessions: "Chats",
     scopeMessages: "Messages",
@@ -2509,6 +2531,9 @@ export const en = {
       refreshAccessibility: "Refresh notification permission",
       playSound: "Play sound",
       playSoundHint: "Play a sound when a desktop notification arrives",
+      notchPanel: "Notch panel",
+      notchPanelHint:
+        "Show agents that need you, are running or just finished under the MacBook notch. Hover it to approve or jump.",
       test: "Test notification",
       testHint: "Send a notification using these settings",
       permissionRequired: "Allow notification access before testing",

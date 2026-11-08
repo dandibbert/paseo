@@ -15,6 +15,7 @@ export interface DesktopSettings {
   releaseChannel: ReleaseChannel;
   notifications: {
     playSound: boolean;
+    notchPanel: boolean;
   };
   daemon: {
     manageBuiltInDaemon: boolean;
@@ -32,6 +33,7 @@ export const DEFAULT_DESKTOP_SETTINGS: DesktopSettings = {
   releaseChannel: "stable",
   notifications: {
     playSound: true,
+    notchPanel: true,
   },
   daemon: {
     manageBuiltInDaemon: true,
@@ -161,6 +163,10 @@ function parseDesktopSettings(raw: unknown): DesktopSettings {
         typeof notifications.playSound === "boolean"
           ? notifications.playSound
           : DEFAULT_DESKTOP_SETTINGS.notifications.playSound,
+      notchPanel:
+        typeof notifications.notchPanel === "boolean"
+          ? notifications.notchPanel
+          : DEFAULT_DESKTOP_SETTINGS.notifications.notchPanel,
     },
     daemon: {
       manageBuiltInDaemon:

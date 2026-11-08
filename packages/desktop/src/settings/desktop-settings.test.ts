@@ -81,7 +81,7 @@ describe("desktop-settings", () => {
 
     expect(settings).toEqual({
       releaseChannel: "stable",
-      notifications: { playSound: true },
+      notifications: { playSound: true, notchPanel: true },
       daemon: {
         manageBuiltInDaemon: true,
         keepRunningAfterQuit: false,
@@ -103,7 +103,7 @@ describe("desktop-settings", () => {
 
     expect(next).toEqual({
       releaseChannel: "beta",
-      notifications: { playSound: true },
+      notifications: { playSound: true, notchPanel: true },
       daemon: {
         manageBuiltInDaemon: true,
         keepRunningAfterQuit: false,
@@ -270,7 +270,7 @@ describe("desktop-settings", () => {
 
     expect(migrated).toEqual({
       releaseChannel: "beta",
-      notifications: { playSound: true },
+      notifications: { playSound: true, notchPanel: true },
       daemon: {
         manageBuiltInDaemon: false,
         keepRunningAfterQuit: false,
@@ -315,7 +315,7 @@ describe("desktop-settings", () => {
     expect(persisted.settings.releaseChannel).toBe("beta");
     expect(next).toEqual({
       releaseChannel: "beta",
-      notifications: { playSound: false },
+      notifications: { playSound: false, notchPanel: true },
       daemon: { manageBuiltInDaemon: true, keepRunningAfterQuit: false },
     });
   });
@@ -362,5 +362,19 @@ describe("desktop-settings", () => {
 
     expect(persisted.settings.releaseChannel).toBe("stable");
     expect(persisted.settings.tray).toEqual({ enabled: true });
+  });
+});
+
+describe("notch panel setting", () => {
+  it("is on by default and can be turned off on its own", async () => {
+    const userDataPath = await mkdtemp(path.join(os.tmpdir(), "paseo-notch-settings-"));
+    try {
+      const store = createDesktopSettingsStore({ userDataPath });
+      expect((await store.get()).notifications.notchPanel).toBe(true);
+      const next = await store.patch({ notifications: { notchPanel: false } });
+      expect(next.notifications).toEqual({ playSound: true, notchPanel: false });
+    } finally {
+      await rm(userDataPath, { recursive: true, force: true });
+    }
   });
 });

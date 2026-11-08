@@ -113,6 +113,7 @@ import {
   type AgentDeepLinkTarget,
 } from "@getpaseo/protocol/agent-deep-link";
 import { AgentNavigationInbox, parseAgentDeepLinkFromArgv } from "./agent-navigation.js";
+import { isNotchPanelWindow, registerNotchPanel } from "./features/notch-panel/index.js";
 
 const DEV_SERVER_URL = process.env.EXPO_DEV_URL ?? "http://localhost:8081";
 const APP_SCHEME = "paseo";
@@ -823,10 +824,13 @@ desktopWindowOwner = createDesktopWindowOwner<AgentDeepLinkTarget>({
     });
     return ownedDesktopWindow(win);
   },
-  windows: () => BrowserWindow.getAllWindows().map(ownedDesktopWindow),
+  windows: () =>
+    BrowserWindow.getAllWindows()
+      .filter((win) => !isNotchPanelWindow(win))
+      .map(ownedDesktopWindow),
   focusedWindow: () => {
     const win = BrowserWindow.getFocusedWindow();
-    if (!win) return null;
+    if (!win || isNotchPanelWindow(win)) return null;
     return ownedDesktopWindow(win);
   },
   agentRoute: buildAgentDeepLinkRoute,
@@ -899,7 +903,10 @@ function setupSingleInstanceLock(): boolean {
     if (openProjectPath) {
       void bootstrapComplete
         .then(async () => {
-          const win = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0];
+          const focused = BrowserWindow.getFocusedWindow();
+          const win =
+            (focused && !isNotchPanelWindow(focused) ? focused : null) ??
+            BrowserWindow.getAllWindows().find((candidate) => !isNotchPanelWindow(candidate));
           if (!win || win.isDestroyed()) {
             await desktopWindowOwner.openPrimary({ pendingProjectPath: openProjectPath });
             return undefined;
@@ -992,6 +999,7 @@ async function bootstrap(): Promise<void> {
   ensureNotificationCenterRegistration();
   registerDaemonManager();
   const stopRemoteUpdateHost = startDesktopRemoteUpdateHost();
+  registerNotchPanel({ openAgent: (target) => desktopWindowOwner.openOrFocusAgent(target) });
   app.once("will-quit", stopRemoteUpdateHost);
   registerWindowManager({ mode: DESKTOP_WINDOW_CHROME_MODE });
   registerDialogHandlers();

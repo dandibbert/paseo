@@ -306,6 +306,28 @@ export const ja: TranslationResources = {
       clearSearch: "検索をクリア",
     },
   },
+  notchPanel: {
+    needsYou: "対応が必要",
+    running: "実行中",
+    finished: "完了",
+    empty: "実行中のタスクはありません",
+    offline: "オフライン",
+    open: "開く",
+    untitled: "無題",
+    allow: "許可",
+    deny: "拒否",
+    answer: "回答する",
+    states: {
+      permission: "承認待ち",
+      question: "質問",
+      error: "エラー",
+    },
+    actions: {
+      implement: "実装",
+      reject: "却下",
+      dismiss: "閉じる",
+    },
+  },
   historyTextSearch: {
     scopeSessions: "チャット",
     scopeMessages: "メッセージ",
@@ -2427,6 +2449,9 @@ export const ja: TranslationResources = {
       refreshAccessibility: "通知の権限を更新",
       playSound: "サウンドを再生",
       playSoundHint: "デスクトップ通知が届いたときにサウンドを再生します",
+      notchPanel: "ノッチパネル",
+      notchPanelHint:
+        "MacBook のノッチの下に、対応が必要・実行中・完了したばかりのエージェントを表示します。ポインタを乗せると承認やジャンプができます。",
       test: "通知をテスト",
       testHint: "現在の設定でテスト通知を送信します",
       permissionRequired: "テストする前に通知へのアクセスを許可してください",

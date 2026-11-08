@@ -10,6 +10,8 @@ export interface DesktopSettings {
   releaseChannel: AppReleaseChannel;
   notifications: {
     playSound: boolean;
+    /** The panel under the MacBook notch that lists agents needing you. */
+    notchPanel: boolean;
   };
   daemon: {
     manageBuiltInDaemon: boolean;
@@ -33,6 +35,7 @@ export const DEFAULT_DESKTOP_SETTINGS: DesktopSettings = {
   releaseChannel: "stable",
   notifications: {
     playSound: true,
+    notchPanel: true,
   },
   daemon: {
     manageBuiltInDaemon: true,
@@ -47,6 +50,7 @@ const ReleaseChannelSchema = z.enum(["stable", "beta"]);
 const NotificationsSchema = z
   .looseObject({
     playSound: z.boolean().catch(DEFAULT_DESKTOP_SETTINGS.notifications.playSound),
+    notchPanel: z.boolean().catch(DEFAULT_DESKTOP_SETTINGS.notifications.notchPanel),
   })
   .catch(() => ({ ...DEFAULT_DESKTOP_SETTINGS.notifications }));
 
@@ -125,7 +129,10 @@ function buildDefaultDocument(): PersistedDesktopSettingsDocument {
 function toDesktopSettings(stored: StoredDesktopSettings): DesktopSettings {
   return {
     releaseChannel: stored.releaseChannel,
-    notifications: { playSound: stored.notifications.playSound },
+    notifications: {
+      playSound: stored.notifications.playSound,
+      notchPanel: stored.notifications.notchPanel,
+    },
     daemon: {
       manageBuiltInDaemon: stored.daemon.manageBuiltInDaemon,
       keepRunningAfterQuit: stored.daemon.keepRunningAfterQuit,
@@ -145,10 +152,12 @@ function coerceDesktopSettingsPatch(input: unknown): DesktopSettingsPatch {
   }
 
   if (isRecord(input.notifications)) {
+    const notificationsPatch: Partial<DesktopSettings["notifications"]> = {};
     const playSound = coerceBoolean(input.notifications.playSound);
-    if (playSound !== null) {
-      patch.notifications = { playSound };
-    }
+    if (playSound !== null) notificationsPatch.playSound = playSound;
+    const notchPanel = coerceBoolean(input.notifications.notchPanel);
+    if (notchPanel !== null) notificationsPatch.notchPanel = notchPanel;
+    if (Object.keys(notificationsPatch).length > 0) patch.notifications = notificationsPatch;
   }
 
   if (isRecord(input.daemon)) {

@@ -307,6 +307,28 @@ export const fr: TranslationResources = {
       clearSearch: "Effacer la recherche",
     },
   },
+  notchPanel: {
+    needsYou: "Requiert votre action",
+    running: "En cours",
+    finished: "Tout juste terminé",
+    empty: "Rien en cours",
+    offline: "Hors ligne",
+    open: "Ouvrir",
+    untitled: "Sans titre",
+    allow: "Autoriser",
+    deny: "Refuser",
+    answer: "Répondre",
+    states: {
+      permission: "Approbation",
+      question: "Question",
+      error: "Erreur",
+    },
+    actions: {
+      implement: "Implémenter",
+      reject: "Rejeter",
+      dismiss: "Ignorer",
+    },
+  },
   historyTextSearch: {
     scopeSessions: "Discussions",
     scopeMessages: "Messages",
@@ -2456,6 +2478,9 @@ export const fr: TranslationResources = {
       refreshAccessibility: "Actualiser l’autorisation des notifications",
       playSound: "Émettre un son",
       playSoundHint: "Émet un son à l’arrivée d’une notification de bureau",
+      notchPanel: "Panneau de l’encoche",
+      notchPanelHint:
+        "Affiche sous l’encoche du MacBook les agents qui ont besoin de vous, en cours ou tout juste terminés. Survolez-le pour approuver ou ouvrir.",
       test: "Tester la notification",
       testHint: "Envoie une notification avec ces réglages",
       permissionRequired: "Autorisez les notifications avant de tester",

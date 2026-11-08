@@ -306,6 +306,28 @@ export const es: TranslationResources = {
       clearSearch: "Borrar búsqueda",
     },
   },
+  notchPanel: {
+    needsYou: "Te necesita",
+    running: "En ejecución",
+    finished: "Recién terminado",
+    empty: "No hay nada en ejecución",
+    offline: "Sin conexión",
+    open: "Abrir",
+    untitled: "Sin título",
+    allow: "Permitir",
+    deny: "Denegar",
+    answer: "Responder",
+    states: {
+      permission: "Aprobación",
+      question: "Pregunta",
+      error: "Error",
+    },
+    actions: {
+      implement: "Implementar",
+      reject: "Rechazar",
+      dismiss: "Descartar",
+    },
+  },
   historyTextSearch: {
     scopeSessions: "Chats",
     scopeMessages: "Mensajes",
@@ -2454,6 +2476,9 @@ export const es: TranslationResources = {
       refreshAccessibility: "Actualizar permiso de notificaciones",
       playSound: "Reproducir sonido",
       playSoundHint: "Reproduce un sonido cuando llega una notificación de escritorio",
+      notchPanel: "Panel de la muesca",
+      notchPanelHint:
+        "Muestra bajo la muesca del MacBook los agentes que te necesitan, en ejecución o recién terminados. Pasa el puntero para aprobar o ir.",
       test: "Probar notificación",
       testHint: "Envía una notificación con esta configuración",
       permissionRequired: "Permite el acceso a las notificaciones antes de probar",

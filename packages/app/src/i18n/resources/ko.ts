@@ -302,6 +302,28 @@ export const ko: TranslationResources = {
       clearSearch: "검색 지우기",
     },
   },
+  notchPanel: {
+    needsYou: "처리 필요",
+    running: "실행 중",
+    finished: "방금 완료",
+    empty: "실행 중인 작업이 없습니다",
+    offline: "오프라인",
+    open: "열기",
+    untitled: "제목 없음",
+    allow: "허용",
+    deny: "거부",
+    answer: "답하기",
+    states: {
+      permission: "승인 대기",
+      question: "질문",
+      error: "오류",
+    },
+    actions: {
+      implement: "구현",
+      reject: "거절",
+      dismiss: "닫기",
+    },
+  },
   historyTextSearch: {
     scopeSessions: "채팅",
     scopeMessages: "메시지",
@@ -2415,6 +2437,9 @@ export const ko: TranslationResources = {
       refreshAccessibility: "알림 권한 새로 고침",
       playSound: "소리 재생",
       playSoundHint: "데스크톱 알림이 도착하면 소리를 재생합니다",
+      notchPanel: "노치 패널",
+      notchPanelHint:
+        "MacBook 노치 아래에 처리가 필요하거나 실행 중이거나 방금 끝난 에이전트를 표시합니다. 포인터를 올리면 승인하거나 이동할 수 있습니다.",
       test: "알림 테스트",
       testHint: "현재 설정으로 테스트 알림을 보냅니다",
       permissionRequired: "테스트하기 전에 알림 접근을 허용하세요",

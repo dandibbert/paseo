@@ -648,7 +648,7 @@ describe("loadSettingsFromStorage", () => {
       isElectron: true,
       settings: {
         releaseChannel: "beta",
-        notifications: { playSound: true },
+        notifications: { playSound: true, notchPanel: true },
         daemon: { manageBuiltInDaemon: false, keepRunningAfterQuit: true },
       },
     });
