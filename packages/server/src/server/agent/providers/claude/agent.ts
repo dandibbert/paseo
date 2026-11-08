@@ -3119,6 +3119,7 @@ class ClaudeAgentSession implements AgentSession {
       this.activeForegroundQuery = this.query;
       this.activeForegroundInput = this.input;
       this.startQueryPump();
+      this.runtimeSafety.notePromptSent();
       this.input.push(sdkMessage);
       setTimeout(() => {
         if (this.activeForegroundTurnId === turnId) {
