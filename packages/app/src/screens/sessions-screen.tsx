@@ -18,6 +18,11 @@ import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { useImportSession } from "@/hooks/use-import-session";
 import { useHosts } from "@/runtime/host-runtime";
 import { buildOpenProjectRoute } from "@/utils/host-routes";
+import { SegmentedControl, type SegmentedControlOption } from "@/components/ui/segmented-control";
+import { HistoryTextResults } from "@/history-search/history-text-results";
+import { useHistoryTextSearch } from "@/history-search/use-history-text-search";
+
+type SearchScope = "sessions" | "messages";
 
 /** Long enough that a typed word is one request, short enough to feel live. */
 const SEARCH_DEBOUNCE_MS = 200;
@@ -60,6 +65,67 @@ function resolveEmptyText(input: {
   return "No sessions for this host";
 }
 
+type SessionsBody = "messages" | "loading" | "error" | "empty" | "list";
+
+function resolveBody(input: {
+  isMessageSearch: boolean;
+  isInitialLoad: boolean;
+  showLoadError: boolean;
+  count: number;
+}): SessionsBody {
+  if (input.isMessageSearch) return "messages";
+  if (input.isInitialLoad) return "loading";
+  if (input.showLoadError) return "error";
+  return input.count === 0 ? "empty" : "list";
+}
+
+/** Chooses whether a query matches chat titles or the text of their messages. */
+function SearchScopeRow({
+  visible,
+  value,
+  onChange,
+}: {
+  visible: boolean;
+  value: SearchScope;
+  onChange: (value: SearchScope) => void;
+}): ReactElement | null {
+  const { t } = useTranslation();
+  const options = useMemo<SegmentedControlOption<SearchScope>[]>(
+    () => [
+      { value: "sessions", label: t("historyTextSearch.scopeSessions") },
+      {
+        value: "messages",
+        label: t("historyTextSearch.scopeMessages"),
+        testID: "sessions-scope-messages",
+      },
+    ],
+    [t],
+  );
+  if (!visible) return null;
+  return (
+    <View style={styles.scopeRow}>
+      <SegmentedControl
+        size="sm"
+        value={value}
+        onValueChange={onChange}
+        options={options}
+        testID="sessions-search-scope"
+      />
+    </View>
+  );
+}
+
+function MessageSearchResults({
+  serverId,
+  search,
+}: {
+  serverId: string | null;
+  search: string;
+}): ReactElement {
+  const messageSearch = useHistoryTextSearch({ serverId, search });
+  return <HistoryTextResults search={messageSearch} query={search} />;
+}
+
 export function SessionsScreen() {
   const isFocused = useIsFocused();
 
@@ -95,6 +161,8 @@ function SessionsScreenContent() {
     search,
   });
   const isSearching = isSearchSupported && search.length > 0;
+  const [searchScope, setSearchScope] = useState<SearchScope>("sessions");
+  const isMessageSearch = searchScope === "messages" && search.length > 0;
 
   useEffect(() => {
     if (
@@ -121,6 +189,7 @@ function SessionsScreenContent() {
   const showHostFilter = hosts.length > 1;
   const showFilterRow = showHostFilter || isSearchSupported;
   const showLoadError = isError && agents.length === 0;
+  const body = resolveBody({ isMessageSearch, isInitialLoad, showLoadError, count: agents.length });
 
   const handleBack = useCallback(() => {
     router.navigate(buildOpenProjectRoute());
@@ -176,13 +245,19 @@ function SessionsScreenContent() {
           ) : null}
         </View>
       ) : null}
-      {hostErrors.length > 0 ? <SessionHostErrorsBanner errors={hostErrors} t={t} /> : null}
-      {isInitialLoad ? (
+      <SearchScopeRow visible={isSearching} value={searchScope} onChange={setSearchScope} />
+      {body === "messages" ? (
+        <MessageSearchResults serverId={historyServerId} search={search} />
+      ) : null}
+      {body !== "messages" && hostErrors.length > 0 ? (
+        <SessionHostErrorsBanner errors={hostErrors} t={t} />
+      ) : null}
+      {body === "loading" ? (
         <View style={styles.loadingContainer}>
           <LoadingSpinner size="large" color={theme.colors.foregroundMuted} />
         </View>
       ) : null}
-      {!isInitialLoad && showLoadError ? (
+      {body === "error" ? (
         <View style={styles.emptyContainer}>
           <Text style={styles.emptyText}>Unable to load sessions</Text>
           <Button variant="ghost" onPress={handleRefresh}>
@@ -190,7 +265,7 @@ function SessionsScreenContent() {
           </Button>
         </View>
       ) : null}
-      {!isInitialLoad && !showLoadError && agents.length === 0 ? (
+      {body === "empty" ? (
         <View style={styles.emptyContainer} testID="sessions-empty">
           <Text style={styles.emptyText}>{emptyText}</Text>
           {isSearching ? (
@@ -207,7 +282,7 @@ function SessionsScreenContent() {
           </Button>
         </View>
       ) : null}
-      {!isInitialLoad && !showLoadError && agents.length > 0 ? (
+      {body === "list" ? (
         <AgentList
           agents={agents}
           showCheckoutInfo={false}
@@ -238,6 +313,14 @@ const styles = StyleSheet.create((theme) => ({
       md: theme.spacing[6],
     },
     paddingTop: theme.spacing[4],
+  },
+  scopeRow: {
+    flexDirection: "row",
+    paddingHorizontal: {
+      xs: theme.spacing[3],
+      md: theme.spacing[6],
+    },
+    paddingTop: theme.spacing[3],
   },
   emptyContainer: {
     flex: 1,

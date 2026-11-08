@@ -302,6 +302,20 @@ export const ko: TranslationResources = {
       clearSearch: "검색 지우기",
     },
   },
+  historyTextSearch: {
+    scopeSessions: "채팅",
+    scopeMessages: "메시지",
+    untitled: "제목 없는 채팅",
+    you: "나",
+    agent: "에이전트",
+    moreInChat: "이 채팅에 {{count}}개 더",
+    coverage:
+      "당신과 에이전트가 쓴 내용을 검색합니다. 호스트 업데이트 이후 턴이 끝났거나 한 번 열린 채팅이 포함됩니다.",
+    nativeJump:
+      "여기서 결과를 열면 채팅이 열립니다. 채팅 안에서 메시지로 이동은 데스크톱과 웹에서 작동합니다.",
+    unsearchedHosts: "검색 안 됨: {{hosts}}",
+    noMatches: "일치하는 메시지가 없습니다",
+  },
   agentList: {
     actions: en.agentList.actions,
     fallbackTitle: "새 세션",

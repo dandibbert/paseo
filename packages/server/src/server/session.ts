@@ -58,6 +58,7 @@ import type {
 } from "../terminal/terminal-manager.js";
 import { TerminalSessionController } from "../terminal/terminal-session-controller.js";
 import type { SecureTerminalPromptBroker } from "./secure-input/secure-terminal-prompt-broker.js";
+import { getActiveHistoryTextIndex } from "./history-search/index.js";
 import type { TerminalActivity } from "@getpaseo/protocol/terminal-activity";
 import type { BinaryFrame } from "@getpaseo/protocol/binary-frames/index";
 import {
@@ -3484,6 +3485,8 @@ export class Session {
 
   private dispatchTerminalMessage(msg: SessionInboundMessage): Promise<void> | undefined {
     switch (msg.type) {
+      case "agent.history.search_text.request":
+        return this.handleHistoryTextSearchRequest(msg);
       case "terminal.secure_prompt.list.request":
         this.emit({
           type: "terminal.secure_prompt.list.response",
@@ -8686,6 +8689,31 @@ export class Session {
       type: "agent.timeline.append.response",
       payload: { requestId: msg.requestId, seq, epoch },
     });
+  }
+
+  private async handleHistoryTextSearchRequest(
+    msg: Extract<SessionInboundMessage, { type: "agent.history.search_text.request" }>,
+  ): Promise<void> {
+    const index = getActiveHistoryTextIndex();
+    try {
+      if (!index) throw new Error("History search is unavailable on this host");
+      const result = await index.search(msg.query, msg.limit);
+      this.emit({
+        type: "agent.history.search_text.response",
+        payload: { requestId: msg.requestId, ...result, error: null },
+      });
+    } catch (error) {
+      this.emit({
+        type: "agent.history.search_text.response",
+        payload: {
+          requestId: msg.requestId,
+          hits: [],
+          indexedAgents: 0,
+          truncated: false,
+          error: error instanceof Error ? error.message : String(error),
+        },
+      });
+    }
   }
 
   private async handleAgentTimelineSearchRequest(

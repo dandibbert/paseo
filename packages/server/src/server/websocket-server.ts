@@ -35,6 +35,7 @@ import type { AgentStorage } from "./agent/agent-storage.js";
 import type { DownloadTokenStore } from "./file-download/token-store.js";
 import type { TerminalManager } from "../terminal/terminal-manager.js";
 import type { SecureTerminalPromptBroker } from "./secure-input/secure-terminal-prompt-broker.js";
+import { getActiveHistoryTextIndex } from "./history-search/index.js";
 import type pino from "pino";
 import type { ProjectRegistry, WorkspaceRegistry } from "./workspace-registry.js";
 import type { ProjectUpdate } from "./workspace-reconciliation-service.js";
@@ -2134,6 +2135,7 @@ export class VoiceAssistantWebSocketServer {
         workspaceTerminals: true,
         // COMPAT(secureAgentInput): added in personal v0.11.2, remove after 2027-04-13.
         terminalSecurePrompt: this.secureTerminalPromptBroker !== undefined,
+        historyTextSearch: getActiveHistoryTextIndex() !== null,
         // COMPAT(genuiSystemPrompt): added in personal v0.11.4, remove gate after 2027-04-21.
         genuiSystemPrompt: true,
         // COMPAT(terminalSecureInput): added in v0.9.2-personal, remove after 2027-04-13.

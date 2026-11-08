@@ -3425,6 +3425,14 @@ export const SecureTerminalPromptSchema = z.object({
 });
 export type SecureTerminalPrompt = z.infer<typeof SecureTerminalPromptSchema>;
 
+// COMPAT(historyTextSearch): added in v0.15.3-personal; gate on features.historyTextSearch.
+export const AgentHistorySearchTextRequestSchema = z.object({
+  type: z.literal("agent.history.search_text.request"),
+  requestId: z.string(),
+  query: z.string(),
+  limit: z.number().int().positive().max(200).optional(),
+});
+
 export const TerminalSecurePromptListRequestSchema = z.object({
   type: z.literal("terminal.secure_prompt.list.request"),
   requestId: z.string(),
@@ -3794,6 +3802,7 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   TerminalInputSchema,
   TerminalSecureInputRequestSchema,
   TerminalSecurePromptListRequestSchema,
+  AgentHistorySearchTextRequestSchema,
   TerminalSecurePromptRespondRequestSchema,
   KillTerminalRequestSchema,
   CaptureTerminalRequestSchema,
@@ -4030,6 +4039,8 @@ export const ServerInfoStatusPayloadSchema = z
         terminalSecureInput: z.boolean().optional(),
         // COMPAT(secureAgentInput): added in personal v0.11.2, remove after 2027-04-13.
         terminalSecurePrompt: z.boolean().optional(),
+        // COMPAT(historyTextSearch): added in v0.15.3-personal, remove gate after 2027-05-08.
+        historyTextSearch: z.boolean().optional(),
         // COMPAT(genuiSystemPrompt): added in personal v0.11.4, remove gate after 2027-04-21.
         genuiSystemPrompt: z.boolean().optional(),
         // COMPAT(checkoutForgeSetAutoMerge): added in v0.2.0-beta.1. Remove the
@@ -7105,6 +7116,32 @@ export const TerminalSecureInputResponseSchema = z.object({
   }),
 });
 
+export const AgentHistorySearchTextResponseSchema = z.object({
+  type: z.literal("agent.history.search_text.response"),
+  payload: z.object({
+    requestId: z.string(),
+    hits: z.array(
+      z.object({
+        agentId: z.string(),
+        title: z.string().nullable(),
+        cwd: z.string(),
+        workspaceId: z.string().nullable(),
+        provider: z.string(),
+        updatedAt: z.string(),
+        // The projected timeline seq the in-chat find navigates to.
+        seq: z.number().int().nonnegative(),
+        role: z.enum(["user", "assistant"]),
+        snippet: z.string(),
+        agentMatchCount: z.number().int().positive(),
+      }),
+    ),
+    // Agents in the index. Ones never opened since the index shipped are not included.
+    indexedAgents: z.number().int().nonnegative(),
+    truncated: z.boolean(),
+    error: z.string().nullable(),
+  }),
+});
+
 export const TerminalSecurePromptListResponseSchema = z.object({
   type: z.literal("terminal.secure_prompt.list.response"),
   payload: z.object({
@@ -7825,6 +7862,7 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   SubscribeTerminalResponseSchema,
   TerminalSecureInputResponseSchema,
   TerminalSecurePromptListResponseSchema,
+  AgentHistorySearchTextResponseSchema,
   TerminalSecurePromptRespondResponseSchema,
   KillTerminalResponseSchema,
   CaptureTerminalResponseSchema,

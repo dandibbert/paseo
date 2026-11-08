@@ -146,6 +146,7 @@ import { AgentStorage } from "./agent/agent-storage.js";
 import { attachAgentStoragePersistence } from "./persistence-hooks.js";
 import { createAgentMcpServer } from "./agent/mcp-server.js";
 import { SecureTerminalPromptBroker } from "./secure-input/secure-terminal-prompt-broker.js";
+import { HistoryTextIndex, setActiveHistoryTextIndex } from "./history-search/index.js";
 import {
   createPaseoToolCatalog,
   createPaseoAgentToolManifest,
@@ -1038,6 +1039,19 @@ export async function createPaseoDaemon(
       resolvePaseoToolPolicy(provider, daemonConfigStore.get().providers),
     logger,
   });
+  const historyTextIndex = new HistoryTextIndex({
+    dir: path.join(config.paseoHome, "history-search"),
+    logger,
+    readRows: (agentId) => agentManager.getTimelineRows(agentId),
+  });
+  const detachHistoryTextIndex = agentManager.subscribe(
+    (event) => {
+      if (event.type === "agent_state") historyTextIndex.observe(event.agent);
+      else if (event.type === "agent_removed") void historyTextIndex.remove(event.agentId);
+    },
+    { replayState: false },
+  );
+  setActiveHistoryTextIndex(historyTextIndex);
   const syncPluginProviders = () => {
     agentManager.updateProviderRegistry(
       providerSnapshotManager.replacePluginProviders(pluginRuntime.getProviderRegistrations()),
@@ -2012,6 +2026,9 @@ export async function createPaseoDaemon(
       label: "drain plugin lifecycle events",
     }).catch((error) => logger.warn({ err: error }, "Plugin lifecycle events did not finish"));
     await agentManager.flushForShutdown().catch(() => undefined);
+    detachHistoryTextIndex();
+    historyTextIndex.dispose();
+    setActiveHistoryTextIndex(null);
     detachAgentStoragePersistence();
     await agentStorage.flush().catch(() => undefined);
     await agentProviderRuntime.shutdown();

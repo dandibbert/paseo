@@ -306,6 +306,20 @@ export const ptBR: TranslationResources = {
       clearSearch: "Limpar busca",
     },
   },
+  historyTextSearch: {
+    scopeSessions: "Conversas",
+    scopeMessages: "Mensagens",
+    untitled: "Conversa sem título",
+    you: "Você",
+    agent: "Agente",
+    moreInChat: "Mais {{count}} nesta conversa",
+    coverage:
+      "Pesquisa o que você e os agentes escreveram. Uma conversa entra quando termina um turno ou é aberta após a atualização do host.",
+    nativeJump:
+      "Abrir um resultado aqui abre a conversa; ir até a mensagem funciona no desktop e na web.",
+    unsearchedHosts: "Não pesquisado: {{hosts}}",
+    noMatches: "Nenhuma mensagem corresponde",
+  },
   agentList: {
     actions: en.agentList.actions,
     fallbackTitle: "Nova sessão",

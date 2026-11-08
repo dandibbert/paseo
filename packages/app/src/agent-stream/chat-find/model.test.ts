@@ -311,3 +311,31 @@ it("counts one match per message from a host that reports no counts", async () =
     model.close();
   }
 });
+
+it("lands a history-search jump on the first match at or after its message", async () => {
+  const items = [message(2), message(5), message(9)];
+  const model = new ChatFindModel({
+    async search() {
+      return response([
+        { seq: 2, role: "assistant" },
+        { seq: 5, role: "assistant" },
+        { seq: 9, role: "assistant" },
+      ]);
+    },
+    async load() {},
+    async reveal() {
+      return { count: 1, occurrence: 0 };
+    },
+    clear() {},
+  });
+  try {
+    model.updateHistory("epoch", items);
+    model.jumpTo("target", 5);
+    expect(model.getSnapshot().open).toBe(true);
+    await expect.poll(() => model.getSnapshot().phase).toBe("ready");
+    expect(model.getSnapshot().selectedItemId).toBe("row-5");
+    expect(model.getSnapshot().occurrence).toBe(1);
+  } finally {
+    model.close();
+  }
+});

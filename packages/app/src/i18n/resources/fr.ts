@@ -307,6 +307,20 @@ export const fr: TranslationResources = {
       clearSearch: "Effacer la recherche",
     },
   },
+  historyTextSearch: {
+    scopeSessions: "Discussions",
+    scopeMessages: "Messages",
+    untitled: "Discussion sans titre",
+    you: "Vous",
+    agent: "Agent",
+    moreInChat: "{{count}} de plus dans cette discussion",
+    coverage:
+      "Recherche ce que vous et les agents avez écrit. Une discussion est incluse après la fin d'un tour ou son ouverture depuis la mise à jour de l'hôte.",
+    nativeJump:
+      "Ouvrir un résultat ici ouvre la discussion ; aller au message fonctionne sur ordinateur et sur le web.",
+    unsearchedHosts: "Non recherché : {{hosts}}",
+    noMatches: "Aucun message ne correspond",
+  },
   agentList: {
     actions: en.agentList.actions,
     fallbackTitle: "Nouvelle session",

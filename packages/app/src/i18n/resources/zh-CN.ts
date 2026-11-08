@@ -301,6 +301,18 @@ export const zhCN: TranslationResources = {
       clearSearch: "清除搜索",
     },
   },
+  historyTextSearch: {
+    scopeSessions: "会话",
+    scopeMessages: "消息正文",
+    untitled: "未命名会话",
+    you: "你",
+    agent: "Agent",
+    moreInChat: "此会话还有 {{count}} 处匹配",
+    coverage: "搜索你和 agent 写的内容。主机更新后，会话完成一轮或被打开过一次才会进入索引。",
+    nativeJump: "在这里打开结果会进入该会话；在会话内定位到消息目前只支持桌面端和网页端。",
+    unsearchedHosts: "未搜索：{{hosts}}",
+    noMatches: "没有匹配的消息",
+  },
   agentList: {
     actions: {
       menu: "Agent 操作",

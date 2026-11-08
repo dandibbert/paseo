@@ -756,6 +756,11 @@ export type AgentTimelineSearchPayload = Extract<
   { type: "agent.timeline.search.response" }
 >["payload"];
 
+export type HistoryTextSearchPayload = Extract<
+  SessionOutboundMessage,
+  { type: "agent.history.search_text.response" }
+>["payload"];
+
 export type AgentTimelinePromptIndexPayload = Extract<
   SessionOutboundMessage,
   { type: "agent.timeline.list_prompts.response" }
@@ -7185,6 +7190,28 @@ export class DaemonClient {
         submit,
       }),
       responseType: "terminal.secure_input.response",
+      options: { skipQueue: true },
+    });
+  }
+
+  /**
+   * Searches the message text of every agent the host has indexed. Requires
+   * `server_info.features.historyTextSearch`.
+   */
+  async searchHistoryText(input: {
+    query: string;
+    limit?: number;
+  }): Promise<CorrelatedResponsePayload<"agent.history.search_text.response">> {
+    const requestId = this.createRequestId();
+    return this.sendCorrelatedRequest({
+      requestId,
+      message: SessionInboundMessageSchema.parse({
+        type: "agent.history.search_text.request",
+        requestId,
+        query: input.query,
+        ...(input.limit ? { limit: input.limit } : {}),
+      }),
+      responseType: "agent.history.search_text.response",
       options: { skipQueue: true },
     });
   }

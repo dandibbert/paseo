@@ -301,6 +301,19 @@ export const ar: TranslationResources = {
       clearSearch: "مسح البحث",
     },
   },
+  historyTextSearch: {
+    scopeSessions: "المحادثات",
+    scopeMessages: "الرسائل",
+    untitled: "محادثة بلا عنوان",
+    you: "أنت",
+    agent: "الوكيل",
+    moreInChat: "{{count}} أخرى في هذه المحادثة",
+    coverage:
+      "يبحث فيما كتبته أنت والوكلاء. تُضاف المحادثة بعد انتهاء دور فيها أو فتحها منذ تحديث المضيف.",
+    nativeJump: "فتح نتيجة هنا يفتح المحادثة؛ الانتقال إلى الرسالة يعمل على سطح المكتب والويب.",
+    unsearchedHosts: "لم يُبحث: {{hosts}}",
+    noMatches: "لا توجد رسائل مطابقة",
+  },
   agentList: {
     actions: en.agentList.actions,
     fallbackTitle: "جلسة جديدة",

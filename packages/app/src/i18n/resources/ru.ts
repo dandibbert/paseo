@@ -305,6 +305,20 @@ export const ru: TranslationResources = {
       clearSearch: "Очистить поиск",
     },
   },
+  historyTextSearch: {
+    scopeSessions: "Чаты",
+    scopeMessages: "Сообщения",
+    untitled: "Чат без названия",
+    you: "Вы",
+    agent: "Агент",
+    moreInChat: "Ещё {{count}} в этом чате",
+    coverage:
+      "Ищет то, что писали вы и агенты. Чат попадает в индекс, когда завершает ход или открывается после обновления хоста.",
+    nativeJump:
+      "Результат открывает чат; переход к сообщению внутри чата работает на компьютере и в вебе.",
+    unsearchedHosts: "Не искали: {{hosts}}",
+    noMatches: "Нет совпадающих сообщений",
+  },
   agentList: {
     actions: en.agentList.actions,
     fallbackTitle: "Новая сессия",

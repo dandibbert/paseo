@@ -306,6 +306,20 @@ export const ja: TranslationResources = {
       clearSearch: "検索をクリア",
     },
   },
+  historyTextSearch: {
+    scopeSessions: "チャット",
+    scopeMessages: "メッセージ",
+    untitled: "無題のチャット",
+    you: "あなた",
+    agent: "エージェント",
+    moreInChat: "このチャットにさらに {{count}} 件",
+    coverage:
+      "あなたとエージェントが書いた内容を検索します。ホストの更新後、ターンが完了したか一度開いたチャットが対象です。",
+    nativeJump:
+      "ここで結果を開くとチャットが開きます。チャット内のメッセージへの移動はデスクトップと Web で動作します。",
+    unsearchedHosts: "未検索: {{hosts}}",
+    noMatches: "一致するメッセージはありません",
+  },
   agentList: {
     actions: en.agentList.actions,
     fallbackTitle: "新しいセッション",

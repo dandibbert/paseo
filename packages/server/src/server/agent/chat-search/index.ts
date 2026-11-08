@@ -22,7 +22,7 @@ interface SearchInput {
 // source is never searched whole, because a match the client cannot highlight — across
 // a block boundary, or on syntax the reader never sees — still inflates the total until
 // navigation reaches that message and drops it.
-function searchableBlocks(text: string): string[] {
+export function searchableBlocks(text: string): string[] {
   return markdown
     .parse(text, {})
     .map((token) => {
@@ -41,7 +41,7 @@ function searchableBlocks(text: string): string[] {
     .filter(Boolean);
 }
 
-function searchPattern(query: string): RegExp {
+export function searchPattern(query: string): RegExp {
   const source = query
     .trim()
     .split(/\s+/)

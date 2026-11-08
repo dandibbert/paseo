@@ -298,6 +298,20 @@ export const en = {
       clearSearch: "Clear search",
     },
   },
+  historyTextSearch: {
+    scopeSessions: "Chats",
+    scopeMessages: "Messages",
+    untitled: "Untitled chat",
+    you: "You",
+    agent: "Agent",
+    moreInChat: "{{count}} more in this chat",
+    coverage:
+      "Searches what you and agents wrote. A chat is included once it has finished a turn or been opened since this host updated.",
+    nativeJump:
+      "Opening a result here opens the chat; finding the message inside it works on desktop and web.",
+    unsearchedHosts: "Not searched: {{hosts}}",
+    noMatches: "No messages match",
+  },
   agentList: {
     actions: {
       menu: "Agent actions",

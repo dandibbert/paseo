@@ -19,6 +19,7 @@ import { hasActiveOverlay } from "@/keyboard";
 import { isImeComposingKeyboardEvent } from "@/utils/keyboard-ime";
 import { getHostRuntimeStore } from "@/runtime/host-runtime";
 import { planTimelinePromptJump } from "@/timeline/timeline-sync-plan";
+import { subscribeChatJumps, takeChatJump } from "@/history-search/pending-jump";
 import { ChatFindModel, type ChatFindFailure } from "./model";
 import { createFindViewport } from "./viewport.web";
 import type { ChatFindProps, ChatFindExpansionProps } from "./types";
@@ -98,6 +99,14 @@ export function ChatFind({
     model.updateHistory(epoch, items);
   }, [model, epoch, items]);
   useEffect(() => () => model.close(), [model]);
+  useEffect(() => {
+    const consume = () => {
+      const jump = takeChatJump(serverId, agentId);
+      if (jump) model.jumpTo(jump.query, jump.seq);
+    };
+    consume();
+    return subscribeChatJumps(consume);
+  }, [agentId, model, serverId]);
   useEffect(() => {
     if (!active) model.close();
   }, [active, model]);

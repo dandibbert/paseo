@@ -306,6 +306,20 @@ export const es: TranslationResources = {
       clearSearch: "Borrar búsqueda",
     },
   },
+  historyTextSearch: {
+    scopeSessions: "Chats",
+    scopeMessages: "Mensajes",
+    untitled: "Chat sin título",
+    you: "Tú",
+    agent: "Agente",
+    moreInChat: "{{count}} más en este chat",
+    coverage:
+      "Busca lo que tú y los agentes escribieron. Un chat se incluye cuando termina un turno o se abre tras actualizar este host.",
+    nativeJump:
+      "Abrir un resultado aquí abre el chat; ir al mensaje dentro del chat funciona en escritorio y web.",
+    unsearchedHosts: "Sin buscar: {{hosts}}",
+    noMatches: "Ningún mensaje coincide",
+  },
   agentList: {
     actions: en.agentList.actions,
     fallbackTitle: "Nueva sesión",

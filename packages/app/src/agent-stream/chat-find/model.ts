@@ -82,6 +82,8 @@ export class ChatFindModel {
   private inMessage = { occurrence: 0, count: 0 };
   private abort = new AbortController();
   private timer: ReturnType<typeof setTimeout> | undefined;
+  /** The message seq a jump from history search asked to land on first. */
+  private startSeq: number | null = null;
   constructor(private operations: ChatFindOperations) {}
   readonly getSnapshot = () => this.state;
   readonly subscribe = (listener: () => void) => {
@@ -111,6 +113,7 @@ export class ChatFindModel {
   };
   readonly setQuery = (query: string) => {
     this.cancel();
+    this.startSeq = null;
     this.locations = [];
     this.resultEpoch = null;
     this.resolved.clear();
@@ -129,6 +132,12 @@ export class ChatFindModel {
     this.timer = setTimeout(() => {
       void this.search(signal);
     }, 120);
+  };
+  /** Opens find on `query` and lands on the first match at or after `seq`. */
+  readonly jumpTo = (query: string, seq: number) => {
+    this.publish({ open: true });
+    this.setQuery(query);
+    this.startSeq = seq;
   };
   readonly retry = () => this.setQuery(this.state.query);
   private fail(error: unknown, signal: AbortSignal) {
@@ -163,10 +172,16 @@ export class ChatFindModel {
         );
         cursor = result.nextCursor ?? undefined;
       } while (cursor !== undefined);
-      await this.navigate(0, 1, signal);
+      await this.navigate(this.startIndex(), 1, signal);
     } catch (error) {
       this.fail(error, signal);
     }
+  }
+  private startIndex(): number {
+    const seq = this.startSeq;
+    if (seq === null) return 0;
+    const index = this.locations.findIndex((location) => location.seq >= seq);
+    return index === -1 ? 0 : index;
   }
   updateHistory(epoch: string | null, items: StreamItem[]) {
     if (
