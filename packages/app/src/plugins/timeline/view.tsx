@@ -43,17 +43,16 @@ function parseRendererData(
  * assistant rows mount the link action hook; tool and reasoning rows do not. */
 function PluginAssistantFileLinkBridge({
   Component,
-  itemProps,
-}: {
+  ...itemProps
+}: PluginTimelineItemProps & {
   Component: ComponentType<PluginTimelineItemProps>;
-  itemProps: PluginTimelineItemProps;
 }) {
   const actions = useAssistantFileLinkActions();
   // The host action requires a placement; the public plugin API defaults
   // that optional argument to Paseo's preferred pane disposition.
   const fileLinks = useMemo<NonNullable<PluginTimelineItemProps["fileLinks"]>>(
     () => ({ open: (source, disposition = "preferred") => actions.open(source, disposition) }),
-    [actions.open],
+    [actions],
   );
   return <Component {...itemProps} fileLinks={fileLinks} />;
 }
@@ -105,7 +104,7 @@ function PluginTimelineItemBody({
       <PluginInstallationProvider plugin={plugin}>
         <PluginClientStateProvider source={stateSource}>
           {item.sourceKind === "assistant_message"
-            ? <PluginAssistantFileLinkBridge Component={Component} itemProps={props} />
+            ? <PluginAssistantFileLinkBridge Component={Component} {...props} />
             : <Component {...props} />}
         </PluginClientStateProvider>
       </PluginInstallationProvider>
