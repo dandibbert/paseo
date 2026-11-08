@@ -8,6 +8,8 @@ import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const hostClient = vi.hoisted(() => ({ invokePluginRpc: async () => null }));
+const fileLinkOpener = vi.hoisted(() => vi.fn());
+vi.mock("@/assistant-file-links", () => ({ useAssistantFileLinkActions: () => ({ open: fileLinkOpener }) }));
 const selectedHost = vi.hoisted(() => ({ client: null as DaemonClient | null }));
 vi.mock("@/runtime/host-runtime", () => ({
   useHostRuntimeClient: () => selectedHost.client ?? (hostClient as unknown as DaemonClient),
@@ -57,6 +59,25 @@ const bundle = `(function(require) {
   } };
 })`;
 
+const fileLinkBundle = `(function(require) {
+  const React = require("react");
+  return { default: function(plugin) {
+    function FileCard(props) {
+      return React.createElement("button", {
+        onClick: function() {
+          props.fileLinks?.open({ href: "./reports/status.md#L9" }, "preferred");
+        },
+      }, "Open file");
+    }
+    plugin.addTimelineRenderer({
+      kind: "test-report", version: 1,
+      schema: { safeParse(value) { return { success: true, data: value }; } },
+      Component: FileCard,
+    });
+    return function() {};
+  } };
+})`;
+
 const failingBundle = `(function() {
   return { default: function(plugin) {
     function BrokenCard() { throw new Error("timeline renderer exploded"); }
@@ -97,6 +118,8 @@ const timelineItem = {
   data: { label: "Four tests passed" },
   timestamp: new Date("2026-01-01T00:00:00.000Z"),
 };
+const assistantTimelineItem = { ...timelineItem, sourceKind: "assistant_message" as const };
+const toolTimelineItem = { ...timelineItem, sourceKind: "tool_call" as const };
 const failingTimelineItem = { ...timelineItem, data: { label: "explode" } };
 const recoveredTimelineItem = { ...timelineItem, data: { label: "Recovered" } };
 
@@ -138,6 +161,46 @@ describe("PluginTimelineItemView", () => {
       ),
     );
     expect(container.textContent).toContain("Four tests passed");
+  });
+
+  it("gives plugin assistant rows the native file-panel opener without changing their renderers", async () => {
+    pluginRegistry.installCatalog(
+      "host-1",
+      [
+        {
+          id: "reports",
+          requirements: { paseo: `>=${appPackage.version}` },
+          clientBundle: fileLinkBundle,
+        },
+      ],
+      { client: daemonClient, audio },
+    );
+    const container = document.createElement("div");
+    containers.push(container);
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    roots.push(root);
+    await act(async () =>
+      root.render(
+        <PluginTimelineItemView
+          serverId="host-1"
+          agentId="agent-1"
+          item={assistantTimelineItem}
+        />,
+      ),
+    );
+    const button = container.querySelector("button");
+    expect(button?.textContent).toBe("Open file");
+    await act(async () => button?.click());
+    expect(fileLinkOpener).toHaveBeenCalledWith({ href: "./reports/status.md#L9" }, "preferred");
+    fileLinkOpener.mockClear();
+    await act(async () =>
+      root.render(
+        <PluginTimelineItemView serverId="host-1" agentId="agent-1" item={toolTimelineItem} />,
+      ),
+    );
+    await act(async () => container.querySelector("button")?.click());
+    expect(fileLinkOpener).not.toHaveBeenCalled();
   });
 
   it("contains renderer crashes to one timeline item", async () => {
