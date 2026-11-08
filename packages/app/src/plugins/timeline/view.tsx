@@ -49,7 +49,12 @@ function PluginAssistantFileLinkBridge({
   itemProps: PluginTimelineItemProps;
 }) {
   const actions = useAssistantFileLinkActions();
-  const fileLinks = useMemo(() => ({ open: actions.open }), [actions.open]);
+  // The host action requires a placement; the public plugin API defaults
+  // that optional argument to Paseo's preferred pane disposition.
+  const fileLinks = useMemo<NonNullable<PluginTimelineItemProps["fileLinks"]>>(
+    () => ({ open: (source, disposition = "preferred") => actions.open(source, disposition) }),
+    [actions.open],
+  );
   return <Component {...itemProps} fileLinks={fileLinks} />;
 }
 
