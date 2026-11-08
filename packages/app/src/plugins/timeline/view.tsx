@@ -1,3 +1,4 @@
+import { useAssistantFileLinkActions } from "@/assistant-file-links";
 import { PluginClientStateProvider } from "@getpaseo/plugin/client/host";
 import type { PluginTimelineItemProps } from "@getpaseo/plugin/client";
 import type { PluginTheme } from "@getpaseo/plugin";
@@ -35,6 +36,21 @@ function parseRendererData(
     console.warn("[Plugins] Timeline renderer schema failed", error);
     return null;
   }
+}
+
+/** Native file links in a plugin-authored assistant row use the same file
+ * resolver, workspace context and panel navigation as host Markdown. Only
+ * assistant rows mount the link action hook; tool and reasoning rows do not. */
+function PluginAssistantFileLinkBridge({
+  Component,
+  itemProps,
+}: {
+  Component: ComponentType<PluginTimelineItemProps>;
+  itemProps: PluginTimelineItemProps;
+}) {
+  const actions = useAssistantFileLinkActions();
+  const fileLinks = useMemo(() => ({ open: actions.open }), [actions.open]);
+  return <Component {...itemProps} fileLinks={fileLinks} />;
 }
 
 function PluginTimelineItemBody({
@@ -83,7 +99,9 @@ function PluginTimelineItemBody({
     <SurfaceErrorBoundary installation={plugin} resetKey={item.data} Surface={Component}>
       <PluginInstallationProvider plugin={plugin}>
         <PluginClientStateProvider source={stateSource}>
-          <Component {...props} />
+          {item.sourceKind === "assistant_message"
+            ? <PluginAssistantFileLinkBridge Component={Component} itemProps={props} />
+            : <Component {...props} />}
         </PluginClientStateProvider>
       </PluginInstallationProvider>
     </SurfaceErrorBoundary>
