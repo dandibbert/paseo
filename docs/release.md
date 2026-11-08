@@ -28,8 +28,10 @@ an explicit release. Ordinary pushes never deploy a service or publish installer
 Personal macOS Release and iOS Unsigned IPA still run on GitHub-hosted Macs. Each
 also starts an Ubuntu `M1 fallback` job. When a macOS job has waited 10 minutes for
 a runner, it starts the matching build in the private `dandibbert/mac-build-hub`
-repository on the M1 Pro and cancels the run; the run summary links the M1 build.
-The M1 builds arm64 only. A macOS build moved there always publishes a
+repository and cancels the run only once an M1 runner has picked that build up. If
+a GitHub-hosted Mac starts first, or no M1 runner answers within 15 minutes, it
+withdraws the M1 build and the run stays on GitHub; the run summary says which
+happened. The M1 builds arm64 only. A macOS build moved there always publishes a
 `personal-test-v*` build to Beta, because a run's dispatch inputs cannot be read
 back. Runs that verify an existing build (`verify_build_run_id`) are not moved.
 

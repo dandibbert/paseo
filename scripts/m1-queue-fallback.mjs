@@ -2,7 +2,8 @@
 // Moves this workflow run to the M1 build machine (dandibbert/mac-build-hub) when a
 // GitHub-hosted macOS job has waited too long for a runner. Runs as a small Ubuntu job beside
 // the macOS jobs: it exits once every macOS job has a runner, and otherwise dispatches the
-// matching hub workflow for the same commit and cancels this run.
+// matching hub workflow for the same commit. It cancels this run only once an M1 runner has
+// picked that build up, so an offline M1 leaves the run on GitHub.
 //
 // A job is only created once the jobs it needs have finished, so a queued job's age is how
 // long it has been waiting for a runner.
@@ -43,6 +44,20 @@ export function decide({ jobs, guardName, expectedMacJobs, now, minutes }) {
   return { action: "wait" };
 }
 
+/**
+ * After the hub build is dispatched: whichever side gets a runner first keeps the build.
+ * `hubJobs` are the hub run's jobs; `step` is decide() for this run, looked at again.
+ */
+export function decideHandover({ hubJobs, step, waitedMs, limitMs }) {
+  const onM1 = hubJobs.filter((job) => job.labels.includes("m1-build"));
+  if (onM1.some((job) => job.status === "in_progress" || job.status === "completed")) {
+    return "m1";
+  }
+  if (step.action === "done") return "github";
+  if (waitedMs >= limitMs) return "give-up";
+  return "wait";
+}
+
 async function call(method, path, token, body) {
   const init = {
     method,
@@ -69,65 +84,112 @@ function summary(line) {
   if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, `${line}\n`);
 }
 
-async function main() {
-  const env = process.env;
-  const hubToken = env.M1_BUILD_HUB_TOKEN;
-  if (!hubToken) {
-    summary("M1_BUILD_HUB_TOKEN is not set; this run stays on GitHub-hosted runners.");
-    return;
-  }
-  const repo = env.GITHUB_REPOSITORY;
-  const runId = env.GITHUB_RUN_ID;
-  const minutes = Number(env.QUEUE_MINUTES ?? "10");
-  const pollMs = Number(env.POLL_SECONDS ?? "60") * 1000;
-  const expectedMacJobs = Number(env.EXPECTED_MAC_JOBS);
+function readConfig(env) {
   // SOURCE_SHA in projects other than Paseo, which copy this script.
   const sha = env.SOURCE_SHA ?? env.PASEO_SHA;
   if (!/^[0-9a-f]{40}$/.test(sha ?? "")) throw new Error(`Commit to build is not a SHA: ${sha}`);
-  const shaInput = env.HUB_SHA_INPUT ?? "paseo_sha";
-  const inputs = JSON.parse(env.HUB_INPUTS ?? "{}");
+  return {
+    repo: env.GITHUB_REPOSITORY,
+    runId: env.GITHUB_RUN_ID,
+    runUrl: `${env.GITHUB_SERVER_URL}/${env.GITHUB_REPOSITORY}/actions/runs/${env.GITHUB_RUN_ID}`,
+    token: env.GITHUB_TOKEN,
+    hubToken: env.M1_BUILD_HUB_TOKEN,
+    hubRepo: env.HUB_REPO,
+    hubWorkflow: env.HUB_WORKFLOW,
+    hubWorkflowUrl: `${env.GITHUB_SERVER_URL}/${env.HUB_REPO}/actions/workflows/${env.HUB_WORKFLOW}`,
+    hubInputs: { ...JSON.parse(env.HUB_INPUTS ?? "{}"), [env.HUB_SHA_INPUT ?? "paseo_sha"]: sha },
+    sha,
+    guardName: env.GUARD_JOB_NAME,
+    expectedMacJobs: Number(env.EXPECTED_MAC_JOBS),
+    minutes: Number(env.QUEUE_MINUTES ?? "10"),
+    handoverMs: Number(env.HANDOVER_MINUTES ?? "15") * 60_000,
+    pollMs: Number(env.POLL_SECONDS ?? "60") * 1000,
+  };
+}
 
+async function lookAtRun(config) {
+  const { jobs } = await call(
+    "GET",
+    `/repos/${config.repo}/actions/runs/${config.runId}/jobs?per_page=100`,
+    config.token,
+  );
+  return decide({
+    jobs,
+    guardName: config.guardName,
+    expectedMacJobs: config.expectedMacJobs,
+    now: Date.now(),
+    minutes: config.minutes,
+  });
+}
+
+/** Asks the M1 for the build and cancels this run only once an M1 runner has it. */
+async function handOver(config, stuck) {
+  const dispatched = await call(
+    "POST",
+    `/repos/${config.hubRepo}/actions/workflows/${config.hubWorkflow}/dispatches`,
+    config.hubToken,
+    {
+      ref: "main",
+      inputs: { ...config.hubInputs, requested_by: config.runUrl },
+      return_run_details: true,
+    },
+  );
+  const names = stuck.map((job) => job.name).join(", ");
+  summary(
+    `Waited ${config.minutes} min for a GitHub-hosted Mac (${names}). Asked the M1 to build ${config.sha}: ${dispatched?.html_url ?? config.hubWorkflowUrl}`,
+  );
+  const hubRunId = dispatched?.workflow_run_id;
+  if (!hubRunId) {
+    summary("The hub did not return its run, so this run stays on GitHub as well.");
+    return;
+  }
+  const askedAt = Date.now();
   for (;;) {
-    const { jobs } = await call(
+    await sleep(config.pollMs);
+    const hub = await call(
       "GET",
-      `/repos/${repo}/actions/runs/${runId}/jobs?per_page=100`,
-      env.GITHUB_TOKEN,
+      `/repos/${config.hubRepo}/actions/runs/${hubRunId}/jobs?per_page=100`,
+      config.hubToken,
     );
-    const step = decide({
-      jobs,
-      guardName: env.GUARD_JOB_NAME,
-      expectedMacJobs,
-      now: Date.now(),
-      minutes,
+    const outcome = decideHandover({
+      hubJobs: hub.jobs,
+      step: await lookAtRun(config),
+      waitedMs: Date.now() - askedAt,
+      limitMs: config.handoverMs,
     });
+    if (outcome === "wait") continue;
+    if (outcome === "m1") {
+      summary("The M1 picked the build up; cancelling this run.");
+      await call("POST", `/repos/${config.repo}/actions/runs/${config.runId}/cancel`, config.token);
+      return;
+    }
+    await call("POST", `/repos/${config.hubRepo}/actions/runs/${hubRunId}/cancel`, config.hubToken);
+    summary(
+      outcome === "github"
+        ? "A GitHub-hosted Mac became free first; withdrew the M1 build."
+        : `No M1 runner took the build within ${config.handoverMs / 60_000} min; withdrew it and stayed on GitHub.`,
+    );
+    return;
+  }
+}
+
+async function main() {
+  if (!process.env.M1_BUILD_HUB_TOKEN) {
+    summary("M1_BUILD_HUB_TOKEN is not set; this run stays on GitHub-hosted runners.");
+    return;
+  }
+  const config = readConfig(process.env);
+  for (;;) {
+    const step = await lookAtRun(config);
     if (step.action === "done") {
       console.log(`Nothing to move: ${step.reason}.`);
       return;
     }
     if (step.action === "takeover") {
-      const names = step.stuck.map((job) => job.name).join(", ");
-      const runUrl = `${env.GITHUB_SERVER_URL}/${repo}/actions/runs/${runId}`;
-      const dispatched = await call(
-        "POST",
-        `/repos/${env.HUB_REPO}/actions/workflows/${env.HUB_WORKFLOW}/dispatches`,
-        hubToken,
-        {
-          ref: "main",
-          inputs: { ...inputs, [shaInput]: sha, requested_by: runUrl },
-          return_run_details: true,
-        },
-      );
-      const hubRun =
-        dispatched?.html_url ??
-        `${env.GITHUB_SERVER_URL}/${env.HUB_REPO}/actions/workflows/${env.HUB_WORKFLOW}`;
-      summary(
-        `Waited ${minutes} min for a GitHub-hosted Mac (${names}). Building ${sha} on the M1: ${hubRun}`,
-      );
-      await call("POST", `/repos/${repo}/actions/runs/${runId}/cancel`, env.GITHUB_TOKEN);
-      summary("Cancelled this run; the M1 build replaces it.");
+      await handOver(config, step.stuck);
       return;
     }
-    await sleep(pollMs);
+    await sleep(config.pollMs);
   }
 }
 
