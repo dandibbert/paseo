@@ -431,6 +431,7 @@ export interface PaseoDaemonConfig {
   };
   autoArchiveAfterMerge?: boolean;
   enableTerminalAgentHooks?: boolean;
+  notifyOnAgentErrors?: boolean;
   appendSystemPrompt?: string;
   genuiSystemPrompt?: boolean;
   terminalProfiles?: TerminalProfile[];
@@ -603,6 +604,7 @@ function createInitialMutableDaemonConfig(config: ResolvedDaemonSettings): Mutab
     },
     autoArchiveAfterMerge: config.autoArchiveAfterMerge ?? false,
     enableTerminalAgentHooks: config.enableTerminalAgentHooks ?? false,
+    notifyOnAgentErrors: config.notifyOnAgentErrors !== false,
     idleRuntimeCleanup: config.idleRuntimeCleanup !== false,
     resumeOnStartup: config.resumeOnStartup === true,
     resumePrompt: config.resumePrompt ?? "Resume working.",

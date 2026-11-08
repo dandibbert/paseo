@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   computeNotificationPlan,
-  isPushEligibleAttentionReason,
+  isNotifiableAttentionReason,
   type ClientPresenceState,
   PRESENCE_THRESHOLD_MS,
 } from "./agent-attention-policy.js";
@@ -225,10 +225,17 @@ describe("computeNotificationPlan", () => {
   });
 });
 
-describe("isPushEligibleAttentionReason", () => {
-  it("allows push for finished and permission but not error", () => {
-    expect(isPushEligibleAttentionReason("finished")).toBe(true);
-    expect(isPushEligibleAttentionReason("permission")).toBe(true);
-    expect(isPushEligibleAttentionReason("error")).toBe(false);
+describe("isNotifiableAttentionReason", () => {
+  it("notifies on finished, permission and errors by default", () => {
+    for (const reason of ["finished", "permission", "error"] as const) {
+      expect(isNotifiableAttentionReason(reason, {})).toBe(true);
+    }
+  });
+
+  it("silences only errors when the host turns error notifications off", () => {
+    const off = { notifyOnAgentErrors: false };
+    expect(isNotifiableAttentionReason("error", off)).toBe(false);
+    expect(isNotifiableAttentionReason("finished", off)).toBe(true);
+    expect(isNotifiableAttentionReason("permission", off)).toBe(true);
   });
 });

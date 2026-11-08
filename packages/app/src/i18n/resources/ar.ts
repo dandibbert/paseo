@@ -3042,6 +3042,11 @@ export const ar: TranslationResources = {
         moveUp: "نقل لأعلى",
         moveDown: "نقل لأسفل",
       },
+      agentErrorNotifications: {
+        title: "الإشعار عند فشل وكيل",
+        hint: "يرسل إشعارًا إلى الهاتف ويعرض إشعار النظام عندما يتوقف وكيل على هذا المضيف بسبب خطأ، كما عند انتهاء الدور.",
+        failed: "تعذّر تحديث إشعارات الأخطاء",
+      },
       daemon: {
         rename: {
           editLabel: "تحرير التسمية",

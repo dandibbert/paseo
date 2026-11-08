@@ -3070,6 +3070,11 @@ export const es: TranslationResources = {
         moveUp: "Mover hacia arriba",
         moveDown: "Mover hacia abajo",
       },
+      agentErrorNotifications: {
+        title: "Avisar cuando un agente falle",
+        hint: "Envía una notificación al teléfono y muestra un aviso del sistema cuando un agente de este host se detiene con un error, igual que al terminar un turno.",
+        failed: "No se pudo actualizar el aviso de errores",
+      },
       daemon: {
         rename: {
           editLabel: "Editar etiqueta",

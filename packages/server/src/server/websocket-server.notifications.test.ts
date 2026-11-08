@@ -83,7 +83,10 @@ class RecordingPushNotificationSender implements PushNotificationSender {
   }
 }
 
-function createServer(agentManagerOverrides?: Record<string, unknown>) {
+function createServer(
+  agentManagerOverrides?: Record<string, unknown>,
+  daemonConfig: { notifyOnAgentErrors?: boolean } = {},
+) {
   const pushNotifications = new RecordingPushNotificationSender();
   const agentManager = {
     subscribe: vi.fn(() => () => {}),
@@ -104,6 +107,7 @@ function createServer(agentManagerOverrides?: Record<string, unknown>) {
   const daemonConfigStore = {
     onApply: vi.fn(() => () => {}),
     onChange: vi.fn(() => () => {}),
+    get: vi.fn(() => daemonConfig),
   };
 
   const server = new VoiceAssistantWebSocketServer(
@@ -351,8 +355,22 @@ describe("VoiceAssistantWebSocketServer notification payloads", () => {
     expect(pushNotifications.sent).toHaveLength(1);
   });
 
-  it("does not push error attention when the only connected client has never sent a heartbeat", async () => {
+  it("pushes error attention when the only connected client has never sent a heartbeat", async () => {
     const { server, pushNotifications } = createServer();
+    const ws = connectClient(server, null);
+
+    await asInternals<WebSocketServerInternals>(server).broadcastAgentAttention({
+      agentId: "agent-no-heartbeat",
+      provider: "claude",
+      reason: "error",
+    });
+
+    expect(readAttentionRequiredMessage(ws).shouldNotify).toBe(false);
+    expect(pushNotifications.sent).toHaveLength(1);
+  });
+
+  it("notifies nowhere about errors when the host turned error notifications off", async () => {
+    const { server, pushNotifications } = createServer(undefined, { notifyOnAgentErrors: false });
     const ws = connectClient(server, null);
 
     await asInternals<WebSocketServerInternals>(server).broadcastAgentAttention({

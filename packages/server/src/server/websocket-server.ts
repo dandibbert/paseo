@@ -94,7 +94,7 @@ import type { SpeechReadinessSnapshot, SpeechService } from "./speech/speech-run
 import type { VoiceCallerContext, VoiceSpeakHandler } from "./voice-types.js";
 import {
   computeNotificationPlan,
-  isPushEligibleAttentionReason,
+  isNotifiableAttentionReason,
   type ClientPresenceState,
 } from "./agent-attention-policy.js";
 import {
@@ -2965,12 +2965,16 @@ export class VoiceAssistantWebSocketServer {
       permissionRequest: findLatestPermissionRequest(agent.pendingPermissions),
     });
 
-    const plan = computeNotificationPlan({
-      allStates,
-      focusTarget: { kind: "agent", id: params.agentId },
-      pushEligible: isPushEligibleAttentionReason(params.reason),
-      nowMs,
-    });
+    // A silenced reason (errors, when the host turned them off) notifies nowhere; the
+    // attention state still reaches every client.
+    const plan = isNotifiableAttentionReason(params.reason, this.daemonConfigStore.get())
+      ? computeNotificationPlan({
+          allStates,
+          focusTarget: { kind: "agent", id: params.agentId },
+          pushEligible: true,
+          nowMs,
+        })
+      : { inAppRecipientIndex: null, shouldPush: false };
 
     if (plan.shouldPush) {
       void this.pushNotificationSender.send(notification).catch((err) => {

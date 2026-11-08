@@ -3038,6 +3038,11 @@ export const ja: TranslationResources = {
         moveUp: "上に移動",
         moveDown: "下に移動",
       },
+      agentErrorNotifications: {
+        title: "エージェントの失敗を通知",
+        hint: "このホストのエージェントがエラーで停止したとき、完了時と同じようにスマートフォンへプッシュしシステム通知を表示します。",
+        failed: "エラー通知の設定を更新できません",
+      },
       daemon: {
         rename: {
           editLabel: "ラベルを編集",

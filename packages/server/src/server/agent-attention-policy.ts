@@ -75,6 +75,10 @@ export function computeNotificationPlan({
   return { inAppRecipientIndex: null, shouldPush: pushEligible };
 }
 
-export function isPushEligibleAttentionReason(reason: AgentAttentionReason): boolean {
-  return reason !== "error";
+/** Errors notify unless the host turned that off (`notifyOnAgentErrors`). */
+export function isNotifiableAttentionReason(
+  reason: AgentAttentionReason,
+  settings: { notifyOnAgentErrors?: boolean },
+): boolean {
+  return reason !== "error" || settings.notifyOnAgentErrors !== false;
 }

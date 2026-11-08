@@ -9,7 +9,8 @@ import { buildWorkspaceTabPersistenceKey } from "@/workspace-tabs/model";
 import { deriveWorkspaceTabModel } from "@/screens/workspace/workspace-tab-model";
 import { useHostRuntimeClient, useHostRuntimeIsConnected } from "@/runtime/host-runtime";
 import { useAppSettings } from "@/hooks/use-settings";
-import { dispatchComposerAgentMessage } from "@/composer/actions";
+import { dispatchComposerAgentMessage, queueComposerMessage } from "@/composer/actions";
+import type { SendBehavior } from "@/composer/input/state";
 import { createMessageSubmissionWriter } from "@/composer/submission/writer";
 import { useSessionStore, selectAgentTurnPresentation } from "@/stores/session-store";
 import { FLOATING_ACTION_BUTTON_CLEARANCE } from "@/components/ui/floating-action-button";
@@ -73,7 +74,32 @@ export function useReviewFeedback(input: {
         send: async (recipient, attachment) => {
           const { client: targetClient, sendBehavior } = live.current;
           if (!targetClient) throw new Error(i18n.t("workspace.terminal.hostDisconnected"));
-          const activeTurnBehavior = sendBehavior === "steer" ? "steer" : "interrupt";
+          const session = useSessionStore.getState().sessions[serverId];
+          const turn = selectAgentTurnPresentation(session, recipient.agentId);
+          const delivery = feedbackDelivery(sendBehavior, turn.isActive);
+          if (delivery === "queue") {
+            // The same per-agent queue the composer uses: sent once the agent's turn ends.
+            queueComposerMessage({
+              agentId: recipient.agentId,
+              text: i18n.t("review.feedback.prompt"),
+              attachments: [attachment],
+              queue: {
+                read: (id) =>
+                  useSessionStore.getState().sessions[serverId]?.queuedMessages?.get(id) ?? [],
+                write: (updater) => useSessionStore.getState().setQueuedMessages(serverId, updater),
+              },
+            });
+            live.current.toast.show(
+              createElement(FeedbackSentMessage, {
+                recipient,
+                serverId,
+                workspaceId: workspaceId ?? "",
+              }),
+              { variant: "success" },
+            );
+            return;
+          }
+          const activeTurnBehavior = delivery;
           await dispatchComposerAgentMessage({
             client: targetClient,
             agentId: recipient.agentId,
@@ -82,13 +108,7 @@ export function useReviewFeedback(input: {
             encodeImages: async () => [],
             submission: createMessageSubmissionWriter(serverId),
             activeTurnBehavior,
-            activeTurnId:
-              activeTurnBehavior === "steer"
-                ? (selectAgentTurnPresentation(
-                    useSessionStore.getState().sessions[serverId],
-                    recipient.agentId,
-                  ).turnId ?? undefined)
-                : undefined,
+            activeTurnId: activeTurnBehavior === "steer" ? (turn.turnId ?? undefined) : undefined,
           });
           live.current.toast.show(
             createElement(FeedbackSentMessage, {
@@ -119,6 +139,18 @@ export function useReviewFeedback(input: {
             : controlHeightForLayout("md", isCompact) + SPACING[4]) + 44
         : 0,
   };
+}
+
+/**
+ * How feedback reaches an agent: the user's send setting decides only while the agent is mid-turn.
+ * Queue waits for the turn to end, like the composer; it used to interrupt instead.
+ */
+export function feedbackDelivery(
+  sendBehavior: SendBehavior,
+  agentIsActive: boolean,
+): "queue" | "steer" | "interrupt" {
+  if (sendBehavior === "queue") return agentIsActive ? "queue" : "interrupt";
+  return sendBehavior;
 }
 
 function readRecipients(workspaceKey: string | null): FeedbackRecipient[] {

@@ -275,6 +275,7 @@ export const PersistedConfigSchema = z
           .optional(),
         autoArchiveAfterMerge: z.boolean().optional(),
         enableTerminalAgentHooks: z.boolean().optional(),
+        notifyOnAgentErrors: z.boolean().optional(),
         appendSystemPrompt: z.string().optional(),
         genuiSystemPrompt: z.boolean().optional(),
         terminalProfiles: z.array(TerminalProfileSchema).optional(),

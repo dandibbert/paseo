@@ -3076,6 +3076,11 @@ export const fr: TranslationResources = {
         moveUp: "Monter",
         moveDown: "Descendre",
       },
+      agentErrorNotifications: {
+        title: "Prévenir quand un agent échoue",
+        hint: "Envoie une notification au téléphone et affiche une notification système quand un agent de cet hôte s’arrête sur une erreur, comme à la fin d’un tour.",
+        failed: "Impossible de mettre à jour les notifications d’erreur",
+      },
       daemon: {
         rename: {
           editLabel: "Modifier le libellé",

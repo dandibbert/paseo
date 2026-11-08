@@ -3017,6 +3017,11 @@ export const zhCN: TranslationResources = {
         moveUp: "上移",
         moveDown: "下移",
       },
+      agentErrorNotifications: {
+        title: "agent 出错时通知",
+        hint: "这台主机上的 agent 出错停止时，像完成一轮一样推送到手机并弹出系统通知。",
+        failed: "无法更新出错通知设置",
+      },
       daemon: {
         rename: {
           editLabel: "编辑标签",

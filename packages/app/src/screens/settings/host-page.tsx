@@ -298,6 +298,7 @@ export function HostAgentsPage({ serverId }: { serverId: string }) {
           <GenuiSystemPromptCard serverId={serverId} />
           <RestartRecoveryCard serverId={serverId} />
           <IdleRuntimeCleanupCard serverId={serverId} />
+          <AgentErrorNotificationsCard serverId={serverId} />
         </SettingsSection>
       ) : (
         <View style={[settingsStyles.card, styles.emptyCard]}>
@@ -986,6 +987,49 @@ function EnableTerminalAgentHooksCard({ serverId }: { serverId: string }) {
           onValueChange={handleValueChange}
           accessibilityLabel="Enable terminal agent hooks"
           testID="host-page-terminal-agent-hooks-switch"
+        />
+      </View>
+    </View>
+  );
+}
+
+// COMPAT(agentErrorNotifications): older daemons omit the field and never notify on errors.
+function AgentErrorNotificationsCard({ serverId }: { serverId: string }) {
+  const { t } = useTranslation();
+  const isConnected = useHostRuntimeIsConnected(serverId);
+  const { config, patchConfig } = useDaemonConfig(serverId);
+
+  const handleValueChange = useCallback(
+    (next: boolean) => {
+      void patchConfig({ notifyOnAgentErrors: next }).catch((error) => {
+        console.error("[HostPage] Failed to update agent error notifications", error);
+        Alert.alert(
+          t("settings.host.agentErrorNotifications.failed"),
+          error instanceof Error ? error.message : String(error),
+        );
+      });
+    },
+    [patchConfig, t],
+  );
+
+  if (!isConnected || config?.notifyOnAgentErrors === undefined) return null;
+
+  return (
+    <View style={settingsStyles.card} testID="host-page-agent-error-notifications-card">
+      <View style={settingsStyles.row}>
+        <View style={settingsStyles.rowContent}>
+          <Text style={settingsStyles.rowTitle}>
+            {t("settings.host.agentErrorNotifications.title")}
+          </Text>
+          <Text style={settingsStyles.rowHint}>
+            {t("settings.host.agentErrorNotifications.hint")}
+          </Text>
+        </View>
+        <Switch
+          value={config.notifyOnAgentErrors}
+          onValueChange={handleValueChange}
+          accessibilityLabel={t("settings.host.agentErrorNotifications.title")}
+          testID="host-page-agent-error-notifications-switch"
         />
       </View>
     </View>

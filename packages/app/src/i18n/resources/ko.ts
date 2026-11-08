@@ -3022,6 +3022,11 @@ export const ko: TranslationResources = {
         moveUp: "위로 이동",
         moveDown: "아래로 이동",
       },
+      agentErrorNotifications: {
+        title: "에이전트 실패 시 알림",
+        hint: "이 호스트의 에이전트가 오류로 멈추면 완료 때처럼 휴대폰으로 푸시하고 시스템 알림을 표시합니다.",
+        failed: "오류 알림 설정을 업데이트할 수 없습니다",
+      },
       daemon: {
         rename: {
           editLabel: "레이블 편집",

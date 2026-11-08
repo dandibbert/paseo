@@ -241,6 +241,9 @@ export const MutableDaemonConfigSchema = z
     metadataGeneration: MutableMetadataGenerationConfigSchema.default({ providers: [] }),
     autoArchiveAfterMerge: z.boolean().default(false),
     enableTerminalAgentHooks: z.boolean().default(false),
+    // COMPAT(agentErrorNotifications): added in v0.15.3-personal, optional for older daemons, which
+    // never notify on errors. Absent means on.
+    notifyOnAgentErrors: z.boolean().optional(),
     // COMPAT(idleRuntimeCleanupSetting): added in v0.13.0, keep optional while old daemons are supported.
     // Persisted host-wide value, applied live by the daemon.
     idleRuntimeCleanup: z.boolean().optional(),
@@ -273,6 +276,7 @@ export const MutableDaemonConfigPatchSchema = z
     metadataGeneration: MutableMetadataGenerationConfigSchema.partial().optional(),
     autoArchiveAfterMerge: z.boolean().optional(),
     enableTerminalAgentHooks: z.boolean().optional(),
+    notifyOnAgentErrors: z.boolean().optional(),
     idleRuntimeCleanup: z.boolean().optional(),
     resumeOnStartup: z.boolean().optional(),
     resumePrompt: z.string().optional(),

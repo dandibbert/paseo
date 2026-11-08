@@ -591,6 +591,7 @@ export type ResolvedDaemonSettings = Pick<
   | "git"
   | "autoArchiveAfterMerge"
   | "enableTerminalAgentHooks"
+  | "notifyOnAgentErrors"
   | "appendSystemPrompt"
   | "genuiSystemPrompt"
   | "terminalProfiles"
@@ -666,6 +667,11 @@ export function resolveConfigFromPersisted(
   };
 }
 
+// Absent means on: error notifications are opt-out.
+function notifiesOnAgentErrors(persisted: PersistedConfig): boolean {
+  return persisted.daemon?.notifyOnAgentErrors !== false;
+}
+
 export function resolveReloadableConfig(
   persisted: PersistedConfig,
   options?: ResolveConfigFromPersistedOptions,
@@ -685,6 +691,7 @@ export function resolveReloadableConfig(
     corsAllowedOrigins: resolveCorsAllowedOrigins(env, persisted),
     git: resolveGitProcessConfig(env, persisted),
     enableTerminalAgentHooks: persisted.daemon?.enableTerminalAgentHooks ?? false,
+    notifyOnAgentErrors: notifiesOnAgentErrors(persisted),
     skillSelection: persisted.agents?.skills?.selection,
     pluginsEnabled: persisted.pluginsEnabled ?? false,
     plugins: persisted.plugins,

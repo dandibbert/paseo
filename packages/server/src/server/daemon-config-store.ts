@@ -29,6 +29,7 @@ interface SupportedMutableConfigPatch {
   metadataGeneration?: MutableDaemonConfig["metadataGeneration"];
   autoArchiveAfterMerge?: boolean;
   enableTerminalAgentHooks?: boolean;
+  notifyOnAgentErrors?: boolean;
   idleRuntimeCleanup?: boolean;
   resumeOnStartup?: boolean;
   resumePrompt?: string;
@@ -193,6 +194,7 @@ const RELOADABLE_PATHS = [
   "daemon.git.maxProcessConcurrency",
   "daemon.autoArchiveAfterMerge",
   "daemon.enableTerminalAgentHooks",
+  "daemon.notifyOnAgentErrors",
   "daemon.appendSystemPrompt",
   "daemon.genuiSystemPrompt",
   "daemon.terminalProfiles",
@@ -222,6 +224,7 @@ const PERSISTED_TO_MUTABLE_PATH = new Map<string, string>([
   ["daemon.git.maxProcessConcurrency", "git.maxProcessConcurrency"],
   ["daemon.autoArchiveAfterMerge", "autoArchiveAfterMerge"],
   ["daemon.enableTerminalAgentHooks", "enableTerminalAgentHooks"],
+  ["daemon.notifyOnAgentErrors", "notifyOnAgentErrors"],
   ["daemon.appendSystemPrompt", "appendSystemPrompt"],
   ["daemon.genuiSystemPrompt", "genuiSystemPrompt"],
   ["daemon.terminalProfiles", "terminalProfiles"],
@@ -313,6 +316,9 @@ function pickSupportedPatchFields(patch: MutableDaemonConfigPatch): SupportedMut
       : {}),
     ...(patch.enableTerminalAgentHooks !== undefined
       ? { enableTerminalAgentHooks: patch.enableTerminalAgentHooks }
+      : {}),
+    ...(patch.notifyOnAgentErrors !== undefined
+      ? { notifyOnAgentErrors: patch.notifyOnAgentErrors }
       : {}),
     ...pickRestartRecoveryPatch(patch),
     ...(patch.idleRuntimeCleanup !== undefined
@@ -794,6 +800,9 @@ function mergeMutableDaemonPatch(
   }
   if (patch.enableTerminalAgentHooks !== undefined) {
     next.enableTerminalAgentHooks = patch.enableTerminalAgentHooks;
+  }
+  if (patch.notifyOnAgentErrors !== undefined) {
+    next.notifyOnAgentErrors = patch.notifyOnAgentErrors;
   }
   if (patch.appendSystemPrompt !== undefined) next.appendSystemPrompt = patch.appendSystemPrompt;
   if (patch.genuiSystemPrompt !== undefined) next.genuiSystemPrompt = patch.genuiSystemPrompt;

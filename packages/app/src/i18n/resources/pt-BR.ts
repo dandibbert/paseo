@@ -3051,6 +3051,11 @@ export const ptBR: TranslationResources = {
         moveUp: "Mover para cima",
         moveDown: "Mover para baixo",
       },
+      agentErrorNotifications: {
+        title: "Avisar quando um agente falhar",
+        hint: "Envia um push ao celular e mostra uma notificação do sistema quando um agente deste host para com erro, como ao terminar um turno.",
+        failed: "Não foi possível atualizar o aviso de erros",
+      },
       daemon: {
         rename: {
           editLabel: "Editar rótulo",

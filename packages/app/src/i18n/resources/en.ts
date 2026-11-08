@@ -3178,6 +3178,11 @@ export const en = {
         moveUp: "Move up",
         moveDown: "Move down",
       },
+      agentErrorNotifications: {
+        title: "Notify when an agent fails",
+        hint: "Push to your phone and show a system notification when an agent on this host stops with an error, like a finished turn.",
+        failed: "Unable to update error notifications",
+      },
       daemon: {
         rename: {
           editLabel: "Edit label",
