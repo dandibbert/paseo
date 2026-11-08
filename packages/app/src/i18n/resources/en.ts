@@ -112,6 +112,11 @@ export const en = {
     },
   },
   composer: {
+    queue: {
+      saveEdit: "Save edit",
+      cancelEdit: "Cancel edit",
+      editKeptOnClipboard: "That message was already sent. Your edit is on the clipboard.",
+    },
     placeholders: {
       desktop: "Message the agent, tag @files, or use /commands and /skills",
       mobile: "Message, @files, /commands",

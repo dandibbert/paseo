@@ -15,6 +15,8 @@ See [agent targets and deferred opens](expo-router.md#agent-targets) for route
 ownership and workspace recovery. Notification generation, presence, and push
 eligibility remain daemon concerns.
 
+The daemon also decides which reasons notify. Agent errors notify like finished turns unless the host's `notifyOnAgentErrors` is off (Settings → host → Agents); the app does not filter reasons itself. A pending secure input request always pushes, whoever is present, because it expires.
+
 ## Native delivery
 
 Keep the router instance at module scope. Android's `singleTask` Activity can

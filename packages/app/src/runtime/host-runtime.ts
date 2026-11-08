@@ -2597,8 +2597,10 @@ export class HostRuntimeStore {
     if (!client || !queue?.length || session.initializingAgents.get(agentId) === true) {
       return;
     }
-    this.queuedAgentDrainInFlight.add(drainKey);
     const next = queue[0];
+    // The head is being edited in place; draining resumes when the edit is saved or cancelled.
+    if (next.held) return;
+    this.queuedAgentDrainInFlight.add(drainKey);
     void sendQueuedComposerMessageNow({
       agentId,
       messageId: next.id,

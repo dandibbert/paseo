@@ -117,6 +117,12 @@ export const ptBR: TranslationResources = {
     },
   },
   composer: {
+    queue: {
+      saveEdit: "Salvar edição",
+      cancelEdit: "Cancelar edição",
+      editKeptOnClipboard:
+        "Essa mensagem já foi enviada. Sua edição está na área de transferência.",
+    },
     placeholders: {
       desktop: "Envie uma mensagem ao agente, marque @files ou use /commands e /skills",
       mobile: "Mensagem, @files, /commands",

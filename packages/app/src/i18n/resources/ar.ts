@@ -116,6 +116,11 @@ export const ar: TranslationResources = {
     },
   },
   composer: {
+    queue: {
+      saveEdit: "حفظ التعديل",
+      cancelEdit: "إلغاء التعديل",
+      editKeptOnClipboard: "أُرسلت تلك الرسالة بالفعل. تعديلك موجود في الحافظة.",
+    },
     placeholders: {
       desktop: "أرسل رسالة إلى الوكيل أو ضع علامة على @files أو استخدم /commands و /skills",
       mobile: "الرسالة، @files ، /commands",

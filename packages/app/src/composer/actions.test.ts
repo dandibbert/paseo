@@ -21,7 +21,8 @@ import {
   uploadFileAttachments,
   cancelComposerAgent,
   dispatchComposerAgentMessage,
-  editQueuedComposerMessage,
+  holdQueuedComposerMessage,
+  saveQueuedComposerMessage,
   findForgeItemByOption,
   isAttachmentSelectedForForgeItem,
   openComposerAttachment,
@@ -753,40 +754,57 @@ describe("queueComposerMessage", () => {
   });
 });
 
-describe("editQueuedComposerMessage", () => {
-  it("returns null and leaves the queue untouched when the message id is missing", () => {
-    const queue = createFakeQueue(
-      new Map([["agent", [{ id: "other", text: "other", attachments: [] }]]]),
-    );
-    const result = editQueuedComposerMessage({ agentId: "agent", messageId: "missing", queue });
-    expect(result).toBeNull();
-    expect(queue.state.get("agent")).toHaveLength(1);
-  });
-
-  it("returns the text and only user attachments, removing the queued entry", () => {
-    const review = reviewWorkspaceAttachment("Queued snapshot.");
-    const image = imageWithId("img-queued-edit");
-    const queue = createFakeQueue(
+describe("editing a queued message in place", () => {
+  const queued = () =>
+    createFakeQueue(
       new Map([
         [
           "agent",
           [
-            {
-              id: "msg-1",
-              text: "queued draft",
-              attachments: [{ kind: "image", metadata: image }, review],
-            },
+            { id: "msg-1", text: "first", attachments: [] },
+            { id: "msg-2", text: "second", attachments: [] },
           ],
         ],
       ]),
     );
 
-    const result = editQueuedComposerMessage({ agentId: "agent", messageId: "msg-1", queue });
-    expect(result).toEqual({
-      text: "queued draft",
-      attachments: [{ kind: "image", metadata: image }],
-    });
-    expect(queue.state.get("agent")).toEqual([]);
+  it("holds the message where it is while it is edited", () => {
+    const queue = queued();
+    expect(
+      holdQueuedComposerMessage({ agentId: "agent", messageId: "msg-1", queue, held: true }),
+    ).toBe(true);
+    expect(queue.state.get("agent")?.map((item) => [item.id, item.held === true])).toEqual([
+      ["msg-1", true],
+      ["msg-2", false],
+    ]);
+  });
+
+  it("saves the new text in the same position and releases the hold", () => {
+    const queue = queued();
+    holdQueuedComposerMessage({ agentId: "agent", messageId: "msg-1", queue, held: true });
+    expect(
+      saveQueuedComposerMessage({ agentId: "agent", messageId: "msg-1", queue, text: " edited " }),
+    ).toBe("saved");
+    expect(queue.state.get("agent")).toEqual([
+      { id: "msg-1", text: "edited", attachments: [], held: false },
+      { id: "msg-2", text: "second", attachments: [] },
+    ]);
+  });
+
+  it("reports a message that was sent or removed meanwhile, so the edit is not lost", () => {
+    const queue = queued();
+    expect(
+      saveQueuedComposerMessage({ agentId: "agent", messageId: "gone", queue, text: "edited" }),
+    ).toBe("gone");
+    expect(queue.state.get("agent")).toHaveLength(2);
+  });
+
+  it("removes a message whose text was cleared and that has no attachments", () => {
+    const queue = queued();
+    expect(
+      saveQueuedComposerMessage({ agentId: "agent", messageId: "msg-2", queue, text: "  " }),
+    ).toBe("removed");
+    expect(queue.state.get("agent")?.map((item) => item.id)).toEqual(["msg-1"]);
   });
 });
 

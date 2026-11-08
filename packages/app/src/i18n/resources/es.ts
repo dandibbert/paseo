@@ -117,6 +117,11 @@ export const es: TranslationResources = {
     },
   },
   composer: {
+    queue: {
+      saveEdit: "Guardar edición",
+      cancelEdit: "Cancelar edición",
+      editKeptOnClipboard: "Ese mensaje ya se envió. Tu edición está en el portapapeles.",
+    },
     placeholders: {
       desktop: "Envíe un mensaje al agente, etiquete@fileso use/commandsy/skills",
       mobile: "Mensaje,@files,/commands",

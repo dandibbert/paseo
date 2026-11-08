@@ -117,6 +117,11 @@ export const ja: TranslationResources = {
     },
   },
   composer: {
+    queue: {
+      saveEdit: "編集を保存",
+      cancelEdit: "編集をキャンセル",
+      editKeptOnClipboard: "このメッセージは送信済みです。編集内容はクリップボードにあります。",
+    },
     placeholders: {
       desktop: "エージェントにメッセージ、@ファイル、/コマンドや/スキルを入力",
       mobile: "メッセージ、@ファイル、/コマンド",

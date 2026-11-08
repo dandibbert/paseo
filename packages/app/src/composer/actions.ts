@@ -24,6 +24,8 @@ export interface QueuedComposerMessage {
   id: string;
   text: string;
   attachments: ComposerAttachment[];
+  /** Being edited in place: the queue stops here until it is saved or the edit is cancelled. */
+  held?: boolean;
 }
 
 export interface AttachmentPersister {
@@ -261,34 +263,55 @@ export function queueComposerMessage(input: QueueComposerMessageInput): QueueCom
   return { queued: item };
 }
 
-export interface EditQueuedComposerMessageInput {
+function updateQueuedMessage(
+  input: { agentId: string; messageId: string; queue: QueueWriter },
+  update: (item: QueuedComposerMessage) => QueuedComposerMessage | null,
+): boolean {
+  if (!input.queue.read(input.agentId).some((q) => q.id === input.messageId)) return false;
+  input.queue.write((prev) => {
+    const next = new Map(prev);
+    const items = (prev.get(input.agentId) ?? []).flatMap((q) => {
+      if (q.id !== input.messageId) return [q];
+      const updated = update(q);
+      return updated ? [updated] : [];
+    });
+    next.set(input.agentId, items);
+    return next;
+  });
+  return true;
+}
+
+/** Holds a queued message in place while it is edited, or releases it. */
+export function holdQueuedComposerMessage(input: {
   agentId: string;
   messageId: string;
   queue: QueueWriter;
+  held: boolean;
+}): boolean {
+  return updateQueuedMessage(input, (item) => ({ ...item, held: input.held }));
 }
 
-export interface EditQueuedComposerMessageResult {
+/**
+ * Saves an in-place edit. "gone" means the message was sent or removed meanwhile, so the caller
+ * keeps the edited text somewhere instead of dropping it.
+ */
+export function saveQueuedComposerMessage(input: {
+  agentId: string;
+  messageId: string;
+  queue: QueueWriter;
   text: string;
-  attachments: UserComposerAttachment[];
-}
-
-export function editQueuedComposerMessage(
-  input: EditQueuedComposerMessageInput,
-): EditQueuedComposerMessageResult | null {
-  const item = input.queue.read(input.agentId).find((q) => q.id === input.messageId);
-  if (!item) return null;
-  input.queue.write((prev) => {
-    const next = new Map(prev);
-    next.set(
-      input.agentId,
-      (prev.get(input.agentId) ?? []).filter((q) => q.id !== input.messageId),
-    );
-    return next;
+}): "saved" | "removed" | "gone" {
+  const text = input.text.trim();
+  let removed = false;
+  const found = updateQueuedMessage(input, (item) => {
+    if (!text && item.attachments.length === 0) {
+      removed = true;
+      return null;
+    }
+    return { ...item, text, held: false };
   });
-  return {
-    text: item.text,
-    attachments: userAttachmentsOnly(item.attachments),
-  };
+  if (!found) return "gone";
+  return removed ? "removed" : "saved";
 }
 
 export interface SendQueuedComposerMessageNowInput {

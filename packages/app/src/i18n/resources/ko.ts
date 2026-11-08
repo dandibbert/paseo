@@ -116,6 +116,11 @@ export const ko: TranslationResources = {
     },
   },
   composer: {
+    queue: {
+      saveEdit: "수정 저장",
+      cancelEdit: "수정 취소",
+      editKeptOnClipboard: "이미 보낸 메시지입니다. 수정한 내용은 클립보드에 있습니다.",
+    },
     placeholders: {
       desktop: "에이전트에게 메시지를 보내거나 @files 태그, /commands, /skills를 사용하세요",
       mobile: "메시지, @files, /commands",

@@ -117,6 +117,11 @@ export const ru: TranslationResources = {
     },
   },
   composer: {
+    queue: {
+      saveEdit: "Сохранить правку",
+      cancelEdit: "Отменить правку",
+      editKeptOnClipboard: "Это сообщение уже отправлено. Ваша правка в буфере обмена.",
+    },
     placeholders: {
       desktop: "Напишите агенту сообщение, отметьте @files или используйте /commands и /skills.",
       mobile: "Сообщение,@files,/commands",

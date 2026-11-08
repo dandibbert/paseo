@@ -118,6 +118,12 @@ export const fr: TranslationResources = {
     },
   },
   composer: {
+    queue: {
+      saveEdit: "Enregistrer la modification",
+      cancelEdit: "Annuler la modification",
+      editKeptOnClipboard:
+        "Ce message est déjà parti. Votre modification est dans le presse-papiers.",
+    },
     placeholders: {
       desktop: "Écrivez à l’agent, mentionnez des @fichiers ou utilisez les /commandes et /skills",
       mobile: "Message, @fichiers, /commandes",

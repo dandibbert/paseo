@@ -456,7 +456,7 @@ export interface SessionState {
   // Queued messages
   queuedMessages: Map<
     string,
-    Array<{ id: string; text: string; attachments: ComposerAttachment[] }>
+    Array<{ id: string; text: string; attachments: ComposerAttachment[]; held?: boolean }>
   >;
 }
 
