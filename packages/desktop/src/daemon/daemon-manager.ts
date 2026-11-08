@@ -58,6 +58,11 @@ import {
   readLegacySkillSelection,
 } from "../integrations/legacy-skill-selection.js";
 import { tailFile } from "../diagnostics/tail-file.js";
+import { createHostClient } from "@getpaseo/client/node";
+import {
+  startRemoteUpdateHost,
+  type RemoteUpdateHostClient,
+} from "../features/remote-update-host.js";
 
 const DAEMON_LOG_FILENAME = "daemon.log";
 let ownedLaunch: { home: string; instance: DaemonInstance } | null = null;
@@ -544,6 +549,64 @@ export function createDaemonCommandHandlers(): Record<string, DesktopCommandHand
     read_legacy_skill_selection: () => readLegacySkillSelection(),
     delete_legacy_skill_selection: () => deleteLegacySkillSelection(),
   };
+}
+
+function createRemoteUpdateClient(home: string, listen: string): RemoteUpdateHostClient {
+  const client = createHostClient(listen, {
+    clientId: "paseo-desktop-update-host",
+    clientType: "cli",
+    appVersion: resolveDesktopAppVersion(),
+    localCredential: () => readLocalCredentialForTarget(home, listen) ?? undefined,
+    connectTimeoutMs: 10_000,
+    reconnect: { enabled: false },
+  });
+  return {
+    connect: () => client.connect(),
+    close: () => client.close(),
+    getLastServerInfoMessage: () => client.getLastServerInfoMessage(),
+    subscribeConnectionStatus: (listener) => client.subscribeConnectionStatus(listener),
+    on: (type, handler) => client.on(type, (message) => handler(message)),
+    registerDesktopHost: (input) => client.registerDesktopHost(input),
+    reportDesktopHostUpdate: (report) => client.reportDesktopHostUpdate(report),
+  };
+}
+
+/**
+ * Answers remote `paseo host update` requests from the main process, so a locked Mac whose
+ * window is throttled still installs the update.
+ */
+export function startDesktopRemoteUpdateHost(): () => void {
+  const home = getPaseoHome();
+  return startRemoteUpdateHost({
+    readTarget: async () => {
+      const instance = await readDaemonInstance(home);
+      if (!instance?.desktopManaged || !instance.listen) return null;
+      return {
+        listen: instance.listen,
+        key: `${instance.pid}:${instance.startedAt}:${instance.listen}`,
+      };
+    },
+    createClient: (listen) => createRemoteUpdateClient(home, listen),
+    appVersion: resolveDesktopAppVersion(),
+    log: {
+      info: (message) => log.info(`[remote-update] ${message}`),
+      warn: (message, error) => log.warn(`[remote-update] ${message}`, error),
+    },
+    defaultChannel: async () => (await getDesktopSettingsStore().get()).releaseChannel,
+    check: (releaseChannel) =>
+      checkForAppUpdate({
+        currentVersion: resolveDesktopAppVersion(),
+        releaseChannel,
+        intent: "manual",
+      }),
+    install: (releaseChannel) =>
+      downloadAndInstallUpdate(
+        { currentVersion: resolveDesktopAppVersion(), releaseChannel },
+        async () => {
+          await stopDesktopDaemon("app_update");
+        },
+      ),
+  });
 }
 
 export function registerDaemonManager(): void {
