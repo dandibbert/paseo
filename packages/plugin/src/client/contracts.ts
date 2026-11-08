@@ -309,7 +309,26 @@ export type PluginTimelineTransformerContribution<
     }
   : never;
 
+/**
+ * Forward an assistant-authored link to the same resolver used by Paseo's
+ * native Markdown renderer. The host decides whether it is an external URL,
+ * a workspace file or an unresolvable path; plugins never navigate to
+ * arbitrary file paths on their own.
+ */
+export interface PluginTimelineFileLinkActions {
+  open(
+    source: {
+      href: string;
+      text?: string;
+      sourceType?: "inline-code";
+    },
+    disposition?: "main" | "preferred" | "side",
+  ): void;
+}
+
 export interface PluginTimelineItemProps<Data = unknown> extends PluginHostProps {
+  /** Optional on older hosts; preserves the native file panel from plugin Markdown. */
+  fileLinks?: PluginTimelineFileLinkActions;
   agentId: string;
   item: {
     type: "plugin";

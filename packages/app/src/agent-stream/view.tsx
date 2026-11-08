@@ -961,7 +961,21 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
             );
 
           case "plugin":
-            return (
+            // Timeline plugins render outside the host's assistant-message
+            // provider. Supply the same workspace file resolver so enhanced
+            // Markdown can open file panels without replacing the whole reply.
+            // Other plugin rows do not need this provider.
+            return item.sourceKind === "assistant_message" ? (
+              <AssistantFileLinkResolverProvider
+                client={client}
+                serverId={resolvedServerId}
+                workspaceRoot={workspaceRoot}
+                onOpenWorkspaceFile={handleInlinePathPress}
+                toast={toast}
+              >
+                <PluginTimelineItemView agentId={agentId} item={item} serverId={resolvedServerId} />
+              </AssistantFileLinkResolverProvider>
+            ) : (
               <PluginTimelineItemView agentId={agentId} item={item} serverId={resolvedServerId} />
             );
 
@@ -976,6 +990,10 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
         renderToolCallItem,
         setTurnExpanded,
         resolvedServerId,
+        client,
+        workspaceRoot,
+        handleInlinePathPress,
+        toast,
       ],
     );
 

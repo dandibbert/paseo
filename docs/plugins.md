@@ -671,6 +671,18 @@ Live assistant messages use `phase: "streaming"`; committing to history makes th
 Paseo memoizes by source-item reference and phase and derives replacement IDs from source identity, so
 streaming updates preserve mounted component identity.
 
+Assistant-message replacements can keep Paseo's native file preview behavior:
+when the host supports it, `PluginTimelineItemProps.fileLinks?.open({ href }, "preferred")`
+passes a Markdown file link to the same workspace resolver and file-panel opener
+used by built-in assistant replies. The link can be a relative path, absolute
+path, `file://` URL, or an inline-code path with `sourceType: "inline-code"`
+and `text`. The host validates and resolves it in the current workspace and
+opens its normal file panel; `"side"` and `"main"` select other placements.
+The property is absent on older hosts and on non-assistant plugin rows. Use
+it only in the response to a user click, and retain your fallback for older
+clients. This lets timeline plugins preserve their own Markdown rendering
+rather than yielding whole assistant messages to native Markdown.
+
 `query.itemType` selects one public `AgentTimelineItem.type`. The callback owns any detailed
 recognition and returns plain plugin item objects. `undefined` keeps the source item, `items`
 replaces it, and an empty array removes it. Output `data` must be JSON-compatible. Paseo adds the
