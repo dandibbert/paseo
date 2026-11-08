@@ -3099,6 +3099,28 @@ export const es: TranslationResources = {
           dialogFailedMessage:
             "No se puede abrir el cuadro de diálogo de confirmación de reinicio.",
         },
+        installUpdate: {
+          title: "Actualizar Paseo",
+          hint: "Busca e instala actualizaciones de Paseo en este host: Paseo Desktop actualiza la app (su ventana debe estar abierta), una versión headless de Linux instala la última versión y reinicia su servicio, y una instalación npm actualiza su paquete.",
+          check: "Buscar actualizaciones",
+          checking: "Buscando…",
+          install: "Actualizar",
+          installing: "Actualizando…",
+          forceInstall: "Actualizar de todos modos",
+          upToDate: "Actualizado ({{version}})",
+          available: "{{current}} → {{target}} disponible",
+          restarting:
+            "Actualizando a {{version}}. El host se reinicia y se vuelve a conectar solo.",
+          installed: "{{version}} instalada. Reinicia Paseo en el host para usarla.",
+          busy: "Hay agentes en ejecución: {{agents}}. Actualizar los interrumpe.",
+          failed: "La actualización falló: {{error}}",
+          unsupported:
+            "Paseo en este host no puede actualizarse solo. Actualízalo en el host. {{error}}",
+          confirmTitle: "Actualizar Paseo en {{name}}",
+          confirmMessage: "{{name}} instala {{version}} y se reinicia.",
+          forceConfirmMessage:
+            "{{name}} instala {{version}} y se reinicia. Sus agentes en ejecución se interrumpen.",
+        },
         update: {
           desktopManagedHint:
             "Este daemon está administrado por Paseo Desktop. Actualiza Paseo Desktop en el host.",

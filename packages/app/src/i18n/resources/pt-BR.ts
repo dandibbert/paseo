@@ -3078,6 +3078,27 @@ export const ptBR: TranslationResources = {
             "Isso reiniciará o daemon e fechará todos os terminais dele, encerrando os programas que rodam neles. O app vai se reconectar automaticamente.",
           dialogFailedMessage: "Não foi possível abrir o diálogo de confirmação de reinício.",
         },
+        installUpdate: {
+          title: "Atualizar o Paseo",
+          hint: "Verifica e instala atualizações do Paseo neste host: o Paseo Desktop atualiza o app (a janela precisa estar aberta), uma versão headless para Linux instala a versão mais recente e reinicia o serviço, e uma instalação npm atualiza o pacote.",
+          check: "Verificar atualizações",
+          checking: "Verificando…",
+          install: "Atualizar",
+          installing: "Atualizando…",
+          forceInstall: "Atualizar mesmo assim",
+          upToDate: "Atualizado ({{version}})",
+          available: "{{current}} → {{target}} disponível",
+          restarting: "Atualizando para {{version}}. O host reinicia e se reconecta sozinho.",
+          installed: "{{version}} instalada. Reinicie o Paseo no host para usá-la.",
+          busy: "Há agentes em execução: {{agents}}. Atualizar os interrompe.",
+          failed: "Falha na atualização: {{error}}",
+          unsupported:
+            "O Paseo neste host não consegue se atualizar sozinho. Atualize-o no host. {{error}}",
+          confirmTitle: "Atualizar o Paseo em {{name}}",
+          confirmMessage: "{{name}} instala {{version}} e reinicia.",
+          forceConfirmMessage:
+            "{{name}} instala {{version}} e reinicia. Os agentes em execução são interrompidos.",
+        },
         update: {
           desktopManagedHint:
             "Este daemon é gerenciado pelo Paseo Desktop. Atualize o Paseo Desktop no host.",

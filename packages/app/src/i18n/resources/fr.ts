@@ -3104,6 +3104,27 @@ export const fr: TranslationResources = {
           dialogFailedMessage:
             "Impossible d’ouvrir la boîte de dialogue de confirmation du redémarrage.",
         },
+        installUpdate: {
+          title: "Mettre à jour Paseo",
+          hint: "Recherche et installe les mises à jour de Paseo sur cet hôte : Paseo Desktop met à jour son application (sa fenêtre doit être ouverte), une version headless Linux installe la dernière version et redémarre son service, une installation npm met à jour son paquet.",
+          check: "Rechercher des mises à jour",
+          checking: "Recherche…",
+          install: "Mettre à jour",
+          installing: "Mise à jour…",
+          forceInstall: "Mettre à jour quand même",
+          upToDate: "À jour ({{version}})",
+          available: "{{current}} → {{target}} disponible",
+          restarting: "Mise à jour vers {{version}}. L'hôte redémarre et se reconnecte tout seul.",
+          installed: "{{version}} installée. Redémarrez Paseo sur l'hôte pour l'utiliser.",
+          busy: "Des agents sont en cours : {{agents}}. La mise à jour les interrompt.",
+          failed: "Échec de la mise à jour : {{error}}",
+          unsupported:
+            "Paseo sur cet hôte ne peut pas se mettre à jour seul. Mettez-le à jour sur l'hôte. {{error}}",
+          confirmTitle: "Mettre à jour Paseo sur {{name}}",
+          confirmMessage: "{{name}} installe {{version}} et redémarre.",
+          forceConfirmMessage:
+            "{{name}} installe {{version}} et redémarre. Ses agents en cours sont interrompus.",
+        },
         update: {
           desktopManagedHint:
             "Ce daemon est géré par Paseo Desktop. Mettez à jour Paseo Desktop sur l’hôte.",

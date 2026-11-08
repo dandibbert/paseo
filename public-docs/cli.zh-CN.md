@@ -97,6 +97,8 @@ paseo host upgrade mac-2 studio --channel beta
 paseo host upgrade linux self --force
 ```
 
+App 里每台主机也有同样的入口：**设置 → （主机）→ 更新 Paseo**，先检查再安装。它走 App 自己到该主机的连接，所以那台主机不需要用 CLI。
+
 主机名与 `paseo host ls` 一致，`self` 表示所选 daemon，`--all` 表示所有已启用的已连接主机。`--check` 只报告已安装版本和可用版本，不安装。每台主机更新自己的安装：
 
 | 安装方式            | 会发生什么                                                                                                                                                     |

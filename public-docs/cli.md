@@ -103,6 +103,8 @@ paseo host upgrade mac-2 studio --channel beta
 paseo host upgrade linux self --force
 ```
 
+The app offers the same update per host: **Settings → (host) → Update Paseo** checks, then installs. It talks to the host over the app's own connection, so the host needs no CLI.
+
 Name hosts as in `paseo host ls`, `self` for the selected daemon, or pass `--all` for every enabled
 connected host. `--check` reports installed and available versions without installing. Each host
 updates its own installation:

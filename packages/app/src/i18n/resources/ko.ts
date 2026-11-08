@@ -3049,6 +3049,28 @@ export const ko: TranslationResources = {
             "데몬을 재시작하고 모든 터미널을 닫습니다. 터미널에서 실행 중인 프로그램은 종료됩니다. 앱은 자동으로 다시 연결됩니다.",
           dialogFailedMessage: "재시작 확인 대화 상자를 열 수 없습니다.",
         },
+        installUpdate: {
+          title: "Paseo 업데이트",
+          hint: "이 호스트의 Paseo 업데이트를 확인하고 설치합니다. Paseo Desktop은 앱을 업데이트하고(창이 열려 있어야 함), headless Linux는 최신 릴리스를 설치하고 서비스를 다시 시작하며, npm 설치는 패키지를 업데이트합니다.",
+          check: "업데이트 확인",
+          checking: "확인 중…",
+          install: "업데이트",
+          installing: "업데이트 중…",
+          forceInstall: "그래도 업데이트",
+          upToDate: "최신 버전입니다({{version}})",
+          available: "{{current}} → {{target}} 사용 가능",
+          restarting:
+            "{{version}}(으)로 업데이트 중입니다. 호스트가 자동으로 다시 시작하고 다시 연결됩니다.",
+          installed: "{{version}}을(를) 설치했습니다. 호스트에서 Paseo를 다시 시작하면 적용됩니다.",
+          busy: "실행 중인 에이전트가 있습니다: {{agents}}. 업데이트하면 중단됩니다.",
+          failed: "업데이트 실패: {{error}}",
+          unsupported:
+            "이 호스트의 Paseo는 스스로 업데이트할 수 없습니다. 호스트에서 업데이트하세요. {{error}}",
+          confirmTitle: "{{name}}의 Paseo 업데이트",
+          confirmMessage: "{{name}}이(가) {{version}}을(를) 설치하고 다시 시작합니다.",
+          forceConfirmMessage:
+            "{{name}}이(가) {{version}}을(를) 설치하고 다시 시작합니다. 실행 중인 에이전트는 중단됩니다.",
+        },
         update: {
           desktopManagedHint:
             "이 데몬은 Paseo Desktop에서 관리됩니다. 호스트에서 Paseo 데스크톱을 업데이트합니다.",

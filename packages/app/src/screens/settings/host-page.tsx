@@ -68,6 +68,7 @@ import { BrowserToolsOptInCard } from "./browser-tools-card";
 import { PaseoToolsCard } from "./paseo-tools-card";
 import { RestartRecoveryCard } from "./restart-recovery-card";
 import { IdleRuntimeCleanupCard } from "./idle-runtime-cleanup-card";
+import { HostInstallUpdateCard, useHostSupportsInstallUpdate } from "./host-install-update-card";
 import { restartDaemonFromSettings, updateDaemonFromSettings } from "./daemon-lifecycle";
 
 const ThemedRestart = withUnistyles(RotateCw);
@@ -384,7 +385,7 @@ export function HostSettingsPage({
 
       {isLocalDaemon ? <LocalDaemonSection /> : null}
 
-      {!isLocalDaemon ? <UpdateDaemonCard key={host.serverId} host={host} /> : null}
+      {!isLocalDaemon ? <RemoteUpdateCard key={host.serverId} host={host} /> : null}
 
       <RemoveHostSection host={host} isLocalDaemon={isLocalDaemon} onRemoved={onHostRemoved} />
     </View>
@@ -714,6 +715,16 @@ type DaemonUpdateState =
   | { status: "complete"; workerVersion: string }
   | { status: "updating"; phase: string }
   | { status: "failed"; title: string; message: string };
+
+/** Hosts that install their own updates get the install card; older ones the npm card. */
+function RemoteUpdateCard({ host }: { host: HostProfile }) {
+  const supportsInstallUpdate = useHostSupportsInstallUpdate(host.serverId);
+  return supportsInstallUpdate ? (
+    <HostInstallUpdateCard host={host} />
+  ) : (
+    <UpdateDaemonCard host={host} />
+  );
+}
 
 function UpdateDaemonCard({ host }: { host: HostProfile }) {
   const { t } = useTranslation();

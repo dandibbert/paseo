@@ -3205,6 +3205,26 @@ export const en = {
             "This will restart the daemon and close every terminal on it, ending the programs running in them. The app will reconnect automatically.",
           dialogFailedMessage: "Unable to open the restart confirmation dialog.",
         },
+        installUpdate: {
+          title: "Update Paseo",
+          hint: "Check for and install Paseo on this host: Paseo Desktop updates its app (its window must be open), a headless Linux release installs the latest release and restarts its service, an npm install updates its package.",
+          check: "Check for updates",
+          checking: "Checking…",
+          install: "Update",
+          installing: "Updating…",
+          forceInstall: "Update anyway",
+          upToDate: "Up to date ({{version}})",
+          available: "{{current}} → {{target}} is available",
+          restarting: "Updating to {{version}}. The host restarts and reconnects on its own.",
+          installed: "Installed {{version}}. Restart Paseo on the host to use it.",
+          busy: "Agents are running: {{agents}}. Updating interrupts them.",
+          failed: "Update failed: {{error}}",
+          unsupported: "This host's Paseo cannot update itself. Update it on the host. {{error}}",
+          confirmTitle: "Update Paseo on {{name}}",
+          confirmMessage: "{{name}} installs {{version}} and restarts.",
+          forceConfirmMessage:
+            "{{name}} installs {{version}} and restarts. Its running agents are interrupted.",
+        },
         update: {
           desktopManagedHint:
             "This daemon is managed by Paseo Desktop. Update Paseo Desktop on the host.",

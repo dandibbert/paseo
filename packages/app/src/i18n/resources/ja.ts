@@ -3065,6 +3065,28 @@ export const ja: TranslationResources = {
             "デーモンを再起動し、すべてのターミナルを閉じます。ターミナルで実行中のプログラムは終了します。アプリは自動的に再接続します。",
           dialogFailedMessage: "再起動確認ダイアログを開けませんでした。",
         },
+        installUpdate: {
+          title: "Paseo を更新",
+          hint: "このホストの Paseo の更新を確認してインストールします。Paseo Desktop はアプリを更新し（ウィンドウを開いておく必要があります）、headless Linux は最新リリースを入れてサービスを再起動し、npm インストールはパッケージを更新します。",
+          check: "アップデートを確認",
+          checking: "確認中…",
+          install: "更新",
+          installing: "更新中…",
+          forceInstall: "それでも更新",
+          upToDate: "最新です（{{version}}）",
+          available: "{{current}} → {{target}} が利用可能です",
+          restarting: "{{version}} に更新中です。ホストは自動で再起動して再接続します。",
+          installed:
+            "{{version}} をインストールしました。ホストで Paseo を再起動すると反映されます。",
+          busy: "実行中のエージェントがあります：{{agents}}。更新すると中断されます。",
+          failed: "更新に失敗しました：{{error}}",
+          unsupported:
+            "このホストの Paseo は自分で更新できません。ホストで更新してください。{{error}}",
+          confirmTitle: "{{name}} の Paseo を更新",
+          confirmMessage: "{{name}} は {{version}} をインストールして再起動します。",
+          forceConfirmMessage:
+            "{{name}} は {{version}} をインストールして再起動します。実行中のエージェントは中断されます。",
+        },
         update: {
           desktopManagedHint:
             "このデーモンはPaseo Desktopによって管理されています。ホスト上のPaseo Desktopを更新してください。",

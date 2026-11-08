@@ -3068,6 +3068,26 @@ export const ar: TranslationResources = {
             "سيُعاد تشغيل الخدمة وتُغلق كل طرفياتها، مما ينهي البرامج التي تعمل فيها. سيعيد التطبيق الاتصال تلقائيًا.",
           dialogFailedMessage: "غير قادر على فتح مربع حوار تأكيد إعادة التشغيل.",
         },
+        installUpdate: {
+          title: "تحديث Paseo",
+          hint: "يبحث عن تحديثات Paseo على هذا المضيف ويثبّتها: يحدّث Paseo Desktop تطبيقه (يجب أن تكون نافذته مفتوحة)، ويثبّت إصدار Linux بدون واجهة أحدث إصدار ويعيد تشغيل خدمته، ويحدّث التثبيت عبر npm حزمته.",
+          check: "البحث عن تحديثات",
+          checking: "جارٍ البحث…",
+          install: "تحديث",
+          installing: "جارٍ التحديث…",
+          forceInstall: "التحديث على أي حال",
+          upToDate: "محدّث ({{version}})",
+          available: "يتوفر {{current}} ← {{target}}",
+          restarting: "جارٍ التحديث إلى {{version}}. سيُعاد تشغيل المضيف ويتصل من جديد تلقائيًا.",
+          installed: "تم تثبيت {{version}}. أعد تشغيل Paseo على المضيف لاستخدامه.",
+          busy: "توجد وكلاء قيد التشغيل: {{agents}}. التحديث سيقاطعها.",
+          failed: "فشل التحديث: {{error}}",
+          unsupported: "لا يستطيع Paseo على هذا المضيف تحديث نفسه. حدّثه على المضيف. {{error}}",
+          confirmTitle: "تحديث Paseo على {{name}}",
+          confirmMessage: "سيثبّت {{name}} الإصدار {{version}} ويعيد التشغيل.",
+          forceConfirmMessage:
+            "سيثبّت {{name}} الإصدار {{version}} ويعيد التشغيل. ستتم مقاطعة الوكلاء قيد التشغيل.",
+        },
         update: {
           desktopManagedHint:
             "يدير Paseo Desktop هذا البرنامج الخفي. حدّث Paseo Desktop على المضيف.",
