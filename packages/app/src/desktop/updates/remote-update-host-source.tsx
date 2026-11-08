@@ -8,6 +8,7 @@ import {
   shouldShowDesktopUpdateSection,
 } from "@/desktop/updates/desktop-updates";
 import { runDesktopHostUpdateCommand } from "@/desktop/updates/remote-update-host";
+import { resolveAppVersion } from "@/utils/app-version";
 
 /**
  * Registers this desktop window with its own daemon so `paseo host update` from another machine
@@ -35,7 +36,7 @@ export function RemoteUpdateHostSource(): null {
       }).catch((error: unknown) => console.error("Remote desktop update failed", error));
     });
     void client
-      .registerDesktopHost({ releaseChannel, appVersion: null })
+      .registerDesktopHost({ releaseChannel, appVersion: resolveAppVersion() })
       .catch((error: unknown) => console.error("Desktop host registration failed", error));
     return unsubscribe;
   }, [client, isConnected, isDesktopApp, releaseChannel, serverId]);

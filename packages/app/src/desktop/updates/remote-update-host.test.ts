@@ -86,4 +86,23 @@ describe("remote desktop update", () => {
     expect(rejected.events).not.toContain("install:stable");
     expect(rejected.events.at(-1)).toMatchObject({ status: "failed", error: "signature mismatch" });
   });
+
+  it("reports a check that hangs instead of leaving the requester waiting", async () => {
+    const reports: DesktopHostUpdateReport[] = [];
+    await runDesktopHostUpdateCommand(
+      { commandId: "c9", releaseChannel: "beta", checkOnly: true },
+      {
+        defaultChannel: "stable",
+        check: () => new Promise(() => {}),
+        install: async () => {},
+        report: async (report) => {
+          reports.push(report);
+        },
+        checkTimeoutMs: 10,
+      },
+    );
+    expect(reports).toHaveLength(1);
+    expect(reports[0]).toMatchObject({ commandId: "c9", status: "failed" });
+    expect(reports[0]!.error).toContain("could not reach the update feed");
+  });
 });

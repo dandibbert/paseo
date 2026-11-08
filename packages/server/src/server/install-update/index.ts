@@ -285,7 +285,8 @@ export class DesktopHostBroker {
           ...base,
           status: "failed",
           currentVersion: host.appVersion,
-          error: "Paseo Desktop did not answer the update request in time.",
+          error:
+            "Paseo Desktop did not answer the update request in time. Its window may be closed or not connected to this daemon.",
         },
         followUp: "none",
       };

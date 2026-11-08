@@ -24,6 +24,20 @@ export interface DesktopHostUpdateDeps {
   }>;
   install(channel: DesktopReleaseChannel): Promise<unknown>;
   report(report: DesktopHostUpdateReport): Promise<unknown>;
+  /** How long a check may take; defaults to CHECK_TIMEOUT_MS. */
+  checkTimeoutMs?: number;
+}
+
+// The requesting daemon gives up after two minutes. A check that cannot reach the feed (a
+// broken network or proxy) would otherwise hang past that with no explanation.
+const CHECK_TIMEOUT_MS = 90_000;
+
+function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(message)), ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
 }
 
 /**
@@ -38,7 +52,12 @@ export async function runDesktopHostUpdateCommand(
   const base = { commandId: command.commandId };
   let check: Awaited<ReturnType<DesktopHostUpdateDeps["check"]>>;
   try {
-    check = await deps.check(channel);
+    const timeoutMs = deps.checkTimeoutMs ?? CHECK_TIMEOUT_MS;
+    check = await withTimeout(
+      deps.check(channel),
+      timeoutMs,
+      `Paseo Desktop on this host could not reach the update feed within ${Math.round(timeoutMs / 1000)} s. Check its network or proxy.`,
+    );
   } catch (error) {
     await deps.report({
       ...base,
