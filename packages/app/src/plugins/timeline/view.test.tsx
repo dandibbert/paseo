@@ -118,6 +118,8 @@ const timelineItem = {
   data: { label: "Four tests passed" },
   timestamp: new Date("2026-01-01T00:00:00.000Z"),
 };
+const assistantTimelineItem = { ...timelineItem, sourceKind: "assistant_message" as const };
+const toolTimelineItem = { ...timelineItem, sourceKind: "tool_call" as const };
 const failingTimelineItem = { ...timelineItem, data: { label: "explode" } };
 const recoveredTimelineItem = { ...timelineItem, data: { label: "Recovered" } };
 
@@ -174,7 +176,7 @@ describe("PluginTimelineItemView", () => {
     roots.push(root);
     await act(async () => root.render(
       <PluginTimelineItemView serverId="host-1" agentId="agent-1"
-        item={{ ...timelineItem, sourceKind: "assistant_message" }} />,
+        item={assistantTimelineItem} />,
     ));
     const button = container.querySelector("button");
     expect(button?.textContent).toBe("Open file");
@@ -183,7 +185,7 @@ describe("PluginTimelineItemView", () => {
     fileLinkOpener.mockClear();
     await act(async () => root.render(
       <PluginTimelineItemView serverId="host-1" agentId="agent-1"
-        item={{ ...timelineItem, sourceKind: "tool_call" }} />,
+        item={toolTimelineItem} />,
     ));
     await act(async () => container.querySelector("button")?.click());
     expect(fileLinkOpener).not.toHaveBeenCalled();
