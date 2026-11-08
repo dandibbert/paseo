@@ -180,6 +180,13 @@ describe("PluginTimelineItemView", () => {
     expect(button?.textContent).toBe("Open file");
     await act(async () => button?.click());
     expect(fileLinkOpener).toHaveBeenCalledWith({ href: "./reports/status.md#L9" }, "preferred");
+    fileLinkOpener.mockClear();
+    await act(async () => root.render(
+      <PluginTimelineItemView serverId="host-1" agentId="agent-1"
+        item={{ ...timelineItem, sourceKind: "tool_call" }} />,
+    ));
+    await act(async () => container.querySelector("button")?.click());
+    expect(fileLinkOpener).not.toHaveBeenCalled();
   });
 
   it("contains renderer crashes to one timeline item", async () => {
