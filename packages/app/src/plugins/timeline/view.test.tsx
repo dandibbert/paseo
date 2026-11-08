@@ -166,7 +166,13 @@ describe("PluginTimelineItemView", () => {
   it("gives plugin assistant rows the native file-panel opener without changing their renderers", async () => {
     pluginRegistry.installCatalog(
       "host-1",
-      [{ id: "reports", requirements: { paseo: `>=${appPackage.version}` }, clientBundle: fileLinkBundle }],
+      [
+        {
+          id: "reports",
+          requirements: { paseo: `>=${appPackage.version}` },
+          clientBundle: fileLinkBundle,
+        },
+      ],
       { client: daemonClient, audio },
     );
     const container = document.createElement("div");
@@ -174,19 +180,25 @@ describe("PluginTimelineItemView", () => {
     document.body.appendChild(container);
     const root = createRoot(container);
     roots.push(root);
-    await act(async () => root.render(
-      <PluginTimelineItemView serverId="host-1" agentId="agent-1"
-        item={assistantTimelineItem} />,
-    ));
+    await act(async () =>
+      root.render(
+        <PluginTimelineItemView
+          serverId="host-1"
+          agentId="agent-1"
+          item={assistantTimelineItem}
+        />,
+      ),
+    );
     const button = container.querySelector("button");
     expect(button?.textContent).toBe("Open file");
     await act(async () => button?.click());
     expect(fileLinkOpener).toHaveBeenCalledWith({ href: "./reports/status.md#L9" }, "preferred");
     fileLinkOpener.mockClear();
-    await act(async () => root.render(
-      <PluginTimelineItemView serverId="host-1" agentId="agent-1"
-        item={toolTimelineItem} />,
-    ));
+    await act(async () =>
+      root.render(
+        <PluginTimelineItemView serverId="host-1" agentId="agent-1" item={toolTimelineItem} />,
+      ),
+    );
     await act(async () => container.querySelector("button")?.click());
     expect(fileLinkOpener).not.toHaveBeenCalled();
   });
