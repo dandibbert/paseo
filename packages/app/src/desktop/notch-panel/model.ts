@@ -8,7 +8,13 @@ import type {
  * sends it, already translated, to the panel window, which only draws it. The shape is mirrored
  * in packages/desktop/src/features/notch-panel/types.ts; keep the two in step.
  */
-export type NotchPanelItemState = "permission" | "question" | "error" | "running" | "finished";
+export type NotchPanelItemState =
+  | "permission"
+  | "question"
+  | "error"
+  | "running"
+  | "finished"
+  | "recent";
 
 export interface NotchPanelButton {
   key: string;
@@ -35,7 +41,11 @@ export interface NotchPanelItem {
 export interface NotchPanelLabels {
   needsYou: string;
   running: string;
+  /** Finished but not yet looked at. */
   finished: string;
+  /** Idle chats that changed recently, for a board that is useful when nothing needs you. */
+  recent: string;
+  columnEmpty: string;
   empty: string;
   offline: string;
   open: string;
@@ -48,7 +58,17 @@ export interface NotchPanelState {
   needsYou: NotchPanelItem[];
   running: NotchPanelItem[];
   finished: NotchPanelItem[];
+  recent: NotchPanelItem[];
+  hosts: NotchPanelHostSummary[];
   offlineHosts: string[];
+}
+
+export interface NotchPanelHostSummary {
+  serverId: string;
+  label: string;
+  online: boolean;
+  running: number;
+  needsYou: number;
 }
 
 export interface NotchPanelAgent {
@@ -83,7 +103,9 @@ export interface NotchPanelText {
   translateAction(label: string): string;
 }
 
-const FINISHED_LIMIT = 6;
+const FINISHED_LIMIT = 8;
+const RECENT_LIMIT = 8;
+const RECENT_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 function folderName(cwd: string): string {
   return (
@@ -154,6 +176,7 @@ function itemFor(
   host: NotchPanelHost,
   agent: NotchPanelAgent,
   text: NotchPanelText,
+  now: number,
 ): NotchPanelItem | null {
   if (agent.archivedAt || agent.background) return null;
   const base = {
@@ -207,6 +230,16 @@ function itemFor(
       buttons: [],
     };
   }
+  if (agent.status === "idle" && now - agent.updatedAt.getTime() < RECENT_WINDOW_MS) {
+    return {
+      ...base,
+      state: "recent",
+      detail: null,
+      since: agent.updatedAt.getTime(),
+      requestId: null,
+      buttons: [],
+    };
+  }
   return null;
 }
 
@@ -214,26 +247,47 @@ function newestFirst(a: NotchPanelItem, b: NotchPanelItem): number {
   return b.since - a.since;
 }
 
-/** Sorts every host's agents into what needs you, what is running, and what just finished. */
+/**
+ * Sorts every host's agents into a small board: what needs you, what is running, what finished
+ * and waits to be looked at, and what changed in the last day.
+ */
 export function buildNotchPanelState(input: {
   enabled: boolean;
   hosts: readonly NotchPanelHost[];
   labels: NotchPanelLabels;
   text: NotchPanelText;
+  now?: number;
 }): NotchPanelState {
+  const now = input.now ?? Date.now();
   const needsYou: NotchPanelItem[] = [];
   const running: NotchPanelItem[] = [];
   const finished: NotchPanelItem[] = [];
+  const recent: NotchPanelItem[] = [];
+  const hosts: NotchPanelHostSummary[] = [];
   const offlineHosts: string[] = [];
   for (const host of input.hosts) {
     if (!host.online) offlineHosts.push(host.label);
+    const summary: NotchPanelHostSummary = {
+      serverId: host.serverId,
+      label: host.label,
+      online: host.online,
+      running: 0,
+      needsYou: 0,
+    };
     for (const agent of host.agents) {
-      const item = itemFor(host, agent, input.text);
+      const item = itemFor(host, agent, input.text, now);
       if (!item) continue;
-      if (item.state === "running") running.push(item);
-      else if (item.state === "finished") finished.push(item);
-      else needsYou.push(item);
+      if (item.state === "running") {
+        running.push(item);
+        summary.running += 1;
+      } else if (item.state === "finished") finished.push(item);
+      else if (item.state === "recent") recent.push(item);
+      else {
+        needsYou.push(item);
+        summary.needsYou += 1;
+      }
     }
+    hosts.push(summary);
   }
   return {
     enabled: input.enabled,
@@ -241,6 +295,8 @@ export function buildNotchPanelState(input: {
     needsYou: needsYou.sort(newestFirst),
     running: running.sort(newestFirst),
     finished: finished.sort(newestFirst).slice(0, FINISHED_LIMIT),
+    recent: recent.sort(newestFirst).slice(0, RECENT_LIMIT),
+    hosts,
     offlineHosts,
   };
 }

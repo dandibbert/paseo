@@ -10,11 +10,13 @@ const state: NotchPanelState = {
   labels: {
     needsYou: "需要你",
     running: "运行中",
-    finished: "刚完成",
-    empty: "没有正在进行的任务",
+    finished: "待查看",
+    recent: "最近完成",
+    columnEmpty: "暂无",
+    empty: "目前没有需要你处理的任务",
     offline: "离线",
     open: "打开",
-    states: { permission: "", question: "", error: "", running: "", finished: "" },
+    states: { permission: "", question: "", error: "", running: "", finished: "", recent: "" },
   },
   needsYou: [
     {
@@ -35,6 +37,24 @@ const state: NotchPanelState = {
   ],
   running: [],
   finished: [],
+  recent: [
+    {
+      key: "mac:r",
+      serverId: "mac",
+      agentId: "r",
+      title: "Write release notes",
+      subtitle: "Mac · docs",
+      state: "recent",
+      detail: null,
+      since: Date.now() - 3_600_000,
+      requestId: null,
+      buttons: [],
+    },
+  ],
+  hosts: [
+    { serverId: "mac", label: "Mac", online: true, running: 0, needsYou: 1 },
+    { serverId: "linux", label: "Linux", online: false, running: 0, needsYou: 0 },
+  ],
   offlineHosts: ["Linux"],
 };
 
@@ -69,7 +89,10 @@ describe("notch panel page", () => {
     expect(island.style.width).toBe(`${185 + 128}px`);
     // Titles are text, never markup.
     expect(document.querySelector(".title")?.textContent).toBe("Fix <b>login</b>");
-    expect(document.querySelector(".footer")?.textContent).toBe("离线: Linux");
+    expect([...document.querySelectorAll(".chip")].map((chip) => chip.textContent)).toEqual([
+      "Mac! 1",
+      "Linux离线",
+    ]);
     const allow = [...document.querySelectorAll("button")].find((b) => b.textContent === "允许")!;
     allow.click();
     expect(page.bridge.action).toHaveBeenCalledWith({
@@ -83,10 +106,28 @@ describe("notch panel page", () => {
     expect((document.querySelector("button") as HTMLButtonElement).disabled).toBe(true);
   });
 
+  it("shows a small board of running, to-review and recent chats when nothing needs you", () => {
+    const page = loadPage();
+    page.push({
+      state: { ...state, needsYou: [] },
+      geometry: { notchWidth: 185, notchHeight: 38, hasNotch: true },
+    });
+    expect(document.querySelector(".calm")?.textContent).toBe("目前没有需要你处理的任务");
+    const columns = [...document.querySelectorAll(".column")];
+    expect(columns.map((column) => column.querySelector(".section-title")?.textContent)).toEqual([
+      "运行中0",
+      "待查看0",
+      "最近完成1",
+    ]);
+    expect(columns[2]?.querySelector(".card .title")?.textContent).toBe("Write release notes");
+    // Yesterday's chats alone do not grow the collapsed island.
+    expect(document.getElementById("island")!.style.width).toBe("185px");
+  });
+
   it("stays hidden on a screen without a notch while nothing needs showing", () => {
     const page = loadPage();
     page.push({
-      state: { ...state, needsYou: [], offlineHosts: [] },
+      state: { ...state, needsYou: [], recent: [], offlineHosts: [] },
       geometry: { notchWidth: 190, notchHeight: 25, hasNotch: false },
     });
     expect(document.getElementById("island")!.classList.contains("hidden")).toBe(true);

@@ -309,8 +309,10 @@ export const ja: TranslationResources = {
   notchPanel: {
     needsYou: "対応が必要",
     running: "実行中",
-    finished: "完了",
-    empty: "実行中のタスクはありません",
+    finished: "確認待ち",
+    recent: "最近完了",
+    columnEmpty: "なし",
+    empty: "対応が必要なものはありません",
     offline: "オフライン",
     open: "開く",
     untitled: "無題",

@@ -309,8 +309,10 @@ export const ptBR: TranslationResources = {
   notchPanel: {
     needsYou: "Precisa de você",
     running: "Em execução",
-    finished: "Recém-concluído",
-    empty: "Nada em execução",
+    finished: "Para revisar",
+    recent: "Recentes",
+    columnEmpty: "Nada aqui",
+    empty: "Nada precisa de você",
     offline: "Offline",
     open: "Abrir",
     untitled: "Sem título",

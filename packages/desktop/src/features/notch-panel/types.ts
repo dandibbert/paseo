@@ -2,7 +2,13 @@
  * The notch panel's content, built and translated by the main window and drawn by the panel.
  * Mirrors packages/app/src/desktop/notch-panel/model.ts; keep the two in step.
  */
-export type NotchPanelItemState = "permission" | "question" | "error" | "running" | "finished";
+export type NotchPanelItemState =
+  | "permission"
+  | "question"
+  | "error"
+  | "running"
+  | "finished"
+  | "recent";
 
 export interface NotchPanelButton {
   key: string;
@@ -28,6 +34,8 @@ export interface NotchPanelLabels {
   needsYou: string;
   running: string;
   finished: string;
+  recent: string;
+  columnEmpty: string;
   empty: string;
   offline: string;
   open: string;
@@ -40,7 +48,17 @@ export interface NotchPanelState {
   needsYou: NotchPanelItem[];
   running: NotchPanelItem[];
   finished: NotchPanelItem[];
+  recent: NotchPanelItem[];
+  hosts: NotchPanelHostSummary[];
   offlineHosts: string[];
+}
+
+export interface NotchPanelHostSummary {
+  serverId: string;
+  label: string;
+  online: boolean;
+  running: number;
+  needsYou: number;
 }
 
 /** What the panel page needs to draw itself under the notch. */

@@ -1,7 +1,7 @@
 # Notch panel
 
-The macOS desktop app draws a panel under the MacBook notch: agents that need you, running agents
-and just-finished ones across every connected host, with approvals answered in place.
+The macOS desktop app draws a panel under the MacBook notch: a small board of every connected host,
+with what needs you on top (approvals answered in place) and running, to-review and recent chats below.
 
 ## Who owns what
 

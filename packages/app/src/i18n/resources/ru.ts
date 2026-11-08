@@ -308,8 +308,10 @@ export const ru: TranslationResources = {
   notchPanel: {
     needsYou: "Нужны вы",
     running: "Выполняется",
-    finished: "Только что завершено",
-    empty: "Ничего не выполняется",
+    finished: "Посмотреть",
+    recent: "Недавние",
+    columnEmpty: "Пусто",
+    empty: "Ничего не требует вашего внимания",
     offline: "Не в сети",
     open: "Открыть",
     untitled: "Без названия",

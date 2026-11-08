@@ -309,8 +309,10 @@ export const es: TranslationResources = {
   notchPanel: {
     needsYou: "Te necesita",
     running: "En ejecución",
-    finished: "Recién terminado",
-    empty: "No hay nada en ejecución",
+    finished: "Por revisar",
+    recent: "Recientes",
+    columnEmpty: "Nada aquí",
+    empty: "Nada te necesita",
     offline: "Sin conexión",
     open: "Abrir",
     untitled: "Sin título",

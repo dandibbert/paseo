@@ -5,8 +5,8 @@
  */
 
 /** The panel window's size; the visible island is drawn inside it, the rest lets clicks through. */
-export const NOTCH_WINDOW_WIDTH = 520;
-export const NOTCH_WINDOW_HEIGHT = 620;
+export const NOTCH_WINDOW_WIDTH = 760;
+export const NOTCH_WINDOW_HEIGHT = 640;
 
 const STYLE = `
 :root { color-scheme: dark; }
@@ -19,7 +19,7 @@ html, body { margin: 0; height: 100%; background: transparent; overflow: hidden;
   transition: width .32s cubic-bezier(.2,.9,.25,1.05), height .32s cubic-bezier(.2,.9,.25,1.05),
     border-radius .32s ease, opacity .2s ease, box-shadow .3s ease; }
 #island.hidden { opacity: 0; }
-#island.expanded { border-radius: 0 0 24px 24px; box-shadow: 0 12px 40px rgba(0,0,0,.45); }
+#island.expanded { border-radius: 0 0 26px 26px; box-shadow: 0 14px 44px rgba(0,0,0,.5); }
 #bar { position: absolute; top: 0; left: 0; right: 0; display: flex; align-items: center;
   justify-content: space-between; padding: 0 12px; transition: opacity .2s ease; }
 #island.expanded #bar { opacity: 0; pointer-events: none; }
@@ -30,15 +30,25 @@ html, body { margin: 0; height: 100%; background: transparent; overflow: hidden;
 .dot.error { background: #f26d6d; box-shadow: 0 0 8px rgba(242,109,109,.7); }
 .dot.running { background: #4b9cff; animation: pulse 1.6s ease-in-out infinite; }
 .dot.finished { background: #3ecf72; }
+.dot.recent { background: #6b6b6b; }
+.dot.online { background: #3ecf72; }
 @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .35; } }
 #island.alert { box-shadow: 0 0 0 1px rgba(245,165,36,.65), 0 6px 26px rgba(245,165,36,.35); }
-#content { position: absolute; left: 0; right: 0; bottom: 0; padding: 0 14px 14px;
+#content { position: absolute; left: 0; right: 0; bottom: 0; padding: 4px 16px 16px;
   overflow-y: auto; opacity: 0; transition: opacity .18s ease; }
 #island.expanded #content { opacity: 1; transition-delay: .08s; }
 #content::-webkit-scrollbar { width: 0; }
-.section { margin-top: 10px; }
+.hosts { display: flex; gap: 6px; flex-wrap: wrap; margin: 8px 0 4px; }
+.chip { display: flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px;
+  background: #151515; font-size: 11.5px; color: #cfcfcf; max-width: 220px; }
+.chip .name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.chip .count { color: #8b8b8b; font-variant-numeric: tabular-nums; }
+.chip.offline { color: #6f6f6f; }
 .section-title { font-size: 11px; font-weight: 600; letter-spacing: .02em; color: #8b8b8b;
-  margin: 0 4px 6px; display: flex; justify-content: space-between; }
+  margin: 12px 4px 6px; display: flex; justify-content: space-between; }
+.section-title.needs { color: #f5b54a; }
+.calm { color: #8b8b8b; font-size: 12px; margin: 12px 4px 2px; display: flex; gap: 6px;
+  align-items: center; }
 .item { background: #161616; border-radius: 14px; padding: 9px 11px; margin-bottom: 6px; }
 .item:hover { background: #1f1f1f; }
 .row { display: flex; align-items: center; gap: 8px; }
@@ -59,9 +69,15 @@ button.primary { background: #f2f2f2; color: #000; }
 button.primary:hover { background: #fff; }
 button.danger { background: #4a1c1c; color: #ffb4b4; }
 button:disabled { opacity: .45; cursor: default; }
-.compact { padding: 7px 11px; }
-.empty { color: #8b8b8b; text-align: center; padding: 18px 0 6px; }
-.footer { color: #8b8b8b; font-size: 11px; margin: 8px 4px 0; }
+.board { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 4px; }
+.column { background: #0d0d0d; border-radius: 16px; padding: 8px; min-height: 92px; }
+.column .section-title { margin: 2px 4px 8px; }
+.card { background: #171717; border-radius: 11px; padding: 7px 9px; margin-bottom: 5px; }
+.card:hover { background: #222; }
+.card .title { font-size: 12px; }
+.card .sub { margin-left: 16px; font-size: 11px; }
+.none { color: #5d5d5d; font-size: 11.5px; text-align: center; padding: 14px 0; }
+.more { color: #8b8b8b; font-size: 11px; text-align: center; padding: 2px 0 0; }
 `;
 
 export function runNotchPanel(): void {
@@ -83,12 +99,21 @@ export function runNotchPanel(): void {
     requestId: string | null;
     buttons: Button[];
   }
+  interface HostSummary {
+    serverId: string;
+    label: string;
+    online: boolean;
+    running: number;
+    needsYou: number;
+  }
   interface State {
     enabled: boolean;
     labels: {
       needsYou: string;
       running: string;
       finished: string;
+      recent: string;
+      columnEmpty: string;
       empty: string;
       offline: string;
       open: string;
@@ -96,6 +121,8 @@ export function runNotchPanel(): void {
     needsYou: Item[];
     running: Item[];
     finished: Item[];
+    recent: Item[];
+    hosts: HostSummary[];
     offlineHosts: string[];
   }
   interface Geometry {
@@ -115,9 +142,10 @@ export function runNotchPanel(): void {
   const content = document.getElementById("content") as HTMLDivElement;
   if (!bridge || !island) return;
 
-  const EXPANDED_WIDTH = 460;
+  const EXPANDED_WIDTH = 720;
   const EAR_WIDTH = 64;
-  const MAX_HEIGHT = 600;
+  const MAX_HEIGHT = 620;
+  const COLUMN_LIMIT = 5;
   let state: State | null = null;
   let geometry: Geometry = { notchWidth: 190, notchHeight: 32, hasNotch: false };
   let expanded = false;
@@ -146,6 +174,7 @@ export function runNotchPanel(): void {
     if (item.state === "error") return "dot error";
     if (item.state === "running") return "dot running";
     if (item.state === "finished") return "dot finished";
+    if (item.state === "recent") return "dot recent";
     return "dot needs";
   }
 
@@ -154,54 +183,87 @@ export function runNotchPanel(): void {
     collapse();
   }
 
-  function renderItem(item: Item, compact: boolean): HTMLElement {
-    const card = el("div", compact ? "item compact" : "item");
+  function renderButtons(item: Item): HTMLElement | null {
+    if (item.buttons.length === 0 || !item.requestId) return null;
+    const buttons = el("div", "buttons");
+    const done = answered.has(item.requestId);
+    for (const spec of item.buttons) {
+      const button = el("button", spec.tone, spec.label) as HTMLButtonElement;
+      button.disabled = done;
+      button.addEventListener("click", (event) => {
+        event.stopPropagation();
+        if (spec.kind === "open") {
+          open(item);
+          return;
+        }
+        if (!item.requestId) return;
+        answered.add(item.requestId);
+        bridge?.action({
+          type: "respond",
+          serverId: item.serverId,
+          agentId: item.agentId,
+          requestId: item.requestId,
+          buttonKey: spec.key,
+        });
+        render();
+      });
+      buttons.append(button);
+    }
+    return buttons;
+  }
+
+  /** A full-width card for something that needs you, with its detail and buttons. */
+  function renderNeed(item: Item): HTMLElement {
+    const card = el("div", "item");
     const row = el("div", "row");
     row.append(el("span", dotClass(item)), el("span", "title", item.title));
     row.append(el("span", "time", ago(item.since)));
     card.append(row, el("div", "sub", item.subtitle));
-    if (item.detail && !compact) {
+    if (item.detail) {
       card.append(el("div", item.state === "error" ? "detail error" : "detail", item.detail));
     }
-    if (item.buttons.length > 0 && item.requestId) {
-      const buttons = el("div", "buttons");
-      const done = answered.has(item.requestId);
-      for (const spec of item.buttons) {
-        const button = el("button", spec.tone, spec.label) as HTMLButtonElement;
-        button.disabled = done;
-        button.addEventListener("click", (event) => {
-          event.stopPropagation();
-          if (spec.kind === "open") {
-            open(item);
-            return;
-          }
-          if (!item.requestId) return;
-          answered.add(item.requestId);
-          bridge?.action({
-            type: "respond",
-            serverId: item.serverId,
-            agentId: item.agentId,
-            requestId: item.requestId,
-            buttonKey: spec.key,
-          });
-          render();
-        });
-        buttons.append(button);
-      }
-      card.append(buttons);
-    }
+    const buttons = renderButtons(item);
+    if (buttons) card.append(buttons);
     card.addEventListener("click", () => open(item));
     return card;
   }
 
-  function section(title: string, items: Item[], compact: boolean): HTMLElement | null {
-    if (items.length === 0) return null;
-    const wrap = el("div", "section");
+  /** A small board card: title, where it runs, how long ago. */
+  function renderCard(item: Item): HTMLElement {
+    const card = el("div", "card");
+    const row = el("div", "row");
+    row.append(el("span", dotClass(item)), el("span", "title", item.title));
+    row.append(el("span", "time", ago(item.since)));
+    card.append(row, el("div", "sub", item.subtitle));
+    card.addEventListener("click", () => open(item));
+    return card;
+  }
+
+  function renderColumn(title: string, items: Item[], empty: string): HTMLElement {
+    const column = el("div", "column");
     const heading = el("div", "section-title");
     heading.append(el("span", undefined, title), el("span", undefined, String(items.length)));
-    wrap.append(heading);
-    for (const item of items) wrap.append(renderItem(item, compact));
-    return wrap;
+    column.append(heading);
+    if (items.length === 0) column.append(el("div", "none", empty));
+    for (const item of items.slice(0, COLUMN_LIMIT)) column.append(renderCard(item));
+    if (items.length > COLUMN_LIMIT)
+      column.append(el("div", "more", `+${items.length - COLUMN_LIMIT}`));
+    return column;
+  }
+
+  function renderHosts(current: State): HTMLElement | null {
+    if (current.hosts.length === 0) return null;
+    const row = el("div", "hosts");
+    for (const host of current.hosts) {
+      const chip = el("div", host.online ? "chip" : "chip offline");
+      chip.title = host.label;
+      chip.append(el("span", host.online ? "dot online" : "dot"), el("span", "name", host.label));
+      if (!host.online) chip.append(el("span", "count", current.labels.offline));
+      else if (host.needsYou > 0) chip.append(el("span", "count", `! ${host.needsYou}`));
+      else if (host.running > 0) chip.append(el("span", "count", String(host.running)));
+      row.append(chip);
+    }
+    return row;
   }
 
   function renderBar(current: State): void {
@@ -224,16 +286,17 @@ export function runNotchPanel(): void {
     bar.append(left, right);
   }
 
-  function hasSomething(current: State): boolean {
+  /** Whether the collapsed island grows ears: only for live work, not for yesterday's chats. */
+  function hasLiveWork(current: State): boolean {
     return current.needsYou.length + current.running.length + current.finished.length > 0;
   }
 
   function layout(): void {
     const current = state;
     const visible = current !== null && current.enabled;
-    const something = current !== null && hasSomething(current);
+    const live = current !== null && hasLiveWork(current);
     // A screen without a notch shows nothing until there is something to show.
-    island.classList.toggle("hidden", !visible || (!geometry.hasNotch && !something && !expanded));
+    island.classList.toggle("hidden", !visible || (!geometry.hasNotch && !live && !expanded));
     island.classList.toggle("expanded", expanded);
     bar.style.height = `${geometry.notchHeight}px`;
     if (expanded) {
@@ -242,7 +305,7 @@ export function runNotchPanel(): void {
       island.style.width = `${EXPANDED_WIDTH}px`;
       island.style.height = `${Math.max(height, geometry.notchHeight + 64)}px`;
     } else {
-      island.style.width = `${geometry.notchWidth + (something ? EAR_WIDTH * 2 : 0)}px`;
+      island.style.width = `${geometry.notchWidth + (live ? EAR_WIDTH * 2 : 0)}px`;
       island.style.height = `${geometry.notchHeight}px`;
     }
   }
@@ -255,18 +318,28 @@ export function runNotchPanel(): void {
     }
     renderBar(current);
     content.replaceChildren();
-    const parts = [
-      section(current.labels.needsYou, current.needsYou, false),
-      section(current.labels.running, current.running, true),
-      section(current.labels.finished, current.finished, true),
-    ].filter((part): part is HTMLElement => part !== null);
-    if (parts.length === 0) content.append(el("div", "empty", current.labels.empty));
-    content.append(...parts);
-    if (current.offlineHosts.length > 0) {
-      content.append(
-        el("div", "footer", `${current.labels.offline}: ${current.offlineHosts.join(", ")}`),
+    const hosts = renderHosts(current);
+    if (hosts) content.append(hosts);
+    if (current.needsYou.length > 0) {
+      const heading = el("div", "section-title needs");
+      heading.append(
+        el("span", undefined, current.labels.needsYou),
+        el("span", undefined, String(current.needsYou.length)),
       );
+      content.append(heading);
+      for (const item of current.needsYou) content.append(renderNeed(item));
+    } else {
+      const calm = el("div", "calm");
+      calm.append(el("span", "dot finished"), el("span", undefined, current.labels.empty));
+      content.append(calm);
     }
+    const board = el("div", "board");
+    board.append(
+      renderColumn(current.labels.running, current.running, current.labels.columnEmpty),
+      renderColumn(current.labels.finished, current.finished, current.labels.columnEmpty),
+      renderColumn(current.labels.recent, current.recent, current.labels.columnEmpty),
+    );
+    content.append(board);
     layout();
   }
 

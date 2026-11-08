@@ -305,8 +305,10 @@ export const ko: TranslationResources = {
   notchPanel: {
     needsYou: "처리 필요",
     running: "실행 중",
-    finished: "방금 완료",
-    empty: "실행 중인 작업이 없습니다",
+    finished: "확인 대기",
+    recent: "최근 완료",
+    columnEmpty: "없음",
+    empty: "처리할 작업이 없습니다",
     offline: "오프라인",
     open: "열기",
     untitled: "제목 없음",

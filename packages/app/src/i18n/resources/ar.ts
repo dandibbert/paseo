@@ -304,8 +304,10 @@ export const ar: TranslationResources = {
   notchPanel: {
     needsYou: "يحتاجك",
     running: "قيد التشغيل",
-    finished: "انتهى للتو",
-    empty: "لا شيء قيد التشغيل",
+    finished: "للمراجعة",
+    recent: "الأخيرة",
+    columnEmpty: "لا شيء",
+    empty: "لا شيء يحتاجك",
     offline: "غير متصل",
     open: "فتح",
     untitled: "بلا عنوان",

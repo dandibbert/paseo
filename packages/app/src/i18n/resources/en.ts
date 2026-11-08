@@ -301,8 +301,10 @@ export const en = {
   notchPanel: {
     needsYou: "Needs you",
     running: "Running",
-    finished: "Just finished",
-    empty: "Nothing is running",
+    finished: "To review",
+    recent: "Recent",
+    columnEmpty: "Nothing here",
+    empty: "Nothing needs you",
     offline: "Offline",
     open: "Open",
     untitled: "Untitled",

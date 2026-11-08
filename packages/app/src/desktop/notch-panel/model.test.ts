@@ -12,6 +12,8 @@ const labels: NotchPanelLabels = {
   needsYou: "Needs you",
   running: "Running",
   finished: "Finished",
+  recent: "Recent",
+  columnEmpty: "—",
   empty: "Nothing running",
   offline: "Offline",
   open: "Open",
@@ -21,6 +23,7 @@ const labels: NotchPanelLabels = {
     error: "Error",
     running: "Running",
     finished: "Finished",
+    recent: "Recent",
   },
 };
 const text: NotchPanelText = {
@@ -132,5 +135,33 @@ describe("permissionResponse", () => {
       message: "Denied by user",
     });
     expect(permissionResponse(plan, "allow")).toBeNull();
+  });
+});
+
+describe("the idle board", () => {
+  it("lists idle chats from the last day and counts each host's work", () => {
+    const now = 10 * 24 * 60 * 60 * 1000;
+    const state = buildNotchPanelState({
+      enabled: true,
+      labels,
+      text,
+      now,
+      hosts: [
+        {
+          serverId: "mac",
+          label: "Mac",
+          online: true,
+          agents: [
+            agent("fresh", { updatedAt: new Date(now - 60_000) }),
+            agent("stale", { updatedAt: new Date(now - 3 * 24 * 60 * 60 * 1000) }),
+            agent("busy", { status: "running" }),
+          ],
+        },
+      ],
+    });
+    expect(state.recent.map((item) => item.agentId)).toEqual(["fresh"]);
+    expect(state.hosts).toEqual([
+      { serverId: "mac", label: "Mac", online: true, running: 1, needsYou: 0 },
+    ]);
   });
 });

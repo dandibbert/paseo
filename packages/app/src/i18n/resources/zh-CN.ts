@@ -304,8 +304,10 @@ export const zhCN: TranslationResources = {
   notchPanel: {
     needsYou: "需要你",
     running: "运行中",
-    finished: "刚完成",
-    empty: "没有正在进行的任务",
+    finished: "待查看",
+    recent: "最近完成",
+    columnEmpty: "暂无",
+    empty: "目前没有需要你处理的任务",
     offline: "离线",
     open: "打开",
     untitled: "未命名",
