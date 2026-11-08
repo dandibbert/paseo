@@ -46,6 +46,7 @@ export interface SidebarProjectionInput {
   projectNamesByViewKey: Map<string, string>;
   groupMode: SidebarGroupMode;
   workspaceSort?: WorkspaceSort;
+  offlineServerIds?: ReadonlySet<string>;
   pinnedCollapsed: boolean;
   collapsedProjectKeys: ReadonlySet<string>;
   collapsedWorkspaceGroupKeys: ReadonlySet<string>;
@@ -76,6 +77,7 @@ export function buildSidebarProjection(input: SidebarProjectionInput): SidebarPr
       pinnedGroups.unpinnedProjects,
       input.workspaceEntriesByKey,
       input.workspaceSort ?? "activity",
+      input.offlineServerIds,
     );
     for (const host of hosts)
       sections.push(

@@ -274,3 +274,37 @@ it("filters status without replacing project identity and distinguishes matching
   expect(projectLocationSummary(a, [a])).toBeNull();
   expect(projectLocationSummary(a, [a, b])).toBe("/repo/a");
 });
+it("sorts an offline host's work below every online host's, by time within each", () => {
+  const dead = timed("dead", "a", "dead-host", 1000);
+  const live = timed("live", "b", "live-host", 10);
+  const deadToo = timed("dead-too", "c", "dead-host", 500);
+  const projects = [
+    makeProject([dead.placement], "a"),
+    makeProject([live.placement], "b"),
+    makeProject([deadToo.placement], "c"),
+  ];
+  const entries = new Map([dead, live, deadToo].map((row) => [row.entry.workspaceKey, row.entry]));
+  const offline = new Set(["dead-host"]);
+  expect(
+    orderSidebarProjects(projects, entries, "activity", offline).map((project) => project.viewKey),
+  ).toEqual(["b", "a", "c"]);
+});
+it("keeps a shared project's online workspaces first and an offline host's group last", () => {
+  const dead = timed("dead", "shared", "dead-host", 1000);
+  const live = timed("live", "shared", "live-host", 10);
+  const shared = makeProject([dead.placement, live.placement], "shared");
+  shared.hosts = [
+    { ...shared.hosts[0], serverId: "dead-host" },
+    { ...shared.hosts[0], serverId: "live-host" },
+  ];
+  const entries = new Map([dead, live].map((row) => [row.entry.workspaceKey, row.entry]));
+  const offline = new Set(["dead-host"]);
+  expect(
+    orderSidebarProjects([shared], entries, "activity", offline)[0].workspaces.map(
+      (row) => row.workspaceId,
+    ),
+  ).toEqual(["live", "dead"]);
+  expect(
+    groupSidebarProjectsByHost([shared], entries, "activity", offline).map((g) => g.serverId),
+  ).toEqual(["live-host", "dead-host"]);
+});

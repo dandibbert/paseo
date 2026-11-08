@@ -2204,7 +2204,7 @@ function ProjectModeList({
     (state) => state.togglePinnedCollapsed,
   );
 
-  const { effectiveWorkspaceSort: workspaceSort } = useSidebarModel();
+  const { effectiveWorkspaceSort: workspaceSort, offlineServerIds } = useSidebarModel();
   const groupMode = useSidebarViewStore((state) => state.groupMode);
   const hosts = useHosts();
   const manualSort = useSidebarViewStore((state) => state.workspaceSort === "manual");
@@ -2503,7 +2503,12 @@ function ProjectModeList({
     renderProjectBlock(item, { isDragging: false });
   const hostGroups =
     groupMode === "host"
-      ? groupSidebarProjectsByHost(unpinnedProjects, workspaceEntriesByKey, workspaceSort)
+      ? groupSidebarProjectsByHost(
+          unpinnedProjects,
+          workspaceEntriesByKey,
+          workspaceSort,
+          offlineServerIds,
+        )
       : [];
   const staticProjectBody =
     groupMode === "host"

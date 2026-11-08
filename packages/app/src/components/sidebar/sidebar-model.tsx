@@ -18,6 +18,7 @@ import {
 import { useSidebarOrderStore } from "@/stores/sidebar-order-store";
 import type { SidebarShortcutModel } from "@/utils/sidebar-shortcuts";
 import { buildSidebarProjection } from "./sidebar-projection";
+import { useHostRuntimeConnectionStatuses, useHosts } from "@/runtime/host-runtime";
 import type { SidebarProjectIconTarget } from "@/utils/sidebar-project-row-model";
 import { filterWorkspacesByLabels, type SidebarWorkspaceGroup } from "./sidebar-labels";
 import { filterWorkspacesByProjects, resolveActiveProjectFilters } from "./sidebar-project-filter";
@@ -37,6 +38,8 @@ interface SidebarModel extends SidebarWorkspacesListResult {
   allProjects: SidebarProjectEntry[];
   /** The project filter as it is actually being applied — see `resolveActiveProjectFilters`. */
   resolvedProjectFilters: readonly string[];
+  /** Hosts that are not online; time sorts list their work after the online hosts'. */
+  offlineServerIds: ReadonlySet<string>;
   hasProjectsBeforeFilter: boolean;
   groupMode: SidebarGroupMode;
   workspaceGroups: SidebarWorkspaceGroup[];
@@ -48,6 +51,21 @@ interface SidebarModel extends SidebarWorkspacesListResult {
 }
 
 const SidebarModelContext = createContext<SidebarModel | null>(null);
+
+function useOfflineServerIds(): ReadonlySet<string> {
+  const hosts = useHosts();
+  const serverIds = useMemo(() => hosts.map((host) => host.serverId), [hosts]);
+  const statuses = useHostRuntimeConnectionStatuses(serverIds);
+  return useMemo(
+    () =>
+      new Set(
+        // A dead host keeps retrying, so "connecting" counts as offline; otherwise each attempt
+        // would lift it back to the top.
+        serverIds.filter((serverId) => statuses.get(serverId) !== "online"),
+      ),
+    [serverIds, statuses],
+  );
+}
 
 export function SidebarModelProvider({
   active,
@@ -89,6 +107,7 @@ export function SidebarModelProvider({
     reconcileLabelFilter(availableLabelNames);
   }, [availableLabelNames, hasAuthoritativeLabelCatalog, reconcileLabelFilter]);
   const effectiveSort = list.effectiveWorkspaceSort;
+  const offlineServerIds = useOfflineServerIds();
   const hasActiveLabelFilter = hasActiveSidebarLabelFilter(labelFilter);
   const resolvedProjectFilters = useMemo(
     () =>
@@ -150,8 +169,14 @@ export function SidebarModelProvider({
           : [];
       });
     }
-    return orderSidebarProjects(projects, filteredWorkspaceEntriesByKey, effectiveSort);
+    return orderSidebarProjects(
+      projects,
+      filteredWorkspaceEntriesByKey,
+      effectiveSort,
+      offlineServerIds,
+    );
   }, [
+    offlineServerIds,
     showBackground,
     activityFilter,
     effectiveSort,
@@ -172,6 +197,7 @@ export function SidebarModelProvider({
       projectNamesByViewKey: list.projectNamesByViewKey,
       groupMode,
       workspaceSort: effectiveSort,
+      offlineServerIds,
       pinnedCollapsed,
       collapsedProjectKeys,
       collapsedWorkspaceGroupKeys,
@@ -182,6 +208,7 @@ export function SidebarModelProvider({
       collapsedWorkspaceGroupKeys,
       groupMode,
       effectiveSort,
+      offlineServerIds,
       list.projectNamesByViewKey,
       filteredProjects,
       pinnedCollapsed,
@@ -198,6 +225,7 @@ export function SidebarModelProvider({
       projects: filteredProjects,
       allProjects: list.projects,
       resolvedProjectFilters,
+      offlineServerIds,
       hasProjectsBeforeFilter: list.projects.length > 0,
       workspaceEntriesByKey: filteredWorkspaceEntriesByKey,
       groupMode,
@@ -210,6 +238,7 @@ export function SidebarModelProvider({
     }),
     [
       resolvedProjectFilters,
+      offlineServerIds,
       collapsedProjectKeys,
       groupMode,
       list,
