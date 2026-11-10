@@ -117,6 +117,12 @@ export function toStoredAgentRecord(
   } satisfies StoredAgentRecord;
 }
 
+/** Account discovery depends on the harness session and its model, so the key follows both. */
+function projectUsageScopeKey(agent: ManagedAgent): string | undefined {
+  const usageSession = agent.session?.usageSession?.();
+  return usageSession ? `${usageSession.sessionKey}:${usageSession.model ?? ""}` : undefined;
+}
+
 export function toAgentPayload(
   agent: ManagedAgent,
   options?: ProjectionOptions,
@@ -164,6 +170,11 @@ export function toAgentPayload(
     archivedAt: options?.archivedAt ?? null,
     ...visibilityFlags(agent),
   };
+
+  const usageScopeKey = projectUsageScopeKey(agent);
+  if (usageScopeKey !== undefined) {
+    payload.usageScopeKey = usageScopeKey;
+  }
 
   const usage = sanitizeUsage(agent.lastUsage);
   if (usage !== undefined) {
