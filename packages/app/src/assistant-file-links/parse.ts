@@ -229,16 +229,23 @@ export function classifyAssistantFileLink(
     };
   }
 
-  if (/\s/.test(trimmed)) {
+  // A Markdown link written as `[name](<path with spaces>)` reaches us with its spaces raw, not
+  // percent-encoded. It is still an authored link to that exact path, so encode the spaces and
+  // let the href decoding below restore them. Inferred text with spaces stays prose.
+  const token =
+    options.explicitLink && options.decodeHref
+      ? trimmed.replace(/\s/g, (space) => encodeURIComponent(space))
+      : trimmed;
+  if (/\s/.test(token)) {
     return null;
   }
 
-  const target = parseAssistantFileLink(trimmed, options);
+  const target = parseAssistantFileLink(token, options);
   if (!target) {
     return null;
   }
 
-  if (!options.explicitLink && isAmbiguousWorkspaceCandidate(trimmed, target, options)) {
+  if (!options.explicitLink && isAmbiguousWorkspaceCandidate(token, target, options)) {
     return {
       kind: "ambiguousFileCandidate",
       target,

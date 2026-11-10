@@ -198,6 +198,34 @@ describe("classifyForResolution", () => {
       value: { kind: "file", target: { path: "C:/repo/my file.md", lineStart } },
     });
   });
+  it.each([
+    "/Users/you/Applications/CrossOver/Cheat Engine/Cheat Engine (64-bit FEX).app",
+    "/Users/you/Applications/CrossOver/Cheat%20Engine/Cheat%20Engine%20(64-bit%20FEX).app",
+  ])("opens a Markdown link to a path with spaces, encoded or written in <> (%s)", (href) => {
+    expect(classifyForResolution({ href }, CONTEXT)).toMatchObject({
+      kind: "resolved",
+      value: {
+        kind: "file",
+        target: {
+          path: "/Users/you/Applications/CrossOver/Cheat Engine/Cheat Engine (64-bit FEX).app",
+        },
+      },
+    });
+  });
+
+  it("leaves inferred text with spaces alone", () => {
+    expect(
+      classifyForResolution(
+        {
+          href: "/Users/you/my notes.md",
+          text: "/Users/you/my notes.md",
+          sourceType: "inline-code",
+        },
+        CONTEXT,
+      ),
+    ).toEqual({ kind: "resolved", value: { kind: "ignored" } });
+  });
+
   it("returns the directFile target synchronously", () => {
     const result = classifyForResolution({ href: "src/components/message.tsx#L33" }, CONTEXT);
 
