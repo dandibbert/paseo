@@ -59,6 +59,8 @@ import { type SidebarRowItem } from "./row-items";
 import { useWorkspaceLabelProjection } from "@/workspace-labels";
 import { WorkspaceLabelDot } from "@/workspace-labels/swatch";
 import { WorkspaceLabelManagerModal } from "@/workspace-labels/manager-modal";
+import { PluginIconView } from "@/plugins/icons";
+import type { PluginWorkspaceRowBadgeItemGroup } from "@/plugins/workspace-row-badge-items";
 
 const mutedIconMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
 
@@ -66,6 +68,7 @@ const ThemedSettings2 = withUnistyles(Settings2);
 /** CI's mark: the subject of the checks row, and the shape the icon-only option leaves behind. */
 const ThemedCircleCheck = withUnistyles(CircleCheck);
 const ThemedCircle = withUnistyles(Circle);
+const ThemedPluginIconView = withUnistyles(PluginIconView);
 
 /** Fits the item's 16pt leading slot with a hair of room, matching the trailing check. */
 const OPTION_ICON_SIZE = 14;
@@ -635,7 +638,10 @@ function OptionList<Value extends string>({
   ));
 }
 
-/** Identity and operational metadata stay independent; toggling one never resets another. */
+/**
+ * Identity and operational metadata stay independent; toggling one never resets another. Plugin
+ * badge items come last, under their own separator, so they never split a section of Paseo's own.
+ */
 function ShowPage({ preferences }: { preferences: Preferences }): ReactElement {
   const { t } = useTranslation();
   const renderItem = (item: SidebarRowItem) => (
@@ -674,7 +680,44 @@ function ShowPage({ preferences }: { preferences: Preferences }): ReactElement {
       <MenuLabel>{t("sidebar.display.sections.work")}</MenuLabel>
       {(["changeRequest", "services", "labels", "activitySource"] as const).map(renderItem)}
       <ChecksSubTrigger />
+      {preferences.pluginRowBadgeItems.length > 0 ? (
+        <MenuSeparator testID="sidebar-plugin-row-badge-items-separator" />
+      ) : null}
+      {preferences.pluginRowBadgeItems.map((item) => (
+        <PluginRowBadgeItemOption key={item.key} item={item} preferences={preferences} />
+      ))}
     </>
+  );
+}
+
+/** A plugin's workspace row badge item, toggled like the row's own. */
+function PluginRowBadgeItemOption({
+  item,
+  preferences,
+}: {
+  item: PluginWorkspaceRowBadgeItemGroup;
+  preferences: Preferences;
+}): ReactElement {
+  const handleSelect = useCallback(
+    () => preferences.togglePluginRowBadgeItem(item.key),
+    [item.key, preferences],
+  );
+  const leading = useMemo(
+    () => (
+      <ThemedPluginIconView icon={item.icon} size={OPTION_ICON_SIZE} uniProps={mutedIconMapping} />
+    ),
+    [item.icon],
+  );
+  return (
+    <MenuItem
+      selected={preferences.isPluginRowBadgeItemVisible(item.key)}
+      leading={leading}
+      closeOnSelect={false}
+      onSelect={handleSelect}
+      testID={`sidebar-row-badge-item-plugin-${item.pluginId}-${item.itemId}`}
+    >
+      {item.title}
+    </MenuItem>
   );
 }
 

@@ -43,6 +43,7 @@ vi.mock("../client-runtime", () => ({
 }));
 vi.mock("../icons", () => ({
   Icon: () => null,
+  PluginIconView: () => null,
   pluginIconComponent: () => () => null,
 }));
 
