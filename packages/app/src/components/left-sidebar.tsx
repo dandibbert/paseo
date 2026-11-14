@@ -1,7 +1,6 @@
 import { SidebarActivityFilterControl } from "@/components/sidebar/activity-filter";
 import { SidebarViewSlot } from "@/plugins/sidebar-view";
 import { useAddHost } from "@/hosts/add-host";
-import { router } from "expo-router";
 import {
   CircleGauge,
   FolderPlus,
@@ -86,8 +85,9 @@ import { useOwnsWindowChromeCorner, WindowChromeSafeArea } from "@/utils/desktop
 import { useCloseAgentListGesture } from "@/mobile-panels/gestures";
 import { useLeftPanelWidth } from "@/mobile-panels/provider";
 import { MobilePanelOverlay } from "@/mobile-panels/presentation";
-import { buildSettingsRoute } from "@/utils/host-routes";
-import { openHostOverview } from "@/navigation/settings-navigation";
+import { buildSettingsHostSectionRoute } from "@/utils/host-routes";
+import { useActiveWorkspaceSelection } from "@/stores/navigation-active-workspace-store";
+import { openSettingsFromSidebar } from "@/navigation/settings-navigation";
 import { UsageSidebarItem, UsageSidebarRoot, useUsageSummary, useOpenSidebarUsage } from "@/usage";
 import { SidebarAgentListSkeleton } from "./sidebar-agent-list-skeleton";
 import { SidebarCalloutSlot } from "./sidebar-callout-slot";
@@ -158,6 +158,7 @@ export const LeftSidebar = memo(function LeftSidebar({
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const isCompactLayout = useIsCompactFormFactor();
+  const activeWorkspace = useActiveWorkspaceSelection();
   const showMobileAgent = usePanelStore((state) => state.showMobileAgent);
 
   const {
@@ -194,25 +195,26 @@ export const LeftSidebar = memo(function LeftSidebar({
   const openProjectPicker = useOpenAddProject();
   const { open: openImportSession, sheet: importSessionSheet } = useImportSession();
 
-  // Each destination closes the navigation overlay first. Closing is idempotent, so a docked
-  // sidebar runs the same handler.
+  // Workspace destinations close the overlay; Settings retains it for the return journey.
   const handleOpenProject = useCallback(() => {
     void openProjectPicker();
   }, [openProjectPicker]);
 
   const handleSettings = useCallback(() => {
-    showMobileAgent();
-    router.push(buildSettingsRoute());
-  }, [showMobileAgent]);
+    openSettingsFromSidebar({ workspace: activeWorkspace, isCompact: isCompactLayout });
+  }, [activeWorkspace, isCompactLayout]);
 
   const handleAddHost = useAddHost();
 
   const handleOpenHostSettings = useCallback(
     (serverId: string) => {
-      showMobileAgent();
-      openHostOverview(serverId);
+      openSettingsFromSidebar({
+        workspace: activeWorkspace,
+        isCompact: isCompactLayout,
+        route: buildSettingsHostSectionRoute(serverId, "host"),
+      });
     },
-    [showMobileAgent],
+    [activeWorkspace, isCompactLayout],
   );
 
   const labels = useMemo(

@@ -26,11 +26,13 @@ const folderIcon = <ThemedFolder uniProps={iconProps} />;
  */
 export function UnpreviewableFileActions({
   serverId,
+  workspaceId: workspaceIdProp,
   workspaceRoot,
   path,
   absolutePath,
 }: {
   serverId: string;
+  workspaceId?: string | null;
   workspaceRoot: string;
   /** Workspace-relative path. */
   path: string;
@@ -38,7 +40,8 @@ export function UnpreviewableFileActions({
 }) {
   const { t } = useTranslation();
   const toast = useToast();
-  const { workspaceId } = usePaneContext();
+  const { workspaceId: paneWorkspaceId } = usePaneContext();
+  const workspaceId = workspaceIdProp ?? paneWorkspaceId;
   const download = useFileDownload({ serverId, workspaceId, workspaceRoot });
   const isLocalDaemon = useIsLocalDaemon(serverId);
   const { targets } = useDesktopOpenTargets({ isLocalExecution: isLocalDaemon });

@@ -8,6 +8,7 @@ import type { SidebarWorkspaceEntry } from "@/hooks/use-sidebar-workspaces-list"
 import { useAppSettings } from "@/hooks/use-settings";
 import type { SidebarWorkspaceTrailing } from "@/hooks/use-settings";
 import { useCompactTimeAgo } from "@/hooks/use-time-ago";
+import type { SidebarSurfaceBackdrop } from "@/styles/surface-backdrop";
 
 export type { SidebarWorkspaceTrailing };
 
@@ -43,15 +44,25 @@ export function hasSidebarWorkspaceTrailing({
 export function SidebarWorkspaceTrailingContent({
   workspace,
   trailing,
+  backdrop,
 }: {
   workspace: SidebarWorkspaceEntry;
   trailing: SidebarWorkspaceTrailing;
+  backdrop: SidebarSurfaceBackdrop;
 }) {
   if (trailing === "both")
     return (
       <View style={styles.both}>
-        <SidebarWorkspaceTrailingContent workspace={workspace} trailing="diff" />
-        <SidebarWorkspaceTrailingContent workspace={workspace} trailing="timestamp" />
+        <SidebarWorkspaceTrailingContent
+          workspace={workspace}
+          trailing="diff"
+          backdrop={backdrop}
+        />
+        <SidebarWorkspaceTrailingContent
+          workspace={workspace}
+          trailing="timestamp"
+          backdrop={backdrop}
+        />
       </View>
     );
   if (trailing === "diff" && workspace.diffStat) {
@@ -60,7 +71,7 @@ export function SidebarWorkspaceTrailingContent({
     );
   }
   if (trailing === "timestamp" && workspace.statusEnteredAt) {
-    return <WorkspaceTimestamp enteredAt={workspace.statusEnteredAt} />;
+    return <WorkspaceTimestamp enteredAt={workspace.statusEnteredAt} backdrop={backdrop} />;
   }
   return null;
 }
@@ -70,7 +81,13 @@ export function SidebarWorkspaceTrailingContent({
  * re-renders the component that owns it — keeping that component down to a single `<Text>` is
  * what stops a minute tick from reaching the row, the list, or the diff stat next door.
  */
-function WorkspaceTimestamp({ enteredAt }: { enteredAt: Date }) {
+function WorkspaceTimestamp({
+  enteredAt,
+  backdrop,
+}: {
+  enteredAt: Date;
+  backdrop: SidebarSurfaceBackdrop;
+}) {
   const label = useCompactTimeAgo(enteredAt);
   const { t } = useTranslation();
   return (
@@ -79,7 +96,15 @@ function WorkspaceTimestamp({ enteredAt }: { enteredAt: Date }) {
       accessibilityLabel={`${t("sidebar.display.show.timestamp")}: ${label}`}
     >
       <DensityIcon icon={Timer} size="xs" color="foregroundMuted" />
-      <Text style={styles.timestamp} numberOfLines={1} testID="sidebar-workspace-timestamp">
+      <Text
+        style={[
+          styles.timestamp,
+          backdrop === "surfaceSidebarHover" && styles.hovered,
+          backdrop === "surfaceSidebarSelected" && styles.selected,
+        ]}
+        numberOfLines={1}
+        testID="sidebar-workspace-timestamp"
+      >
         {label}
       </Text>
     </View>
@@ -99,4 +124,6 @@ const styles = StyleSheet.create((theme) => ({
     fontWeight: theme.fontWeight.normal,
     flexShrink: 0,
   },
+  hovered: { color: theme.colors.foregroundSidebarHover },
+  selected: { color: theme.colors.foregroundSidebarSelected },
 }));

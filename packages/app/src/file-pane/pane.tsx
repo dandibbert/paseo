@@ -25,21 +25,25 @@ import { UnpreviewableFileActions } from "./unpreviewable-file-actions";
  */
 export function FilePane({
   serverId,
+  workspaceId: workspaceIdProp,
   workspaceRoot,
   location,
   navigationRevision,
 }: {
   serverId: string;
+  workspaceId?: string | null;
   workspaceRoot: string;
   location: WorkspaceFileLocation;
   navigationRevision: number;
 }) {
   const { t } = useTranslation();
-  const { workspaceId } = usePaneContext();
+  const { workspaceId: paneWorkspaceId } = usePaneContext();
+  const workspaceId = workspaceIdProp ?? paneWorkspaceId;
   const connected = useSessionStore((state) => Boolean(state.sessions[serverId]?.client));
   const root = workspaceRoot.trim();
   const path = location.path.trim();
   const target = useMemo(() => {
+    if (!path) return null;
     const resolved = resolveFilePreviewReadTarget({ path, workspaceRoot: root });
     return resolved ? { ...resolved, workspaceId } : null;
   }, [path, root, workspaceId]);
@@ -104,8 +108,9 @@ export function FilePane({
         <Text style={styles.mutedText}>{formatFileSize(snapshot.size)}</Text>
         <UnpreviewableFileActions
           serverId={serverId}
-          workspaceRoot={root}
-          path={path}
+          workspaceId={workspaceId}
+          workspaceRoot={target?.cwd ?? root}
+          path={target?.path ?? path}
           absolutePath={absolutePath}
         />
       </>

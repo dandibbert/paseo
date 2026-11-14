@@ -198,6 +198,7 @@ export const SidebarWorkspaceRowContent = memo(function SidebarWorkspaceRowConte
             </Text>
           ) : null}
           <WorkspaceMetaRow
+            backdrop={backdrop}
             currentBranch={workspace.currentBranch}
             projectName={leadingProjectName}
             hostBadge={hostBadge ?? null}
