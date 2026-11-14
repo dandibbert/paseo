@@ -18,7 +18,15 @@ import { toolItem } from "./timeline.js";
 import { AntigravityError, diagnostic, type Frame, type Step } from "./wire.js";
 
 const persistenceSchema = z
-  .object({ version: z.literal(1), data: z.object({ conversationId: z.string().min(1) }).strict() })
+  .object({
+    version: z.literal(1),
+    data: z
+      .object({
+        conversationId: z.string().min(1),
+        fullAccessWarned: z.boolean().optional(),
+      })
+      .strict(),
+  })
   .strict();
 interface Turn {
   id: string;
@@ -47,32 +55,38 @@ export class Session {
   private state: State = { type: "dormant" };
   private config: ProviderSessionConfig;
   private conversationId: string | null;
+  private fullAccessWarned: boolean;
   private firstMessage: boolean;
   private readonly promptFiles = new PromptFiles();
   private readonly reportedDenials = new Map<string, number>();
 
   constructor(private readonly options: SessionOptions) {
     this.config = { ...options.config, mode: options.config.mode ?? "full-access" };
-    this.conversationId = options.persistence
-      ? persistenceSchema.parse(options.persistence).data.conversationId
+    const persisted = options.persistence
+      ? persistenceSchema.parse(options.persistence).data
       : null;
+    this.conversationId = persisted?.conversationId ?? null;
+    this.fullAccessWarned = persisted?.fullAccessWarned === true;
     this.firstMessage = this.conversationId === null;
     validateSelection(this.config, options.catalog());
   }
 
   async open(requestId: string, capabilities: readonly string[]): Promise<void> {
     await this.ensureDriver();
+    const shouldPublishFullAccessNotice = !this.fullAccessWarned;
+    this.fullAccessWarned = true;
     this.emit({
       type: "session.opened",
       requestId,
       sessionId: this.options.id,
       capabilities,
       restoration: "core",
+      historyReplay: false,
       persistence: this.config.persist ? this.persistence() : undefined,
       cwd: this.config.cwd,
       title: this.config.title,
     });
-    this.publishFullAccessNotice();
+    if (shouldPublishFullAccessNotice) this.publishFullAccessNotice();
     this.publishConfig();
     this.emit({ type: "session.commands", sessionId: this.options.id, commands: [] });
     this.emit({ type: "session.ready", requestId, sessionId: this.options.id });
@@ -348,7 +362,13 @@ export class Session {
 
   private persistence(): ProviderPersistence {
     if (this.conversationId === null) throw new AntigravityError("Antigravity has no conversation");
-    return { version: 1, data: { conversationId: this.conversationId } };
+    return {
+      version: 1,
+      data: {
+        conversationId: this.conversationId,
+        ...(this.fullAccessWarned ? { fullAccessWarned: true } : {}),
+      },
+    };
   }
 
   private publishConfig(): void {

@@ -430,7 +430,7 @@ it("rejects plan and keeps the full-access selection without respawning", async 
   ).toHaveLength(1);
 });
 
-it("emits one full-access warning per open, none on respawn, and one again on resume", async () => {
+it("emits one full-access warning on initial open, none on respawn, and none on resume", async () => {
   const h = await harness();
   await h.open();
   const warning = {
@@ -445,6 +445,7 @@ it("emits one full-access warning per open, none on respawn, and one again on re
     },
   };
   const opened = h.events.findIndex((event) => event.type === "session.opened");
+  expect(h.events[opened]).toMatchObject({ type: "session.opened", historyReplay: false });
   expect(h.events[opened + 1]).toEqual(warning);
   expect(h.events.slice(0, opened).some((event) => event.type === "session.notice")).toBe(false);
   await h.completed(await h.prompt("HELLO"));
@@ -463,11 +464,33 @@ it("emits one full-access warning per open, none on respawn, and one again on re
     expect(launch.args).not.toContain("--mode");
   }
   const persistence = h.persistence();
+  expect(persistence).toMatchObject({
+    version: 1,
+    data: { conversationId: expect.any(String), fullAccessWarned: true },
+  });
   await h.connection.close();
   const resumed = await harness();
   await resumed.open(persistence);
   await resumed.completed(await resumed.prompt("RESUME"));
-  expect(resumed.events.filter((event) => event.type === "session.notice")).toEqual([warning]);
+  expect(resumed.events.filter((event) => event.type === "session.notice")).toEqual([]);
+
+  // Pre-fix persistence records without fullAccessWarned still parse, emit once, and upgrade persistence.
+  await resumed.connection.close();
+  const legacyResumed = await harness();
+  const legacyPersistence: ProviderPersistence = {
+    version: 1,
+    data: {
+      conversationId: (persistence.data as { conversationId: string }).conversationId,
+    },
+  };
+  await legacyResumed.open(legacyPersistence);
+  expect(legacyResumed.events.filter((event) => event.type === "session.notice")).toEqual([
+    warning,
+  ]);
+  expect(legacyResumed.persistence()).toMatchObject({
+    version: 1,
+    data: { conversationId: expect.any(String), fullAccessWarned: true },
+  });
 });
 
 it("defers model and mode changes until the next prompt, then respawns with validated flags", async () => {

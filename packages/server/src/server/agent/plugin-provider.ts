@@ -609,6 +609,7 @@ class ProviderRuntimeSession {
   config: ProviderConfigState = { models: [], modes: [], thinkingOptions: [] };
   commands: Array<{ name: string; description: string; argumentHint?: string }> = [];
   persistence: ProviderPersistence | null = null;
+  historyReplay = true;
 
   constructor(
     private readonly runtime: ProviderRuntime,
@@ -768,6 +769,7 @@ class ProviderRuntimeSession {
     }
     if (event.type === "session.opened") {
       this.capabilities = [...event.capabilities];
+      this.historyReplay = event.historyReplay ?? this.restoration === "core";
       this.persistence = this.restoration === "core" ? (event.persistence ?? null) : null;
       return;
     }
@@ -1264,6 +1266,14 @@ class PluginAgentSession implements AgentSession {
       supportsRewindConversation: capabilities.supportsRewindConversation && resumable,
       supportsRewindBoth: capabilities.supportsRewindBoth && resumable,
     };
+  }
+
+  get supportsHistoryReplay(): boolean {
+    return (
+      this.bridge.restoration === "core" &&
+      this.bridge.historyReplay &&
+      this.bridge.negotiatedCapabilities.includes("session.persistence")
+    );
   }
 
   get controls(): AgentOptionControl[] {
@@ -1860,6 +1870,7 @@ class PluginAgentSession implements AgentSession {
   private get canReplayHistory(): boolean {
     return (
       this.bridge.restoration === "core" &&
+      this.bridge.historyReplay &&
       this.bridge.persistence !== null &&
       this.bridge.negotiatedCapabilities.includes("session.persistence")
     );

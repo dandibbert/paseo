@@ -611,6 +611,8 @@ export type ProviderEvent =
       toolCallId?: string;
       capabilities: readonly string[];
       restoration: "core" | "parent";
+      /** Whether opening this session with `history: "replay"` replays persisted timeline history. Defaults to `restoration === "core"`. */
+      historyReplay?: boolean;
       persistence?: ProviderPersistence;
       title?: string;
       description?: string;
@@ -1397,6 +1399,7 @@ export const ProviderEventSchema: z.ZodType<ProviderEvent> = z.discriminatedUnio
       toolCallId: idSchema.optional(),
       capabilities: z.array(z.string()),
       restoration: z.enum(["core", "parent"]),
+      historyReplay: z.boolean().optional(),
       persistence: persistenceSchema.optional(),
       title: z.string().optional(),
       description: z.string().optional(),

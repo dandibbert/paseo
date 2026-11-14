@@ -479,6 +479,9 @@ export function wrapSessionProvider(provider: AgentProvider, inner: AgentSession
     get capabilities() {
       return inner.capabilities;
     },
+    get supportsHistoryReplay() {
+      return inner.supportsHistoryReplay;
+    },
     get initialTimeline() {
       return inner.initialTimeline;
     },

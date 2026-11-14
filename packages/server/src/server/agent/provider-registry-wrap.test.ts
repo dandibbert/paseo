@@ -62,6 +62,7 @@ class FakeSession implements AgentSession {
   readonly provider = "claude";
   id = "session-1";
   capabilities = CAPABILITIES;
+  supportsHistoryReplay = true;
   initialTimeline: ImportedTimelineEntry[] = [
     { item: { type: "assistant_message", id: "initial", text: "Provider setup" } },
   ];
@@ -221,8 +222,10 @@ describe("wrapSessionProvider", () => {
     const wrapped = wrapSessionProvider("custom-claude", session);
     session.id = "session-2";
     session.capabilities = { ...CAPABILITIES, supportsMcpServers: false };
+    session.supportsHistoryReplay = false;
     expect(wrapped.id).toBe("session-2");
     expect(wrapped.capabilities).toEqual(session.capabilities);
+    expect(wrapped.supportsHistoryReplay).toBe(false);
     expect(wrapped.initialTimeline).toEqual(session.initialTimeline);
   });
 

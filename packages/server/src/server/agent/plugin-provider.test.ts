@@ -2181,6 +2181,36 @@ test("commits notices emitted during session open as the initial timeline with s
   );
 });
 
+test("marks supportsHistoryReplay false when session.opened sets historyReplay: false", async () => {
+  await withObservedProvider(
+    {
+      async handleInput(input, emit) {
+        if (input.type !== "session.open") return false;
+        emit({
+          type: "session.opened",
+          requestId: input.requestId,
+          sessionId: input.sessionId,
+          capabilities: ["prompt.message", "session.persistence"],
+          restoration: "core",
+          historyReplay: false,
+          persistence: { version: 1, data: { conversationId: "c1" } },
+          cwd: input.config.cwd,
+        });
+        emit({ type: "session.ready", requestId: input.requestId, sessionId: input.sessionId });
+        return true;
+      },
+    },
+    async (client) => {
+      const session = await client.createSession({ provider: client.provider, cwd: "/workspace" });
+      try {
+        expect(session.supportsHistoryReplay).toBe(false);
+      } finally {
+        await session.close();
+      }
+    },
+  );
+});
+
 describe("pending provider responses", () => {
   test.each<RequestKind>(["session.open", "catalog", "session.configure", "session.prompt"])(
     "preserves the send error for %s",

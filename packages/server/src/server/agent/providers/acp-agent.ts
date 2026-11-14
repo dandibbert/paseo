@@ -2099,6 +2099,10 @@ export class ACPAgentSession implements AgentSession, ACPClient {
     };
   }
 
+  get supportsHistoryReplay(): boolean {
+    return Boolean(this.agentCapabilities?.loadSession);
+  }
+
   async *streamHistory(): AsyncGenerator<AgentStreamEvent> {
     if (!this.historyPending || this.persistedHistory.length === 0) {
       return;

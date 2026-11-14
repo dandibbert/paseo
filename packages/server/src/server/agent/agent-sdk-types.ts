@@ -692,6 +692,12 @@ export interface AgentSession {
   readonly provider: AgentProvider;
   readonly id: string | null;
   readonly capabilities: AgentCapabilityFlags;
+  /**
+   * Whether `streamHistory()` replays authoritative persisted conversation history from the provider.
+   * Defaults to true; providers without native history replay set this to false so refreshes do
+   * not discard Paseo's retained or durable timeline.
+   */
+  readonly supportsHistoryReplay?: boolean;
   /** Composer controls over top-level option keys. Values come from the agent's effective options. */
   readonly controls?: AgentOptionControl[];
   /**

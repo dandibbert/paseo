@@ -22,6 +22,7 @@ import {
 import { RENDER_UI_SYSTEM_PROMPT } from "./tools/render-ui/render-ui-prompt.js";
 import { AgentStorage, parseStoredAgentRecord } from "./agent-storage.js";
 import { InMemoryAgentTimelineStore } from "./agent-timeline-store.js";
+import { JsonlAgentTimelineStore } from "./jsonl-agent-timeline-store.js";
 import { limitAgentTimelineItemContent } from "./agent-timeline-content.js";
 import { buildStoredAgentPayload, toAgentPayload } from "./agent-projections.js";
 import type { ProviderOptions } from "@getpaseo/protocol/agent-types";
@@ -14336,6 +14337,108 @@ describe("agent options", () => {
       expect(manager.getAgent(created.id)?.config.providerOptions).toEqual(expected);
     });
   });
+});
+
+test("preserves timeline across refresh, reload, and restart when provider lacks history replay", async () => {
+  const workdir = mkdtempSync(join(tmpdir(), "agent-manager-no-replay-"));
+  const timelinesDir = join(workdir, "timelines");
+  const agentsDir = join(workdir, "agents");
+  const notice = {
+    type: "notification" as const,
+    level: "warning" as const,
+    message: "Antigravity is running with full access",
+  };
+  class NoReplaySession extends TestAgentSession {
+    override readonly supportsHistoryReplay = false;
+    override readonly initialTimeline = [{ item: notice, timestamp: "2026-11-14T00:00:00.000Z" }];
+    override async *streamHistory(): AsyncGenerator<AgentStreamEvent> {
+      // Simulate opening notice before registration on initial creation only; resume has no history.
+      if (!this.resumed) {
+        yield { type: "timeline", provider: "codex", ...this.initialTimeline[0] };
+      }
+    }
+    constructor(
+      config: AgentSessionConfig,
+      private readonly resumed = false,
+    ) {
+      super(config);
+    }
+  }
+  class NoReplayClient extends TestAgentClient {
+    override async createSession(config: AgentSessionConfig): Promise<AgentSession> {
+      return new NoReplaySession(config, false);
+    }
+    override async resumeSession(
+      _handle: AgentPersistenceHandle,
+      config?: Partial<AgentSessionConfig>,
+    ): Promise<AgentSession> {
+      return new NoReplaySession({ provider: "codex", cwd: config?.cwd ?? workdir }, true);
+    }
+  }
+
+  let agentId: string | null = null;
+  let firstManager: AgentManager | null = null;
+  let restartedManager: AgentManager | null = null;
+  try {
+    const firstStore = new JsonlAgentTimelineStore(timelinesDir, logger);
+    firstManager = new AgentManager({
+      clients: { codex: new NoReplayClient() },
+      registry: new AgentStorage(agentsDir, logger),
+      durableTimelineStore: firstStore,
+      logger,
+    });
+    const created = await firstManager.createAgent({ provider: "codex", cwd: workdir }, undefined, {
+      workspaceId: undefined,
+    });
+    agentId = created.id;
+    await firstManager.appendTimelineItem(agentId, { type: "user_message", text: "first turn" });
+    await firstManager.appendTimelineItem(agentId, {
+      type: "assistant_message",
+      text: "first reply",
+    });
+
+    // Refreshing (`rehydrateFromDisk: true` + `hydrateTimelineFromProvider`) must not wipe timeline
+    // or stack another copy of the opening warning.
+    await firstManager.reloadAgentSession(agentId, undefined, { rehydrateFromDisk: true });
+    await firstManager.hydrateTimelineFromProvider(agentId, { broadcast: true });
+    await firstManager.hydrateTimelineFromProvider(agentId, { force: true, broadcast: true });
+    expect(firstManager.getTimeline(agentId)).toEqual([
+      notice,
+      { type: "user_message", text: "first turn" },
+      { type: "assistant_message", text: "first reply" },
+    ]);
+
+    await firstManager.closeAgent(agentId);
+    await firstManager.flush();
+    await firstStore.flush();
+    firstManager = null;
+
+    // Simulate daemon restart with a fresh AgentManager + JsonlAgentTimelineStore.
+    const secondStore = new JsonlAgentTimelineStore(timelinesDir, logger);
+    restartedManager = new AgentManager({
+      clients: { codex: new NoReplayClient() },
+      registry: new AgentStorage(agentsDir, logger),
+      durableTimelineStore: secondStore,
+      logger,
+    });
+    const resumed = await restartedManager.resumeAgentFromPersistence(
+      created.persistence!,
+      { cwd: workdir },
+      agentId,
+    );
+    await restartedManager.hydrateTimelineFromProvider(resumed.id);
+    expect(restartedManager.getTimeline(resumed.id)).toEqual([
+      notice,
+      { type: "user_message", text: "first turn" },
+      { type: "assistant_message", text: "first reply" },
+    ]);
+  } finally {
+    if (agentId && firstManager) await firstManager.closeAgent(agentId).catch(() => undefined);
+    if (agentId && restartedManager) {
+      await restartedManager.closeAgent(agentId).catch(() => undefined);
+    }
+    rmSync(workdir, { recursive: true, force: true });
+  }
 });
 
 test("folds provider background work and clears it when the agent closes", async () => {

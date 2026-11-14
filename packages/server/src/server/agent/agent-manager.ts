@@ -756,6 +756,21 @@ function buildExplicitTimelineSeedForRegister(
   };
 }
 
+function isDuplicateInitialNotification(
+  existingItems: readonly AgentTimelineItem[],
+  item: AgentTimelineItem,
+): boolean {
+  if (item.type !== "notification") {
+    return false;
+  }
+  return existingItems.some(
+    (existing) =>
+      existing.type === "notification" &&
+      existing.level === item.level &&
+      existing.message === item.message,
+  );
+}
+
 function buildImportedTimelineRows(entries: readonly ImportedTimelineEntry[]): AgentTimelineRow[] {
   const rows: AgentTimelineRow[] = [];
   for (const entry of entries) {
@@ -1979,14 +1994,12 @@ export class AgentManager {
       await this.requireExternalMcpSupport(session, providerLaunchConfig, launchContext);
       this.assertAcceptingAgentRegistrations();
 
-      if (rehydrateFromDisk) {
-        // Wipe the in-memory timeline so registerSession mints a new epoch and
-        // hydrateTimelineFromProvider re-streams the freshly read provider history.
-        this.timelineStore.delete(agentId);
-        for (const event of this.providerSubagents.deleteParent(agentId)) {
-          this.dispatch({ type: "provider_subagent", event });
-        }
-      }
+      const canRehydrateFromProvider = this.prepareReloadTimelineForRehydrate({
+        agentId,
+        rehydrateFromDisk,
+        previousSession: existing.session,
+        nextSession: session,
+      });
 
       // Preserve existing labels and timeline during reload.
       handedToRegistration = true;
@@ -2003,7 +2016,7 @@ export class AgentManager {
         workspaceActivityAt: existing.workspaceActivityAt,
         workspaceActivitySource: existing.workspaceActivitySource,
         lastUserMessageAt: existing.lastUserMessageAt,
-        historyPrimed: rehydrateFromDisk ? false : preservedHistoryPrimed,
+        historyPrimed: canRehydrateFromProvider ? false : preservedHistoryPrimed,
         lastUsage: preservedLastUsage,
         lastError: preservedLastError,
         attention: preservedAttention,
@@ -2032,6 +2045,28 @@ export class AgentManager {
         }
       }
     }
+  }
+
+  private prepareReloadTimelineForRehydrate(input: {
+    agentId: string;
+    rehydrateFromDisk: boolean;
+    previousSession: AgentSession;
+    nextSession: AgentSession;
+  }): boolean {
+    const canRehydrate =
+      input.rehydrateFromDisk &&
+      input.previousSession.supportsHistoryReplay !== false &&
+      input.nextSession.supportsHistoryReplay !== false;
+    if (!canRehydrate) {
+      return false;
+    }
+    // Wipe the in-memory timeline so registerSession mints a new epoch and
+    // hydrateTimelineFromProvider re-streams the freshly read provider history.
+    this.timelineStore.delete(input.agentId);
+    for (const event of this.providerSubagents.deleteParent(input.agentId)) {
+      this.dispatch({ type: "provider_subagent", event });
+    }
+    return true;
   }
 
   private async closeReloadedSession(session: AgentSession, agentId: string): Promise<void> {
@@ -4418,15 +4453,7 @@ export class AgentManager {
       // Initialize previousStatus to track transitions
       this.previousStatuses.set(resolvedAgentId, managed.lifecycle);
       if (session.initialTimeline?.length) {
-        if (!managed.historyPrimed) {
-          // Legacy/imported chats need their existing history before startup rows.
-          await this.primeTimelineFromLegacyProviderHistory(managed, false, startupHistory);
-        } else {
-          for (const entry of buildImportedTimelineRows(session.initialTimeline)) {
-            this.recordTimeline(managed.id, entry.item, { timestamp: entry.timestamp });
-          }
-        }
-        this.refreshSessionPersistence(managed);
+        await this.applyInitialTimelineOnRegister(managed, session.initialTimeline, startupHistory);
       }
       await this.refreshRuntimeInfo(managed, { emit: false });
       this.assertAgentRegistrationActive(managed);
@@ -4460,6 +4487,27 @@ export class AgentManager {
       }
       throw error;
     }
+  }
+
+  private async applyInitialTimelineOnRegister(
+    managed: ActiveManagedAgent,
+    initialTimeline: readonly ImportedTimelineEntry[],
+    startupHistory: readonly AgentStreamEvent[],
+  ): Promise<void> {
+    if (!managed.historyPrimed) {
+      // Legacy/imported chats need their existing history before startup rows.
+      await this.primeTimelineFromLegacyProviderHistory(managed, false, startupHistory);
+      this.refreshSessionPersistence(managed);
+      return;
+    }
+    const existingItems = this.timelineStore.getItems(managed.id);
+    for (const entry of buildImportedTimelineRows(initialTimeline)) {
+      if (isDuplicateInitialNotification(existingItems, entry.item)) {
+        continue;
+      }
+      this.recordTimeline(managed.id, entry.item, { timestamp: entry.timestamp });
+    }
+    this.refreshSessionPersistence(managed);
   }
 
   private assertAcceptingAgentRegistrations(): void {
@@ -4626,8 +4674,14 @@ export class AgentManager {
     if (!this.durableTimelineStore) {
       return { timestamp: now.toISOString() };
     }
+    const rows = await this.durableTimelineStore.getCommittedRows(agentId);
+    const latestSeq = rows.reduce(
+      (max, row) => Math.max(max, row.seq),
+      await this.durableTimelineStore.getLatestCommittedSeq(agentId),
+    );
     return {
-      nextSeq: (await this.durableTimelineStore.getLatestCommittedSeq(agentId)) + 1,
+      rows,
+      nextSeq: latestSeq + 1,
       timestamp: now.toISOString(),
     };
   }
@@ -4941,6 +4995,11 @@ export class AgentManager {
     agent: ActiveManagedAgent,
     options?: HydrateTimelineOptions,
   ): Promise<void> {
+    if (agent.session.supportsHistoryReplay === false) {
+      agent.historyPrimed = true;
+      return;
+    }
+
     if (agent.historyPrimed && !options?.force) {
       return;
     }
@@ -4965,6 +5024,10 @@ export class AgentManager {
     broadcast: boolean,
     broadcastTimeline: boolean,
   ): Promise<void> {
+    if (agent.session.supportsHistoryReplay === false) {
+      agent.historyPrimed = true;
+      return;
+    }
     const historyEvents: Extract<AgentStreamEvent, { type: "timeline" }>[] = [];
     const providerSubagentEvents: Extract<AgentStreamEvent, { type: "provider_subagent" }>[] = [];
     for await (const rawEvent of agent.session.streamHistory()) {
@@ -5049,6 +5112,10 @@ export class AgentManager {
     // The replay is the timeline, so drop the rows a previous hydration committed.
     // Keeping them would leave getTimelineRows reading one copy per hydration.
     await this.deleteCommittedTimeline(agent.id);
+    if (this.timelineStore.has(agent.id) && this.timelineStore.getRows(agent.id).length > 0) {
+      this.timelineStore.delete(agent.id);
+      this.timelineStore.initialize(agent.id, { timestamp: new Date().toISOString() });
+    }
 
     const timelineEvents: Array<{
       event: Extract<AgentStreamEvent, { type: "timeline" }>;
