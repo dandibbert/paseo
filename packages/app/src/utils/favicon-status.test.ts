@@ -5,6 +5,10 @@ import { createFaviconStatusSelector, deriveFaviconStatus } from "./favicon-stat
 function agent(input: Partial<Agent> & { id: string }): Agent {
   return {
     status: "idle",
+    turn:
+      input.status === "running"
+        ? { phase: "open", turnId: null, startedAt: null, cancellationRequestId: null }
+        : { phase: "idle", cancellationRequestId: null },
     background: false,
     archivedAt: null,
     requiresAttention: false,
@@ -18,6 +22,12 @@ function stateWith(...agents: Agent[]) {
 }
 
 describe("deriveFaviconStatus", () => {
+  it("is running while an idle agent still has background work", () => {
+    expect(deriveFaviconStatus(stateWith(agent({ id: "a", backgroundWork: { count: 1 } })))).toBe(
+      "running",
+    );
+  });
+
   it("is running when any visible agent runs", () => {
     expect(
       deriveFaviconStatus(

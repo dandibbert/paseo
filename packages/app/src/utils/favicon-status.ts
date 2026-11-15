@@ -1,4 +1,5 @@
 import type { Agent } from "@/stores/session-store";
+import { isAgentWorking } from "./agent-activity";
 import { memoizeOnSessionMaps } from "./memoize-on-session-maps";
 
 export type FaviconStatus = "none" | "running" | "attention";
@@ -23,7 +24,7 @@ export function deriveFaviconStatus(state: FaviconAgentSource): FaviconStatus {
     if (!session) continue;
     for (const agent of session.agents.values()) {
       if (agent.background || agent.archivedAt) continue;
-      if (agent.status === "running") return "running";
+      if (isAgentWorking(agent)) return "running";
       if (agent.requiresAttention) hasAttention = true;
       if (agent.pendingPermissions.length > 0) hasNeedsInput = true;
     }

@@ -212,6 +212,7 @@ import {
   closeBulkWorkspaceTabs,
 } from "@/screens/workspace/workspace-bulk-close";
 import { resolveCloseAgentTabPolicy } from "@/subagents";
+import { isAgentWorking } from "@/utils/agent-activity";
 import {
   getPanelInstanceAttributes,
   useModifiedPanelTabIds,
@@ -2003,7 +2004,7 @@ function WorkspaceScreenContent({
         const agent =
           useSessionStore.getState().sessions[normalizedServerId]?.agents?.get(agentId) ?? null;
         let closePolicy = resolveCloseAgentTabPolicy(agent);
-        const isRunning = agent?.status === "running";
+        const isRunning = agent ? isAgentWorking(agent) : false;
 
         if (isRunning && closePolicy.kind === "archive-on-close") {
           const confirmed = await confirmDialog({

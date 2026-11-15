@@ -130,9 +130,7 @@ function SessionRowBadges({
   const showAttention = showAttentionIndicator && agent.requiresAttention;
   return (
     <>
-      {agent.archivedAt ? (
-        <ArchivedBadge />
-      ) : null}
+      {agent.archivedAt ? <ArchivedBadge /> : null}
       {!agent.archivedAt && agent.status !== "idle" ? (
         <StatusBadge
           label={t(`agentList.status.${agent.status}`)}

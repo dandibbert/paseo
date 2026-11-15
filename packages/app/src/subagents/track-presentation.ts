@@ -3,15 +3,13 @@ import type { ComposerTrackPillSegment } from "@/composer/tracks";
 import type { SidebarStateBucket } from "@/utils/sidebar-agent-state";
 import type { AgentLifecycleStatus } from "@getpaseo/protocol/agent-lifecycle";
 import { STATUS_BUCKET_ORDER } from "@/utils/sidebar-agent-state";
+import { resolveAgentLifecycle } from "@/utils/agent-activity";
 import type { SubagentRow } from "./select";
 import { isFinishedSubagent } from "./archive-finished";
 import { providerSubagentLifecycleStatus } from "./provider-store";
 
 function presentationStatus(row: SubagentRow) {
-  if (row.kind === "paseo") {
-    if (row.turn.phase === "open") return "running";
-    return row.status === "running" ? "idle" : row.status;
-  }
+  if (row.kind === "paseo") return resolveAgentLifecycle(row);
   return providerSubagentLifecycleStatus(row.status);
 }
 

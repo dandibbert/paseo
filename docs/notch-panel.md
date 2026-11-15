@@ -11,6 +11,11 @@ with what needs you on top (approvals answered in place) and running, to-review 
 - The main process (`packages/desktop/src/features/notch-panel/`) owns the panel window and relays
   button presses: `open` goes through the desktop window owner, `respond` goes back to the
   publishing window, which answers the permission as it currently stands.
+- The panel and the sidebar must agree on what is running. Both read an agent's state from
+  `packages/app/src/utils/agent-activity.ts`; never test `agent.status` yourself. A chat that
+  ended its turn to wait for subagents or background work is still running, and the panel also
+  takes the sidebar's running workspaces as input, because provider subagents are not in the
+  agent list.
 - The panel page is plain DOM serialised from `runNotchPanel` with `Function#toString`. Keep that
   function free of imports and outer variables.
 

@@ -34,10 +34,19 @@ const text: NotchPanelText = {
   translateAction: (label) => (label === "Reject" ? "拒绝" : label),
 };
 
+const OPEN_TURN = {
+  phase: "open",
+  turnId: "turn-1",
+  startedAt: new Date(500),
+  cancellationRequestId: null,
+} as const;
+
 function agent(id: string, overrides: Partial<NotchPanelAgent> = {}): NotchPanelAgent {
   return {
     id,
     status: "idle",
+    turn:
+      overrides.status === "running" ? OPEN_TURN : { phase: "idle", cancellationRequestId: null },
     title: id,
     cwd: "/Users/me/repo/",
     pendingPermissions: [],
@@ -163,5 +172,70 @@ describe("the idle board", () => {
     expect(state.hosts).toEqual([
       { serverId: "mac", label: "Mac", online: true, running: 1, needsYou: 0 },
     ]);
+  });
+});
+
+describe("running, by the sidebar's rules", () => {
+  function runningIds(
+    agents: NotchPanelAgent[],
+    runningWorkspaceIds?: string[],
+  ): { running: string[]; other: string[] } {
+    const state = buildNotchPanelState({
+      enabled: true,
+      labels,
+      text,
+      now: 2000,
+      hosts: [{ serverId: "mac", label: "Mac", online: true, agents, runningWorkspaceIds }],
+    });
+    return {
+      running: state.running.map((item) => item.agentId),
+      other: [...state.finished, ...state.recent].map((item) => item.agentId),
+    };
+  }
+
+  it("keeps a chat running after its turn ends while its background work goes on", () => {
+    const waiting = agent("main", {
+      backgroundWork: { count: 2 },
+      requiresAttention: true,
+      attentionReason: "finished",
+    });
+    expect(runningIds([waiting])).toEqual({ running: ["main"], other: [] });
+  });
+
+  it("keeps a chat running while a subagent under it runs", () => {
+    const agents = [
+      agent("main"),
+      agent("child", { parentAgentId: "main" }),
+      agent("grandchild", { parentAgentId: "child", status: "running" }),
+    ];
+    expect(runningIds(agents)).toEqual({ running: ["main"], other: [] });
+  });
+
+  it("gives a running workspace to its latest chat when no chat accounts for it", () => {
+    const agents = [
+      agent("older", { workspaceId: "ws", lastActivityAt: new Date(100) }),
+      agent("latest", { workspaceId: "ws", lastActivityAt: new Date(900) }),
+      agent("elsewhere", { workspaceId: "other" }),
+    ];
+    expect(runningIds(agents, ["ws"])).toEqual({
+      running: ["latest"],
+      other: ["older", "elsewhere"],
+    });
+  });
+
+  it("leaves the idle chats of a workspace alone when one of them accounts for it", () => {
+    const agents = [
+      agent("idle", { workspaceId: "ws", lastActivityAt: new Date(900) }),
+      agent("busy", { workspaceId: "ws", status: "running", lastActivityAt: new Date(100) }),
+    ];
+    expect(runningIds(agents, ["ws"])).toEqual({ running: ["busy"], other: ["idle"] });
+  });
+
+  it("does not trust a running status once the turn has closed", () => {
+    const stale = agent("stale", {
+      status: "running",
+      turn: { phase: "idle", cancellationRequestId: null },
+    });
+    expect(runningIds([stale]).running).toEqual([]);
   });
 });

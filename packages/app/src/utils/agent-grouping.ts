@@ -1,5 +1,5 @@
 import type { AggregatedAgent } from "@/hooks/use-aggregated-agents";
-import { isSidebarActiveAgent } from "@/utils/sidebar-agent-state";
+import { deriveAgentActivityBucket } from "@/utils/agent-activity";
 
 /**
  * Derives the project key for grouping agents.
@@ -263,19 +263,8 @@ const MAX_INACTIVE_PER_PROJECT = 5;
  * - All truly active agents (running/needs input/requires attention) are always shown
  * - Recently active (within grace period but not truly active) are limited to MAX_INACTIVE_PER_PROJECT
  */
-function activityStatus(agent: AggregatedAgent): AggregatedAgent["status"] {
-  if (agent.turn.phase === "open") return "running";
-  return agent.status === "running" ? "idle" : agent.status;
-}
-
 function isAgentTrulyActive(agent: AggregatedAgent): boolean {
-  return isSidebarActiveAgent({
-    status: activityStatus(agent),
-    backgroundWork: agent.backgroundWork,
-    requiresAttention: agent.requiresAttention,
-    attentionReason: agent.attentionReason,
-    pendingPermissionCount: agent.pendingPermissionCount,
-  });
+  return deriveAgentActivityBucket(agent) !== "done";
 }
 
 function partitionAgentsByActivity(

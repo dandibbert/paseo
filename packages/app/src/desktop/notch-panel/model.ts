@@ -2,6 +2,9 @@ import type {
   AgentPermissionRequest,
   AgentPermissionResponse,
 } from "@getpaseo/protocol/agent-types";
+import type { AgentLifecycleStatus } from "@getpaseo/protocol/agent-lifecycle";
+import type { TurnLiveness } from "@/timeline/turn-liveness";
+import { isAgentWorking } from "@/utils/agent-activity";
 
 /**
  * What the macOS notch panel shows. The main window builds it from every connected host and
@@ -73,9 +76,12 @@ export interface NotchPanelHostSummary {
 
 export interface NotchPanelAgent {
   id: string;
-  status: string;
+  status: AgentLifecycleStatus;
+  turn: TurnLiveness;
+  backgroundWork?: { count: number } | null;
   title: string | null;
   cwd: string;
+  workspaceId?: string;
   pendingPermissions: AgentPermissionRequest[];
   requiresAttention?: boolean;
   attentionReason?: "finished" | "error" | "permission" | null;
@@ -93,6 +99,8 @@ export interface NotchPanelHost {
   label: string;
   online: boolean;
   agents: Iterable<NotchPanelAgent>;
+  /** Workspaces the sidebar shows as running, which includes work only the host can see. */
+  runningWorkspaceIds?: Iterable<string>;
 }
 
 export interface NotchPanelText {
@@ -172,11 +180,63 @@ export function permissionResponse(
   return null;
 }
 
+function isShown(agent: NotchPanelAgent): boolean {
+  return !agent.archivedAt && !agent.background && !agent.parentAgentId;
+}
+
+function topAncestor(
+  agent: NotchPanelAgent,
+  agentsById: ReadonlyMap<string, NotchPanelAgent>,
+): NotchPanelAgent {
+  const seen = new Set<string>();
+  let current = agent;
+  while (current.parentAgentId && !seen.has(current.id)) {
+    seen.add(current.id);
+    const parent = agentsById.get(current.parentAgentId);
+    if (!parent) break;
+    current = parent;
+  }
+  return current;
+}
+
+/**
+ * The chats that count as running, by the sidebar's rules: a chat runs while its own turn is
+ * open, while it has background work, and while any subagent under it does. A chat that stopped
+ * to wait for its subagents is therefore still running.
+ *
+ * Provider subagents are not in the agent list, so the host's word that a workspace is running
+ * covers them: when no chat in such a workspace accounts for it, its latest chat is the one
+ * waiting.
+ */
+function workingAgentIds(host: NotchPanelHost, agents: readonly NotchPanelAgent[]): Set<string> {
+  const agentsById = new Map(agents.map((agent) => [agent.id, agent]));
+  const working = new Set<string>();
+  for (const agent of agents) {
+    if (agent.archivedAt || agent.background || !isAgentWorking(agent)) continue;
+    working.add(topAncestor(agent, agentsById).id);
+  }
+  for (const workspaceId of host.runningWorkspaceIds ?? []) {
+    let latest: NotchPanelAgent | null = null;
+    let accountedFor = false;
+    for (const agent of agents) {
+      if (agent.workspaceId !== workspaceId || !isShown(agent)) continue;
+      if (working.has(agent.id)) {
+        accountedFor = true;
+        break;
+      }
+      if (!latest || agent.lastActivityAt > latest.lastActivityAt) latest = agent;
+    }
+    if (!accountedFor && latest) working.add(latest.id);
+  }
+  return working;
+}
+
 function itemFor(
   host: NotchPanelHost,
   agent: NotchPanelAgent,
   text: NotchPanelText,
   now: number,
+  working: ReadonlySet<string>,
 ): NotchPanelItem | null {
   if (agent.archivedAt || agent.background) return null;
   const base = {
@@ -210,7 +270,7 @@ function itemFor(
   }
   // A subagent is shown when it needs you; its parent already stands for its running work.
   if (agent.parentAgentId) return null;
-  if (agent.status === "running") {
+  if (working.has(agent.id)) {
     return {
       ...base,
       state: "running",
@@ -274,8 +334,10 @@ export function buildNotchPanelState(input: {
       running: 0,
       needsYou: 0,
     };
-    for (const agent of host.agents) {
-      const item = itemFor(host, agent, input.text, now);
+    const agents = Array.from(host.agents);
+    const working = workingAgentIds(host, agents);
+    for (const agent of agents) {
+      const item = itemFor(host, agent, input.text, now, working);
       if (!item) continue;
       if (item.state === "running") {
         running.push(item);

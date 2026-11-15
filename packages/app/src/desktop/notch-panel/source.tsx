@@ -8,7 +8,9 @@ import {
   useHostRuntimeConnectionStatuses,
   useHosts,
 } from "@/runtime/host-runtime";
-import { useSessionStore } from "@/stores/session-store";
+import { useCreateFlowStore } from "@/stores/create-flow-store";
+import { useSessionStore, type SessionState } from "@/stores/session-store";
+import { deriveEffectiveWorkspaceStatus } from "@/workspace-status";
 import {
   buildNotchPanelState,
   permissionResponse,
@@ -45,6 +47,23 @@ function respondFromPanel(action: RespondAction): void {
   void client.respondToPermission(agentId, requestId, response).catch((error: unknown) => {
     console.error("[NotchPanel] Failed to answer a permission", error);
   });
+}
+
+/** The workspaces the sidebar marks as running, so the panel never disagrees with it. */
+function runningWorkspaceIds(serverId: string, session: SessionState | undefined): string[] {
+  if (!session) return [];
+  const pendingCreateAttempts = useCreateFlowStore.getState().pendingByDraftId;
+  const ids: string[] = [];
+  for (const workspace of session.workspaces.values()) {
+    const { status } = deriveEffectiveWorkspaceStatus({
+      serverId,
+      workspace,
+      pendingCreateAttempts,
+      workspaceAgentActivity: session.workspaceAgentActivity,
+    });
+    if (status === "running") ids.push(workspace.id);
+  }
+  return ids;
 }
 
 function NotchPanelPublisher(): null {
@@ -105,6 +124,7 @@ function NotchPanelPublisher(): null {
         label: host.label ?? host.serverId,
         online: current.statuses.get(host.serverId) === "online",
         agents: sessions[host.serverId]?.agents.values() ?? [],
+        runningWorkspaceIds: runningWorkspaceIds(host.serverId, sessions[host.serverId]),
       }));
       const state = buildNotchPanelState({
         enabled: current.enabled,
