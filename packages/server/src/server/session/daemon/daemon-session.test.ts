@@ -60,6 +60,7 @@ function makeSubsystem(overrides: {
     daemonVersion: overrides.daemonVersion,
     daemonRuntimeConfig: overrides.daemonRuntimeConfig,
     listAgents: () => [],
+    agentBusyReason: () => null,
     listProjects: async () => [],
     listWorkspaces: async () => [],
     listProviderAvailability: overrides.listProviderAvailability ?? (async () => []),

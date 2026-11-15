@@ -552,6 +552,28 @@ class FakeAgentSession implements AgentSession {
     this.notifySubscribers(event);
   }
 
+  /** The turn ends with a background shell still listed; the shell finishes a moment later. */
+  private async emitLingeringBackgroundWorkTurn(): Promise<void> {
+    this.notifySubscribers({
+      type: "background_work",
+      provider: this.providerName,
+      items: [{ id: "shell-1", kind: "shell", description: "Run the test suite" }],
+    });
+    await this.emitEvent({
+      type: "timeline",
+      provider: this.providerName,
+      item: { type: "assistant_message", text: "Tests started.", messageId: randomUUID() },
+    });
+    await this.emitEvent({
+      type: "turn_completed",
+      provider: this.providerName,
+      usage: { inputTokens: 1, outputTokens: 1 },
+    });
+    setTimeout(() => {
+      this.notifySubscribers({ type: "background_work", provider: this.providerName, items: [] });
+    }, 400);
+  }
+
   /**
    * A background Task that outlives the turn's reply: the Task starts, the assistant replies,
    * then the Task completes.
@@ -830,6 +852,11 @@ class FakeAgentSession implements AgentSession {
         };
         await this.appendHistoryEvent(child);
         this.notifySubscribers(child);
+      }
+
+      if (textPrompt === "Start lingering background work") {
+        await this.emitLingeringBackgroundWorkTurn();
+        return;
       }
 
       if (textPrompt === "Start background work") {

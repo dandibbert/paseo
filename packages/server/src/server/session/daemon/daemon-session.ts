@@ -46,6 +46,7 @@ export interface DaemonSessionOptions {
   daemonVersion: string | undefined;
   daemonRuntimeConfig: DaemonRuntimeConfig | undefined;
   listAgents: () => ManagedAgent[];
+  agentBusyReason: (agentId: string) => string | null;
   listProjects: () => Promise<PersistedProjectRecord[]>;
   listWorkspaces: () => Promise<PersistedWorkspaceRecord[]>;
   listProviderAvailability: () => Promise<ProviderAvailability[]>;
@@ -115,6 +116,7 @@ export class DaemonSession {
       daemonVersion: this.daemonVersion ?? null,
       desktopManaged: this.daemonRuntimeConfig?.desktopManaged === true,
       listAgents: this.listAgents,
+      agentBusyReason: options.agentBusyReason,
       emit: (msg) => this.host.emit(msg),
       emitLifecycleIntent: (intent) => this.host.emitLifecycleIntent(intent),
       logger: this.logger,

@@ -356,9 +356,12 @@ paseo logs <id> --filter tools   # Only tool calls
 ```bash
 paseo wait <id>
 paseo wait <id> --timeout 60   # 60 second timeout
+paseo wait <id> --background-work   # Also wait for background work and subagents
 ```
 
 适用于脚本中，或一个 Agent 需要等待另一个 Agent 的情况。
+
+`paseo wait` 在回合结束时返回，即使 Agent 还有后台任务在运行。加上 `--background-work` 会一并等待后台任务结束。
 
 ## 定时任务 {#schedules}
 

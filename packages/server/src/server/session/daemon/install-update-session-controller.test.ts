@@ -37,6 +37,8 @@ function setup(
     daemonVersion: "0.15.2",
     desktopManaged: options.desktopManaged ?? false,
     listAgents: () => options.agents ?? [],
+    agentBusyReason: (agentId) =>
+      (options.agents ?? []).find((agent) => agent.id === agentId)?.lifecycle ?? null,
     emit: (msg) => emitted.push(msg),
     emitLifecycleIntent: (intent) => intents.push(intent),
     logger: pino({ level: "silent" }),

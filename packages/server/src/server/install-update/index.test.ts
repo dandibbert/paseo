@@ -254,24 +254,19 @@ describe("desktop host broker", () => {
 });
 
 describe("busy agents", () => {
-  it("counts running, starting, and permission-blocked agents", () => {
-    const agent = (id: string, lifecycle: string, permissions = 0) => ({
-      id,
-      lifecycle,
-      pendingPermissions: { size: permissions },
-      config: { title: `Agent ${id}` },
-    });
+  it("lists every agent an update would interrupt, with the reason", () => {
+    const agent = (id: string) => ({ id, config: { title: `Agent ${id}` } });
+    const reasons: Record<string, string | null> = {
+      a: "running",
+      b: null,
+      c: "background_work",
+      d: "waiting_for_permission",
+    };
     expect(
-      busyAgents([
-        agent("a", "running"),
-        agent("b", "idle"),
-        agent("c", "initializing"),
-        agent("d", "idle", 1),
-        agent("e", "closed"),
-      ]),
+      busyAgents([agent("a"), agent("b"), agent("c"), agent("d")], (id) => reasons[id] ?? null),
     ).toEqual([
       { id: "a", title: "Agent a", status: "running" },
-      { id: "c", title: "Agent c", status: "initializing" },
+      { id: "c", title: "Agent c", status: "background_work" },
       { id: "d", title: "Agent d", status: "waiting_for_permission" },
     ]);
   });

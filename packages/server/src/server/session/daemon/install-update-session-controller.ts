@@ -41,6 +41,7 @@ export interface InstallUpdateSessionControllerOptions {
   daemonVersion: string | null;
   desktopManaged: boolean;
   listAgents: () => ManagedAgent[];
+  agentBusyReason: (agentId: string) => string | null;
   emit: (msg: SessionOutboundMessage) => void;
   emitLifecycleIntent: (intent: InstallUpdateLifecycleIntent) => void;
   logger: pino.Logger;
@@ -125,7 +126,7 @@ export class InstallUpdateSessionController {
     let outcome: InstallUpdateOutcome;
     try {
       const installation = await (this.options.detect ?? this.detect)();
-      const busy = busyAgents(this.options.listAgents());
+      const busy = busyAgents(this.options.listAgents(), this.options.agentBusyReason);
       if (!checkOnly && msg.force !== true && busy.length > 0) {
         outcome = {
           payload: {

@@ -1533,6 +1533,8 @@ export const WaitForFinishRequestSchema = z.object({
   /** Accepts full ID, unique prefix, or exact full title (server resolves). */
   agentId: z.string(),
   timeoutMs: z.number().int().positive().optional(),
+  /** Keep waiting after the turn ends until background work and subagents are done too. */
+  waitForBackgroundWork: z.boolean().optional(),
 });
 
 export const DaemonGetStatusRequestSchema = z.object({
@@ -4264,6 +4266,8 @@ export const ServerInfoStatusPayloadSchema = z
         agentBackgroundWork: z.boolean().optional(),
         // COMPAT(agentBackgroundWorkStop): added after v0.15.0, remove after 2027-05-03.
         agentBackgroundWorkStop: z.boolean().optional(),
+        // COMPAT(waitForBackgroundWork): added in v0.16, remove gate after 2027-06-15.
+        waitForBackgroundWork: z.boolean().optional(),
         // COMPAT(projectedSubagentTimeline): added after v0.8.0, remove gates after 2027-03-14; retain wire field.
         projectedSubagentTimeline: z.boolean().optional(),
         wholeTurnTimeline: z.boolean().optional(),

@@ -7160,7 +7160,17 @@ export class DaemonClient {
     });
   }
 
-  async waitForFinish(agentId: string, timeout = 60000): Promise<WaitForFinishResult> {
+  async waitForFinish(
+    agentId: string,
+    timeout = 60000,
+    options: { waitForBackgroundWork?: boolean } = {},
+  ): Promise<WaitForFinishResult> {
+    // COMPAT(waitForBackgroundWork): added in v0.16, remove after 2027-06-15.
+    if (
+      options.waitForBackgroundWork &&
+      this.lastServerInfoMessage?.features?.waitForBackgroundWork !== true
+    )
+      throw new Error("Update the host to wait for background work.");
     const requestId = this.createRequestId();
     const hasTimeout = Number.isFinite(timeout) && timeout > 0;
     const message = SessionInboundMessageSchema.parse({
@@ -7168,6 +7178,7 @@ export class DaemonClient {
       requestId,
       agentId,
       ...(hasTimeout ? { timeoutMs: timeout } : {}),
+      ...(options.waitForBackgroundWork ? { waitForBackgroundWork: true } : {}),
     });
     const payload = await this.sendCorrelatedRequest({
       requestId,

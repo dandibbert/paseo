@@ -29,6 +29,7 @@ export const agentWaitSchema: OutputSchema<AgentWaitResult> = {
 export interface AgentWaitOptions extends CommandOptions {
   timeout?: string;
   host?: string;
+  backgroundWork?: boolean;
 }
 
 const WAIT_ACTIVITY_PREVIEW_COUNT = 5;
@@ -135,7 +136,11 @@ export function addWaitOptions(cmd: Command): Command {
   return cmd
     .description("Wait for an agent to become idle")
     .argument("<id>", "Agent ID (or prefix)")
-    .option("--timeout <seconds>", "Maximum wait time (default: no limit)");
+    .option("--timeout <seconds>", "Maximum wait time (default: no limit)")
+    .option(
+      "--background-work",
+      "Keep waiting until background work and subagents the agent started are done too",
+    );
 }
 
 export async function runWaitCommand(
@@ -157,7 +162,9 @@ export async function runWaitCommand(
 
   try {
     try {
-      const state = await client.waitForFinish(agentIdArg, timeoutMs);
+      const state = await client.waitForFinish(agentIdArg, timeoutMs, {
+        waitForBackgroundWork: options.backgroundWork === true,
+      });
       const resolvedAgentId = state.final?.id ?? agentIdArg;
       const recentActivity =
         state.status === "timeout" || state.status === "idle"

@@ -1217,6 +1217,7 @@ export class Session {
       listProviderAvailability: () => this.agentManager.listProviderAvailability(),
       getTerminalsUnavailable: () => terminalManager?.getUnavailableError?.()?.message ?? null,
       listAgents: () => this.agentManager.listAgents(),
+      agentBusyReason: (agentId) => this.agentManager.getAgentBusyReason(agentId),
       listProjects: () => this.projectRegistry.list(),
       // Diagnostics report both the active count and total archived history.
       listWorkspaces: () => this.workspaceRegistry.listAll(),
@@ -3246,7 +3247,12 @@ export class Session {
       case "send_agent_message_request":
         return this.handleSendAgentMessageRequest(msg);
       case "wait_for_finish_request":
-        return this.handleWaitForFinish(msg.agentId, msg.requestId, msg.timeoutMs);
+        return this.handleWaitForFinish(
+          msg.agentId,
+          msg.requestId,
+          msg.timeoutMs,
+          msg.waitForBackgroundWork,
+        );
       case "create_agent_request":
         return this.handleCreateAgentRequest(msg);
       case "resume_agent_request":
@@ -9375,6 +9381,7 @@ export class Session {
     agentIdOrIdentifier: string,
     requestId: string,
     timeoutMs?: number,
+    waitForBackgroundWork?: boolean,
   ): Promise<void> {
     const sourceSignal = this.delivery.requestSignal;
     sourceSignal.throwIfAborted();
@@ -9442,9 +9449,10 @@ export class Session {
         return;
       }
 
-      let result = await this.agentManager.waitForAgentEvent(agentId, {
+      let result = await this.agentManager.waitForAgentWork(agentId, {
         signal: AbortSignal.any([abortController.signal, sourceSignal]),
         waitForActive: true,
+        includeBackgroundWork: waitForBackgroundWork === true,
       });
       let final = await this.getAgentPayloadById(agentId);
       if (!final) {

@@ -307,24 +307,15 @@ export class DesktopHostBroker {
 
 export const desktopHostBroker = new DesktopHostBroker();
 
+/** The agents an update would interrupt, including ones whose turn ended but whose work has not. */
 export function busyAgents(
-  agents: Array<{
-    id: string;
-    lifecycle: string;
-    pendingPermissions: { size: number };
-    config: { title?: string | null };
-  }>,
+  agents: Array<{ id: string; config: { title?: string | null } }>,
+  busyReason: (agentId: string) => string | null,
 ): BusyAgent[] {
-  return agents
-    .filter(
-      (agent) =>
-        agent.lifecycle === "running" ||
-        agent.lifecycle === "initializing" ||
-        agent.pendingPermissions.size > 0,
-    )
-    .map((agent) => ({
-      id: agent.id,
-      title: agent.config.title ?? null,
-      status: agent.pendingPermissions.size > 0 ? "waiting_for_permission" : agent.lifecycle,
-    }));
+  const busy: BusyAgent[] = [];
+  for (const agent of agents) {
+    const status = busyReason(agent.id);
+    if (status) busy.push({ id: agent.id, title: agent.config.title ?? null, status });
+  }
+  return busy;
 }

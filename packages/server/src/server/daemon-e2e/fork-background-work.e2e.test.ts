@@ -54,3 +54,18 @@ test("forks from a reply that background work outlived", async () => {
   expect(byMessage.boundaryMessageId).toBe(reply.item.messageId);
   expect(byCursor.boundaryCursor).toEqual({ epoch: page.epoch, seq: reply.seqEnd });
 }, 60_000);
+
+test("waits past the end of the turn for background work only when asked to", async () => {
+  const agent = await ctx.client.createAgent({ provider: "claude", cwd });
+  await ctx.client.sendMessage(agent.id, "Start lingering background work");
+
+  const turnEnded = await ctx.client.waitForFinish(agent.id, 15_000);
+  expect(turnEnded.status).toBe("idle");
+  expect(turnEnded.final?.backgroundWork?.count).toBe(1);
+
+  const allDone = await ctx.client.waitForFinish(agent.id, 15_000, {
+    waitForBackgroundWork: true,
+  });
+  expect(allDone.status).toBe("idle");
+  expect(allDone.final?.backgroundWork?.count ?? 0).toBe(0);
+}, 60_000);

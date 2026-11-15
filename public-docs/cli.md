@@ -389,9 +389,12 @@ Block until an agent finishes its current task:
 ```bash
 paseo wait <id>
 paseo wait <id> --timeout 60   # 60 second timeout
+paseo wait <id> --background-work   # Also wait for background work and subagents
 ```
 
 Useful in scripts or when one agent needs to wait for another.
+
+`paseo wait` returns when the turn ends, even if the agent left background work running. Pass `--background-work` to wait for that too.
 
 ## Schedules
 

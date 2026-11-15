@@ -23,7 +23,9 @@ export const stopSchema: OutputSchema<StopResult> = {
 
 export function addStopOptions(cmd: Command): Command {
   return cmd
-    .description("Interrupt an agent if it is running (no-op for idle agents)")
+    .description(
+      "Interrupt an agent's turn, or the background work it left running (no-op for idle agents)",
+    )
     .argument("[id]", "Agent ID (or prefix) - optional if --all or --cwd specified")
     .option("--all", "Stop all agents")
     .option("--cwd <path>", "Stop all agents in directory");
@@ -81,13 +83,29 @@ export async function runStopCommand(
       agents = [fetchResult.agent];
     }
 
-    // Interrupt each running agent. Idle agents are a no-op.
+    // Interrupt each agent's turn. One whose turn ended but left background work running has
+    // that work stopped instead. Idle agents are a no-op.
     const stopResults = await Promise.all(
       agents.map(async (agent) => {
-        if (agent.status !== "running") return { ok: true as const, id: agent.id, stopped: false };
         try {
-          await client.cancelAgent(agent.id);
-          return { ok: true as const, id: agent.id, stopped: true };
+          if (agent.status === "running") {
+            await client.cancelAgent(agent.id);
+            return { ok: true as const, id: agent.id, stopped: true };
+          }
+          if ((agent.backgroundWork?.count ?? 0) === 0) {
+            return { ok: true as const, id: agent.id, stopped: false };
+          }
+          const items = await client.listAgentBackgroundWork(agent.id);
+          const stoppable = items.filter((item) => item.canStop);
+          await Promise.all(
+            stoppable.map((item) => client.stopAgentBackgroundWork(agent.id, item)),
+          );
+          if (stoppable.length < items.length) {
+            console.error(
+              `Warning: ${items.length - stoppable.length} background item(s) of agent ${agent.id.slice(0, 7)} cannot be stopped`,
+            );
+          }
+          return { ok: true as const, id: agent.id, stopped: stoppable.length > 0 };
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);
           return { ok: false as const, id: agent.id, message };

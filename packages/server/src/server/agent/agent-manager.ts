@@ -1,4 +1,5 @@
 import { ProviderCliUpdateError } from "./provider-cli-update.js";
+import { resolveAgentBusyReason, type AgentBusyReason } from "./agent-busy.js";
 import type { AttachedAgentTool, PluginAgentToolsRuntime } from "../plugins/agent-tools.js";
 import { ProviderOptionsValidationError } from "./provider-options.js";
 import type { AgentToolResult } from "@getpaseo/plugin/server";
@@ -661,6 +662,7 @@ interface SteerEventBarrier {
   events: AgentStreamEvent[];
 }
 
+const AGENT_WORK_CHANGE_POLL_MS = 2000;
 const BUSY_STATUSES: Set<AgentLifecycleStatus> = new Set(["initializing", "running"]);
 const AgentIdSchema = z.guid();
 
@@ -1510,6 +1512,72 @@ export class AgentManager {
 
   getAgentBackgroundWorkSummary(agentId: string): { count: number } | undefined {
     return this.backgroundWork.summary(agentId);
+  }
+
+  /** Why this agent is busy, or null when interrupting it would lose nothing. */
+  getAgentBusyReason(agentId: string): AgentBusyReason | null {
+    const agent = this.agents.get(agentId);
+    if (!agent) return null;
+    return resolveAgentBusyReason({
+      lifecycle: agent.lifecycle,
+      pendingPermissionCount: agent.pendingPermissions.size,
+      hasPendingTurn:
+        Boolean(agent.activeForegroundTurnId) ||
+        this.runs.hasRun(agentId) ||
+        agent.pendingReplacement === true,
+      backgroundWorkCount: this.backgroundWork.summary(agentId)?.count ?? 0,
+      runningProviderSubagentCount: this.providerSubagents
+        .list(agentId)
+        .filter((child) => child.status === "running").length,
+    });
+  }
+
+  /**
+   * `waitForAgentEvent`, optionally continuing past the end of the turn until the background
+   * work and subagents the agent started are done too.
+   */
+  async waitForAgentWork(
+    agentId: string,
+    options: WaitForAgentOptions & { includeBackgroundWork?: boolean },
+  ): Promise<WaitForAgentResult> {
+    const { includeBackgroundWork, ...waitOptions } = options;
+    let result = await this.waitForAgentEvent(agentId, waitOptions);
+    if (!includeBackgroundWork) return result;
+    // Background work can start a turn of its own when it finishes, so after each change wait
+    // for any turn it opened before checking again.
+    while (
+      !result.permission &&
+      result.status !== "error" &&
+      this.getAgentBusyReason(agentId) === "background_work"
+    ) {
+      await this.waitForAgentWorkChange(agentId, waitOptions.signal);
+      result = await this.waitForAgentEvent(agentId, { signal: waitOptions.signal });
+    }
+    return result;
+  }
+
+  /**
+   * Resolves when something about the agent's work may have changed. It also resolves after a
+   * short interval, so a caller that re-reads the busy reason in a loop cannot miss a change.
+   */
+  waitForAgentWorkChange(agentId: string, signal?: AbortSignal): Promise<void> {
+    return new Promise<void>((resolvePromise, reject) => {
+      if (signal?.aborted) {
+        reject(createAbortError(signal, "wait_for_agent aborted"));
+        return;
+      }
+      const settle = (error?: Error) => {
+        clearTimeout(timer);
+        unsubscribe();
+        signal?.removeEventListener("abort", onAbort);
+        if (error) reject(error);
+        else resolvePromise();
+      };
+      const onAbort = () => settle(createAbortError(signal, "wait_for_agent aborted"));
+      const timer = setTimeout(() => settle(), AGENT_WORK_CHANGE_POLL_MS);
+      const unsubscribe = this.subscribe(() => settle(), { agentId, replayState: false });
+      signal?.addEventListener("abort", onAbort, { once: true });
+    });
   }
 
   private clearBackgroundWork(agentId: string): void {
