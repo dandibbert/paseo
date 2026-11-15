@@ -1,9 +1,11 @@
 import type { Agent } from "@/stores/session-store";
+import { isAgentWorking } from "@/utils/agent-activity";
 import type { ConfirmDialogInput } from "@/utils/confirm-dialog";
 
 export interface ResolveArchiveSubagentDialogInput {
   title: Agent["title"] | null | undefined;
   status: Agent["status"] | null | undefined;
+  turn: Agent["turn"] | null | undefined;
   backgroundWork?: Agent["backgroundWork"];
 }
 
@@ -25,7 +27,14 @@ export function resolveArchiveSubagentDialog(
   input: ResolveArchiveSubagentDialogInput,
 ): ConfirmDialogInput {
   const subagentLabel = resolveSubagentLabel(input.title) ?? "this subagent";
-  const isRunning = input.status === "running" || (input.backgroundWork?.count ?? 0) > 0;
+  const isRunning =
+    input.status && input.turn
+      ? isAgentWorking({
+          status: input.status,
+          turn: input.turn,
+          backgroundWork: input.backgroundWork,
+        })
+      : false;
 
   return {
     title: isRunning ? "Archive running subagent?" : "Archive subagent?",
@@ -59,6 +68,7 @@ export async function requestArchiveSubagent(
     resolveArchiveSubagentDialog({
       title: subagent?.title,
       status: subagent?.status,
+      turn: subagent?.turn,
       backgroundWork: subagent?.backgroundWork,
     }),
   );

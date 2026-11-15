@@ -1,4 +1,5 @@
 import { useMemo, useCallback, useRef, useSyncExternalStore } from "react";
+import { isAgentWorking } from "@/utils/agent-activity";
 import equal from "fast-deep-equal";
 import { useShallow } from "zustand/shallow";
 import { useSessionStore } from "@/stores/session-store";
@@ -126,8 +127,8 @@ export function useAggregatedAgents(options?: {
 
     // Sort by: running agents first, then by most recent activity
     allAgents.sort((left, right) => {
-      const leftRunning = left.turn.phase === "open";
-      const rightRunning = right.turn.phase === "open";
+      const leftRunning = isAgentWorking(left);
+      const rightRunning = isAgentWorking(right);
       if (leftRunning && !rightRunning) {
         return -1;
       }

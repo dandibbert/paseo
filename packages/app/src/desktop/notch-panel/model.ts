@@ -258,7 +258,8 @@ function itemFor(
     };
   }
   const attention = agent.requiresAttention ? agent.attentionReason : null;
-  if (agent.status === "error" || attention === "error") {
+  // An error needs you until you have seen it, as in the sidebar; after that the chat is recent.
+  if (attention === "error") {
     return {
       ...base,
       state: "error",
@@ -290,7 +291,8 @@ function itemFor(
       buttons: [],
     };
   }
-  if (agent.status === "idle" && now - agent.updatedAt.getTime() < RECENT_WINDOW_MS) {
+  const settled = agent.status === "idle" || agent.status === "error";
+  if (settled && now - agent.updatedAt.getTime() < RECENT_WINDOW_MS) {
     return {
       ...base,
       state: "recent",

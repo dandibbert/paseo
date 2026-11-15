@@ -7,6 +7,14 @@ import {
   type ResolveArchiveSubagentDialogInput,
 } from "./archive-subagent";
 
+const OPEN_TURN = {
+  phase: "open",
+  turnId: null,
+  startedAt: null,
+  cancellationRequestId: null,
+} as const;
+const IDLE_TURN = { phase: "idle", cancellationRequestId: null } as const;
+
 interface RecordedArchive {
   serverId: string;
   agentId: string;
@@ -63,6 +71,7 @@ describe("resolveArchiveSubagentDialog", () => {
       resolveArchiveSubagentDialog({
         title: "Review branch",
         status: "running",
+        turn: OPEN_TURN,
       }),
     ).toEqual({
       title: "Archive running subagent?",
@@ -79,6 +88,7 @@ describe("resolveArchiveSubagentDialog", () => {
       resolveArchiveSubagentDialog({
         title: "Starting child",
         status: "initializing",
+        turn: IDLE_TURN,
       }),
     ).toEqual({
       title: "Archive subagent?",
@@ -94,6 +104,7 @@ describe("resolveArchiveSubagentDialog", () => {
       resolveArchiveSubagentDialog({
         title: "Review branch",
         status: "idle",
+        turn: IDLE_TURN,
       }),
     ).toEqual({
       title: "Archive subagent?",
@@ -109,6 +120,7 @@ describe("resolveArchiveSubagentDialog", () => {
       resolveArchiveSubagentDialog({
         title: "New Agent",
         status: null,
+        turn: null,
       }),
     ).toEqual({
       title: "Archive subagent?",
@@ -127,7 +139,7 @@ describe("requestArchiveSubagent", () => {
       initialSubagents: [
         {
           id: "child-agent",
-          snapshot: { title: "Review branch", status: "running" },
+          snapshot: { title: "Review branch", status: "running", turn: OPEN_TURN },
         },
       ],
     });
@@ -143,7 +155,7 @@ describe("requestArchiveSubagent", () => {
       initialSubagents: [
         {
           id: "child-agent",
-          snapshot: { title: "Review branch", status: "idle" },
+          snapshot: { title: "Review branch", status: "idle", turn: IDLE_TURN },
         },
       ],
     });
@@ -159,7 +171,7 @@ describe("requestArchiveSubagent", () => {
       initialSubagents: [
         {
           id: "child-agent",
-          snapshot: { title: "Review branch", status: "running" },
+          snapshot: { title: "Review branch", status: "running", turn: OPEN_TURN },
         },
       ],
     });
@@ -167,7 +179,7 @@ describe("requestArchiveSubagent", () => {
     await requestArchiveSubagent({ serverId: "server-1", subagentId: "child-agent" }, env.deps);
 
     expect(env.recordedConfirmInputs).toEqual([
-      resolveArchiveSubagentDialog({ title: "Review branch", status: "running" }),
+      resolveArchiveSubagentDialog({ title: "Review branch", status: "running", turn: OPEN_TURN }),
     ]);
   });
 
@@ -177,7 +189,7 @@ describe("requestArchiveSubagent", () => {
     await requestArchiveSubagent({ serverId: "server-1", subagentId: "missing" }, env.deps);
 
     expect(env.recordedConfirmInputs).toEqual([
-      resolveArchiveSubagentDialog({ title: undefined, status: undefined }),
+      resolveArchiveSubagentDialog({ title: undefined, status: undefined, turn: undefined }),
     ]);
     expect(env.recordedArchives).toEqual([]);
   });
@@ -188,7 +200,7 @@ describe("requestArchiveSubagent", () => {
       initialSubagents: [
         {
           id: "child-agent",
-          snapshot: { title: "Review branch", status: "running" },
+          snapshot: { title: "Review branch", status: "running", turn: OPEN_TURN },
         },
       ],
     });
@@ -209,7 +221,12 @@ it("warns before archiving an idle subagent with live background work", async ()
     initialSubagents: [
       {
         id: "child",
-        snapshot: { title: "Review branch", status: "idle", backgroundWork: { count: 1 } },
+        snapshot: {
+          title: "Review branch",
+          status: "idle",
+          turn: IDLE_TURN,
+          backgroundWork: { count: 1 },
+        },
       },
     ],
   });

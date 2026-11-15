@@ -4,6 +4,7 @@ import { i18n } from "@/i18n/i18next";
 import { useProviderIcon } from "@/components/provider-icons";
 import type { PanelDescriptor } from "@/panels/panel-registry";
 import { useSessionStore, selectAgentTurnPresentation, type Agent } from "@/stores/session-store";
+import { settleAgentLifecycle } from "@/utils/agent-activity";
 import { deriveSidebarStateBucket } from "@/utils/sidebar-agent-state";
 
 function formatProviderLabel(provider: Agent["provider"]): string {
@@ -72,7 +73,7 @@ export function buildAgentDescriptor(input: {
   const label = resolveAgentLabel(input.title);
   const statusBucket = input.status
     ? deriveSidebarStateBucket({
-        status: input.isTurnActive ? "running" : input.status,
+        status: settleAgentLifecycle(input.status, input.isTurnActive),
         backgroundWork: input.backgroundWork,
         pendingPermissionCount: input.pendingPermissionCount,
         requiresAttention: input.requiresAttention,
@@ -83,7 +84,7 @@ export function buildAgentDescriptor(input: {
   return {
     label: label ?? "",
     subtitle:
-      statusBucket === "running" && !input.isTurnActive && input.status !== "running"
+      statusBucket === "running" && !input.isTurnActive
         ? i18n.t("message.backgroundWork.running")
         : `${formatProviderLabel(provider)} agent`,
     tooltip: label ?? `${formatProviderLabel(provider)} agent`,

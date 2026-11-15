@@ -25,12 +25,24 @@ export interface AgentActivityInput {
   attentionReason?: AgentAttentionReason;
 }
 
+/**
+ * The lifecycle to show once the caller knows whether a turn is active: "running" exactly while
+ * it is. Callers that hold an agent use `resolveAgentLifecycle`; this is for a chat, whose turn
+ * also counts as active from the moment a message is submitted.
+ */
+export function settleAgentLifecycle(
+  status: AgentLifecycleStatus,
+  isTurnActive: boolean,
+): AgentLifecycleStatus {
+  if (isTurnActive) return "running";
+  return status === "running" ? "idle" : status;
+}
+
 /** The lifecycle to show: "running" exactly while the tracked turn is open. */
 export function resolveAgentLifecycle(
   agent: Pick<AgentActivityInput, "status" | "turn">,
 ): AgentLifecycleStatus {
-  if (agent.turn.phase === "open") return "running";
-  return agent.status === "running" ? "idle" : agent.status;
+  return settleAgentLifecycle(agent.status, agent.turn.phase === "open");
 }
 
 /** True while the agent has an open turn or work it left running in the background. */

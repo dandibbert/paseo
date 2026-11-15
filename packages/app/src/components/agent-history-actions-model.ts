@@ -3,13 +3,14 @@ import type { DaemonClient } from "@getpaseo/client/internal/daemon-client";
 import type { AgentSnapshotPayload } from "@getpaseo/protocol/messages";
 import type { AgentDirectoryEntry } from "@/types/agent-directory";
 import { i18n } from "@/i18n/i18next";
+import { resolveAgentLifecycle } from "@/utils/agent-activity";
 
 export type AgentHistoryMutation = "rename" | "stop" | "archive" | "unarchive" | "detach";
 
 export function canStopHistoryAgent(
   agent: Pick<AgentDirectoryEntry, "status" | "turn" | "archivedAt">,
 ): boolean {
-  return !agent.archivedAt && (agent.status === "running" || agent.turn.phase === "open");
+  return !agent.archivedAt && resolveAgentLifecycle(agent) === "running";
 }
 
 export function isHistoryMutationApplicable(
@@ -18,6 +19,8 @@ export function isHistoryMutationApplicable(
 ): boolean {
   switch (action) {
     case "stop":
+      // The host's own snapshot, before the client tracks a turn for it: either field means a
+      // turn is open.
       return !agent.archivedAt && (agent.status === "running" || agent.activeTurn != null);
     case "archive":
       return !agent.archivedAt;

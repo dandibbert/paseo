@@ -12,6 +12,7 @@ import {
   type AgentHistoryOpenTarget,
 } from "@/components/agent-history-actions";
 import { HighlightedText } from "@/components/ui/highlighted-text";
+import { isAgentWorking, resolveAgentLifecycle } from "@/utils/agent-activity";
 import { ArchivedBadge } from "@/components/archived-badge";
 import { StatusBadge } from "@/components/ui/status-badge";
 import type { MenuTriggerState } from "@/components/ui/menu";
@@ -128,13 +129,14 @@ function SessionRowBadges({
   const { t } = useTranslation();
   const pendingCount = agent.pendingPermissionCount ?? 0;
   const showAttention = showAttentionIndicator && agent.requiresAttention;
+  const shownStatus = isAgentWorking(agent) ? "running" : resolveAgentLifecycle(agent);
   return (
     <>
       {agent.archivedAt ? <ArchivedBadge /> : null}
-      {!agent.archivedAt && agent.status !== "idle" ? (
+      {!agent.archivedAt && shownStatus !== "idle" ? (
         <StatusBadge
-          label={t(`agentList.status.${agent.status}`)}
-          variant={agent.status === "error" ? "error" : "muted"}
+          label={t(`agentList.status.${shownStatus}`)}
+          variant={shownStatus === "error" ? "error" : "muted"}
         />
       ) : null}
       {pendingCount > 0 ? (

@@ -1,5 +1,6 @@
 import type { AgentAddress } from "@getpaseo/protocol/addresses";
 import type { Agent } from "@/stores/session-store";
+import { isAgentWorking, resolveAgentLifecycle } from "@/utils/agent-activity";
 import type { SubagentRow } from "./select";
 
 export type ArchiveFinishedStatus =
@@ -21,7 +22,7 @@ export interface ArchiveFinishedOutcome {
 
 export type ManagedSubagentSnapshot = Pick<
   Agent,
-  "id" | "status" | "parentAgentId" | "archivedAt" | "backgroundWork"
+  "id" | "status" | "turn" | "parentAgentId" | "archivedAt" | "backgroundWork"
 >;
 
 export interface ArchiveFinishedSubagentsDeps {
@@ -39,11 +40,15 @@ export interface ArchiveFinishedSubagents {
 }
 
 export function isFinishedSubagent(row: SubagentRow): boolean {
-  if (row.kind === "paseo")
-    return (
-      (row.status === "idle" || row.status === "error") && (row.backgroundWork?.count ?? 0) === 0
-    );
+  if (row.kind === "paseo") return isSettled(row);
   return row.status === "completed" || row.status === "failed" || row.status === "canceled";
+}
+
+/** Done with its turn and its background work, whether it ended well or not. */
+function isSettled(agent: Pick<Agent, "status" | "turn" | "backgroundWork">): boolean {
+  if (isAgentWorking(agent)) return false;
+  const lifecycle = resolveAgentLifecycle(agent);
+  return lifecycle === "idle" || lifecycle === "error";
 }
 
 function canArchiveManagedSubagent(
@@ -51,11 +56,7 @@ function canArchiveManagedSubagent(
   parentAgentId: string,
 ): boolean {
   return Boolean(
-    agent &&
-    !agent.archivedAt &&
-    agent.parentAgentId === parentAgentId &&
-    (agent.backgroundWork?.count ?? 0) === 0 &&
-    (agent.status === "idle" || agent.status === "error"),
+    agent && !agent.archivedAt && agent.parentAgentId === parentAgentId && isSettled(agent),
   );
 }
 

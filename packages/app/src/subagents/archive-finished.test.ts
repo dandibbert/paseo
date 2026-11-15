@@ -47,6 +47,10 @@ function managed(
   return {
     id,
     status,
+    turn:
+      status === "running"
+        ? { phase: "open", turnId: null, startedAt: null, cancellationRequestId: null }
+        : { phase: "idle", cancellationRequestId: null },
     parentAgentId: "parent",
     archivedAt: null,
     ...overrides,

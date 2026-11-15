@@ -86,7 +86,14 @@ describe("buildNotchPanelState", () => {
           serverId: "linux",
           label: "Linux",
           online: false,
-          agents: [agent("e", { status: "error", lastError: "provider exited" })],
+          agents: [
+            agent("e", {
+              status: "error",
+              lastError: "provider exited",
+              requiresAttention: true,
+              attentionReason: "error",
+            }),
+          ],
         },
       ],
     });
@@ -229,6 +236,25 @@ describe("running, by the sidebar's rules", () => {
       agent("busy", { workspaceId: "ws", status: "running", lastActivityAt: new Date(100) }),
     ];
     expect(runningIds(agents, ["ws"])).toEqual({ running: ["busy"], other: ["idle"] });
+  });
+
+  it("stops asking for you once an error has been seen", () => {
+    const state = buildNotchPanelState({
+      enabled: true,
+      labels,
+      text,
+      now: 2000,
+      hosts: [
+        {
+          serverId: "mac",
+          label: "Mac",
+          online: true,
+          agents: [agent("seen", { status: "error", lastError: "provider exited" })],
+        },
+      ],
+    });
+    expect(state.needsYou).toEqual([]);
+    expect(state.recent.map((item) => item.agentId)).toEqual(["seen"]);
   });
 
   it("does not trust a running status once the turn has closed", () => {
