@@ -1,5 +1,5 @@
 import type { ProjectedTimelineRow } from "./timeline-projection.js";
-import type { AgentTimelineItem } from "./agent-sdk-types.js";
+import type { AgentTimelineItem, AgentTurnTelemetry } from "./agent-sdk-types.js";
 
 export interface AgentTimelineRow {
   seq: number;
@@ -7,6 +7,7 @@ export interface AgentTimelineRow {
   item: AgentTimelineItem;
   readonly turnId?: string;
   readonly providerMessageId?: string;
+  readonly telemetry?: AgentTurnTelemetry;
 }
 
 export interface AgentTimelineCursor {

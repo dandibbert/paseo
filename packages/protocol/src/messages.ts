@@ -307,6 +307,7 @@ import type {
   AgentProviderNotice,
   ToolCallDetail,
   ToolCallTimelineItem,
+  AgentTurnTelemetry,
   AgentUsage,
   JsonValue,
 } from "./agent-types.js";
@@ -479,13 +480,32 @@ const AgentCapabilityFlagsSchema: z.ZodType<AgentCapabilityFlags> = z
   })
   .catchall(z.boolean());
 
-const AgentUsageSchema: z.ZodType<AgentUsage> = z.object({
+export const AgentUsageSchema: z.ZodType<AgentUsage> = z.object({
   inputTokens: z.number().optional(),
   cachedInputTokens: z.number().optional(),
+  cacheCreationInputTokens: z.number().optional(),
   outputTokens: z.number().optional(),
+  reasoningTokens: z.number().optional(),
   totalCostUsd: z.number().optional(),
   contextWindowMaxTokens: z.number().optional(),
   contextWindowUsedTokens: z.number().optional(),
+});
+
+export const AgentTurnTelemetrySchema: z.ZodType<AgentTurnTelemetry> = z.object({
+  ttftMs: z.number().optional(),
+  timeToRequestMs: z.number().optional(),
+  durationMs: z.number().optional(),
+  apiDurationMs: z.number().optional(),
+  generationDurationMs: z.number().optional(),
+  toolDurationMs: z.number().optional(),
+  approvalWaitMs: z.number().optional(),
+  outputTps: z.number().optional(),
+  apiTurnCount: z.number().optional(),
+  toolCallCount: z.number().optional(),
+  stopReason: z.string().optional(),
+  model: z.string().optional(),
+  canonicalModel: z.string().optional(),
+  usage: AgentUsageSchema.optional(),
 });
 
 const McpStdioServerConfigSchema = z.object({
@@ -833,6 +853,7 @@ export const AgentStreamEventPayloadSchema = z.discriminatedUnion("type", [
     provider: AgentProviderSchema,
     turnId: z.string().optional(),
     usage: AgentUsageSchema.optional(),
+    telemetry: AgentTurnTelemetrySchema.optional(),
   }),
   z.object({
     type: z.literal("turn_failed"),
@@ -5280,6 +5301,7 @@ export const AgentTimelineEntryPayloadSchema = z.object({
   seqEnd: z.number().int().nonnegative(),
   sourceSeqRanges: z.array(AgentTimelineSeqRangeSchema),
   collapsed: z.array(z.enum(["assistant_merge", "reasoning_merge", "tool_lifecycle", "identity"])),
+  telemetry: AgentTurnTelemetrySchema.optional(),
 });
 
 export const FetchAgentTimelineResponseMessageSchema = z.object({

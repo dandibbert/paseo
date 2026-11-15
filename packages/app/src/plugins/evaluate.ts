@@ -24,6 +24,8 @@ import {
   type PluginSurfaceProps,
   type PluginTimelineRendererContribution,
   type PluginTimelineTransformerContribution,
+  type PluginTurnFooterItemContribution,
+  type PluginContextWindowItemContribution,
   type PluginButtonRegistration,
 } from "@getpaseo/plugin/client";
 import type {
@@ -145,6 +147,8 @@ export function runPluginClientBundle(
     themes: [],
     timelineTransformers: [],
     timelineRenderers: [],
+    turnFooterItems: [],
+    contextWindowItems: [],
   };
   const surfaceIds = new Set<string>();
   const sidebarViewIds = new Set<string>();
@@ -164,6 +168,8 @@ export function runPluginClientBundle(
   const themeIds = new Set<string>();
   const timelineTransformerIds = new Set<string>();
   const timelineRendererIds = new Set<string>();
+  const turnFooterItemIds = new Set<string>();
+  const contextWindowItemIds = new Set<string>();
   const removals = new Set<PluginCleanup>();
   let setupComplete = false;
   let stopped = false;
@@ -565,6 +571,40 @@ export function runPluginClientBundle(
         timelineRendererIds.delete(rendererId),
       );
     },
+    addTurnFooterItem(contribution: PluginTurnFooterItemContribution) {
+      const itemId = requireId(contribution.id, "turn footer item id");
+      if (turnFooterItemIds.has(itemId)) {
+        throw new Error(`Duplicate turn footer item: ${itemId}`);
+      }
+      if (!isComponentType(contribution.Component)) {
+        throw new Error(`Turn footer item ${itemId} is not a component`);
+      }
+      turnFooterItemIds.add(itemId);
+      return register(
+        collector.turnFooterItems,
+        { id: itemId, Component: contribution.Component },
+        () => turnFooterItemIds.delete(itemId),
+      );
+    },
+    addContextWindowItem(contribution: PluginContextWindowItemContribution) {
+      const itemId = requireId(contribution.id, "context window item id");
+      if (contextWindowItemIds.has(itemId)) {
+        throw new Error(`Duplicate context window item: ${itemId}`);
+      }
+      if (!isComponentType(contribution.Component)) {
+        throw new Error(`Context window item ${itemId} is not a component`);
+      }
+      contextWindowItemIds.add(itemId);
+      return register(
+        collector.contextWindowItems,
+        {
+          id: itemId,
+          ...(contribution.replacesSessionCost === true ? { replacesSessionCost: true } : {}),
+          Component: contribution.Component,
+        },
+        () => contextWindowItemIds.delete(itemId),
+      );
+    },
     addComposerPill(contribution) {
       if (stopped) throw new Error("Plugin has stopped");
       return trackButton(runtime.addComposerPill(contribution));
@@ -665,5 +705,7 @@ export function runPluginClientBundle(
     themes: collector.themes,
     timelineTransformers: collector.timelineTransformers,
     timelineRenderers: collector.timelineRenderers,
+    turnFooterItems: collector.turnFooterItems,
+    contextWindowItems: collector.contextWindowItems,
   };
 }

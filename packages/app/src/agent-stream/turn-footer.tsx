@@ -221,6 +221,8 @@ function CompletedTurnFooter({
         getContent={items[startIndex]?.kind === "assistant_message" ? getContent : undefined}
         completedAt={timing?.completedAt}
         durationMs={timing?.durationMs}
+        turnId={items[startIndex]?.turnId ?? null}
+        telemetry={timing?.telemetry ?? null}
         onFork={boundary && onForkAssistantTurn ? handleFork : undefined}
       />
     </View>

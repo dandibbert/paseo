@@ -1,5 +1,5 @@
 import { continuesTimelineTurn, isTimelineTurnTrigger } from "@getpaseo/protocol/timeline-turn";
-import type { AgentTimelineItem, ToolCallDetail } from "./agent-sdk-types.js";
+import type { AgentTimelineItem, AgentTurnTelemetry, ToolCallDetail } from "./agent-sdk-types.js";
 import { timelineItemIdentity } from "@getpaseo/protocol/timeline-identity";
 
 import type { AgentTimelineRow } from "./agent-timeline-store-types.js";
@@ -22,6 +22,7 @@ export interface TimelineProjectionEntry {
   item: AgentTimelineItem;
   turnId?: string;
   providerMessageId?: string;
+  telemetry?: AgentTurnTelemetry;
   timestamp: string;
   seqStart: number;
   seqEnd: number;
@@ -125,6 +126,7 @@ function makeCanonicalEntries(rows: readonly AgentTimelineRow[]): WorkingEntry[]
       timestamp: row.timestamp,
       ...(row.turnId ? { turnId: row.turnId } : {}),
       ...(row.providerMessageId ? { providerMessageId: row.providerMessageId } : {}),
+      ...(row.telemetry ? { telemetry: row.telemetry } : {}),
       seqStart: row.seq,
       seqEnd: row.seq,
       sourceSeqRanges: [{ startSeq: row.seq, endSeq: row.seq }],
@@ -155,6 +157,9 @@ function mergeIdentityEntries(existing: WorkingEntry, entry: WorkingEntry): Work
         item: mergeToolCallItems(existing.item, entry.item),
         timestamp: entry.timestamp,
         seqEnd: Math.max(existing.seqEnd, entry.seqEnd),
+        ...((entry.telemetry ?? existing.telemetry)
+          ? { telemetry: entry.telemetry ?? existing.telemetry }
+          : {}),
         ...mergeIdentityMetadata(existing, entry, "tool_lifecycle"),
       };
     case "plugin":
@@ -233,6 +238,9 @@ function mergeReasoningChunks(entries: readonly WorkingEntry[]): WorkingEntry[] 
       },
       timestamp: entry.timestamp,
       seqEnd: entry.seqEnd,
+      ...((entry.telemetry ?? previous.telemetry)
+        ? { telemetry: entry.telemetry ?? previous.telemetry }
+        : {}),
       sourceSeqRanges: mergeSeqRanges(previous.sourceSeqRanges, entry.sourceSeqRanges),
       collapsed: Array.from(collapsedKinds),
     };
@@ -285,6 +293,9 @@ function mergeAssistantChunks(entries: readonly WorkingEntry[]): WorkingEntry[] 
       },
       timestamp: entry.timestamp,
       seqEnd: entry.seqEnd,
+      ...((entry.telemetry ?? previous.telemetry)
+        ? { telemetry: entry.telemetry ?? previous.telemetry }
+        : {}),
       sourceSeqRanges: mergeSeqRanges(previous.sourceSeqRanges, entry.sourceSeqRanges),
       collapsed: Array.from(collapsedKinds),
     };
@@ -537,6 +548,43 @@ export class TimelineProjection {
     if (index < 0) return null;
     this.rows[index] = { ...this.rows[index], providerMessageId };
     return { ...this.rows[index] };
+  }
+
+  enrichTurnTelemetry(
+    turnId: string | undefined,
+    telemetry: AgentTurnTelemetry,
+    targetSeq?: number,
+  ): ProjectedTimelineRow | null {
+    let targetIndex = -1;
+    if (turnId) {
+      for (let index = this.rows.length - 1; index >= 0; index -= 1) {
+        const row = this.rows[index]!;
+        if (row.turnId !== turnId || row.item.type === "user_message") continue;
+        if (row.item.type === "assistant_message") {
+          targetIndex = index;
+          break;
+        }
+        if (targetIndex < 0) {
+          targetIndex = index;
+        }
+      }
+    }
+    if (targetIndex < 0 && targetSeq !== undefined) {
+      for (let index = this.rows.length - 1; index >= 0; index -= 1) {
+        const row = this.rows[index]!;
+        if (
+          row.seqStart <= targetSeq &&
+          targetSeq <= row.seqEnd &&
+          row.item.type !== "user_message"
+        ) {
+          targetIndex = index;
+          break;
+        }
+      }
+    }
+    if (targetIndex < 0) return null;
+    this.rows[targetIndex] = { ...this.rows[targetIndex]!, telemetry };
+    return { ...this.rows[targetIndex]! };
   }
 }
 

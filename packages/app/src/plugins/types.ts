@@ -22,6 +22,8 @@ import type {
   PluginSettingsScreenContribution as SDKPluginSettingsScreenContribution,
   PluginTimelineRendererContribution,
   PluginTimelineTransformerContribution,
+  PluginTurnFooterItemContribution,
+  PluginContextWindowItemContribution,
   PluginPanelLocation,
   PluginWorkspacePanelContribution as SDKPluginWorkspacePanelContribution,
 } from "@getpaseo/plugin/client";
@@ -70,6 +72,8 @@ export interface EvaluatedPlugin {
   themes: PluginThemeContribution[];
   timelineTransformers: PluginTimelineTransformerContribution[];
   timelineRenderers: PluginTimelineRendererContribution[];
+  turnFooterItems: PluginTurnFooterItemContribution[];
+  contextWindowItems: PluginContextWindowItemContribution[];
 }
 
 export interface InstalledPlugin extends EvaluatedPlugin {

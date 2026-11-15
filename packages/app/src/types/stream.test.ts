@@ -2406,3 +2406,58 @@ it("retains agent-message provenance through live delivery and repeated history"
   expect(replay).toHaveLength(1);
   expect(replay[0]).toMatchObject({ payload: { data: { agentMessage } } });
 });
+
+it("attaches turn_completed telemetry to the turn terminal item and retains hydrated telemetry", () => {
+  const telemetry = { ttftMs: 310, outputTps: 54.2, toolCallCount: 1 };
+  const live = applyStreamEvent({
+    tail: [
+      {
+        kind: "user_message",
+        id: "u1",
+        turnId: "turn-1",
+        text: "hi",
+        timestamp: new Date(100),
+      },
+    ],
+    head: [
+      {
+        kind: "assistant_message",
+        id: "a1",
+        turnId: "turn-1",
+        text: "hello",
+        timestamp: new Date(500),
+      },
+    ],
+    event: {
+      type: "turn_completed",
+      provider: "claude",
+      turnId: "turn-1",
+      telemetry,
+    },
+    timestamp: new Date(1000),
+  });
+  expect(live.tail[1]).toMatchObject({ kind: "assistant_message", telemetry });
+
+  const hydrated = hydrateStreamState([
+    {
+      event: {
+        type: "timeline",
+        provider: "claude",
+        turnId: "turn-1",
+        item: { type: "user_message", text: "hi" },
+      },
+      timestamp: new Date(100),
+    },
+    {
+      event: {
+        type: "timeline",
+        provider: "claude",
+        turnId: "turn-1",
+        item: { type: "assistant_message", text: "hello" },
+      },
+      timestamp: new Date(500),
+      telemetry,
+    },
+  ]);
+  expect(hydrated[1]).toMatchObject({ kind: "assistant_message", telemetry });
+});

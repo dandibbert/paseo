@@ -196,6 +196,7 @@ export function publishAgentStream(
       agent,
       turnId: event.turnId ?? null,
       outcome: { kind: "completed" },
+      ...(event.telemetry ? { telemetry: event.telemetry } : {}),
     });
   } else if (event.type === "turn_failed") {
     lifecycle.emit("agent.turn.after", {

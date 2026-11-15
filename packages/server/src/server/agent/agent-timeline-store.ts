@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { TimelineProjection, type ProjectedTimelineRow } from "./timeline-projection.js";
 import { limitAgentTimelineItemContent } from "./agent-timeline-content.js";
-import type { AgentTimelineItem } from "./agent-sdk-types.js";
+import type { AgentTimelineItem, AgentTurnTelemetry } from "./agent-sdk-types.js";
 import type {
   AgentTimelineFetchOptions,
   AgentTimelineFetchResult,
@@ -83,6 +83,15 @@ export class InMemoryAgentTimelineStore {
       clientMessageId,
       providerMessageId,
     );
+  }
+
+  enrichTurnTelemetry(
+    agentId: string,
+    turnId: string | undefined,
+    telemetry: AgentTurnTelemetry,
+    targetSeq?: number,
+  ): AgentTimelineRow | null {
+    return this.requireState(agentId).projection.enrichTurnTelemetry(turnId, telemetry, targetSeq);
   }
 
   getEpoch(agentId: string): string {

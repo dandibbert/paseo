@@ -4,6 +4,7 @@ import type {
   AgentOptionToggleControl,
   AgentProviderNotice,
   AgentTaskItem,
+  AgentTurnTelemetry,
   JsonValue,
   ProviderOptions,
   ToolPolicy,
@@ -18,6 +19,7 @@ export type {
   AgentOptionToggleControl,
   AgentProviderNotice,
   AgentTaskItem,
+  AgentTurnTelemetry,
 };
 
 export type AgentProvider = string;
@@ -221,7 +223,9 @@ export interface SteerActiveTurnOptions extends AgentSteerOptions {
 export interface AgentUsage {
   inputTokens?: number;
   cachedInputTokens?: number;
+  cacheCreationInputTokens?: number;
   outputTokens?: number;
+  reasoningTokens?: number;
   totalCostUsd?: number;
   contextWindowMaxTokens?: number;
   contextWindowUsedTokens?: number;
@@ -415,7 +419,13 @@ export type AgentTimelineItem =
 export type AgentStreamEvent =
   | { type: "thread_started"; sessionId: string; provider: AgentProvider }
   | { type: "turn_started"; provider: AgentProvider; turnId?: string }
-  | { type: "turn_completed"; provider: AgentProvider; usage?: AgentUsage; turnId?: string }
+  | {
+      type: "turn_completed";
+      provider: AgentProvider;
+      usage?: AgentUsage;
+      telemetry?: AgentTurnTelemetry;
+      turnId?: string;
+    }
   | { type: "usage_updated"; provider: AgentProvider; usage: AgentUsage; turnId?: string }
   | {
       type: "mode_changed";

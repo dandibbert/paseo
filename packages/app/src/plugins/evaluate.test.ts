@@ -988,4 +988,57 @@ describe("file panels", () => {
       ),
     ).toThrow("Duplicate file panel");
   });
+
+  it("collects and cleans up turn footer and context window items", () => {
+    const plugin = evaluatePluginClientBundle(
+      "telemetry",
+      bundle(`
+        function FooterBadge() { return null; }
+        function CostSummary() { return null; }
+        const removeFooter = plugin.addTurnFooterItem({ id: "metrics", Component: FooterBadge });
+        const removeCost = plugin.addContextWindowItem({
+          id: "cost",
+          replacesSessionCost: true,
+          Component: CostSummary,
+        });
+        globalThis.__removeTelemetryItems = () => {
+          removeFooter();
+          removeCost();
+        };
+      `),
+    );
+
+    expect(plugin.turnFooterItems.map((item) => item.id)).toEqual(["metrics"]);
+    expect(
+      plugin.contextWindowItems.map((item) => ({
+        id: item.id,
+        replacesSessionCost: item.replacesSessionCost,
+      })),
+    ).toEqual([{ id: "cost", replacesSessionCost: true }]);
+    (Reflect.get(globalThis, "__removeTelemetryItems") as () => void)();
+    Reflect.deleteProperty(globalThis, "__removeTelemetryItems");
+    expect(plugin.turnFooterItems).toEqual([]);
+    expect(plugin.contextWindowItems).toEqual([]);
+
+    expect(() =>
+      evaluatePluginClientBundle(
+        "telemetry",
+        bundle(`
+          function Item() { return null; }
+          plugin.addTurnFooterItem({ id: "metrics", Component: Item });
+          plugin.addTurnFooterItem({ id: "metrics", Component: Item });
+        `),
+      ),
+    ).toThrow("Duplicate turn footer item: metrics");
+    expect(() =>
+      evaluatePluginClientBundle(
+        "telemetry",
+        bundle(`
+          function Item() { return null; }
+          plugin.addContextWindowItem({ id: "cost", Component: Item });
+          plugin.addContextWindowItem({ id: "cost", Component: Item });
+        `),
+      ),
+    ).toThrow("Duplicate context window item: cost");
+  });
 });

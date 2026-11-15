@@ -16,6 +16,7 @@ import type {
   AgentProvider,
   AgentSessionConfig,
   AgentRuntimeInfo,
+  AgentTurnTelemetry,
   AgentUsage,
   ImportableProviderSession,
 } from "./agent-sdk-types.js";
@@ -623,7 +624,7 @@ function assignFiniteNumber(
   return raw === undefined || raw === null;
 }
 
-function sanitizeUsage(value: unknown): AgentUsage | undefined {
+export function sanitizeUsage(value: unknown): AgentUsage | undefined {
   const sanitized = sanitizeOptionalJson(value);
   if (!sanitized || !isJsonObject(sanitized)) {
     return undefined;
@@ -632,7 +633,9 @@ function sanitizeUsage(value: unknown): AgentUsage | undefined {
   const fields: UsageNumericField[] = [
     "inputTokens",
     "cachedInputTokens",
+    "cacheCreationInputTokens",
     "outputTokens",
+    "reasoningTokens",
     "totalCostUsd",
     "contextWindowMaxTokens",
     "contextWindowUsedTokens",
@@ -641,6 +644,68 @@ function sanitizeUsage(value: unknown): AgentUsage | undefined {
     if (!assignFiniteNumber(sanitized, result, field)) {
       return undefined;
     }
+  }
+  return Object.keys(result).length ? result : undefined;
+}
+
+type TelemetryNumericField = Exclude<
+  {
+    [K in keyof AgentTurnTelemetry]-?: NonNullable<AgentTurnTelemetry[K]> extends number
+      ? K
+      : never;
+  }[keyof AgentTurnTelemetry],
+  undefined
+>;
+type TelemetryStringField = Exclude<
+  {
+    [K in keyof AgentTurnTelemetry]-?: NonNullable<AgentTurnTelemetry[K]> extends string
+      ? K
+      : never;
+  }[keyof AgentTurnTelemetry],
+  undefined
+>;
+
+export function sanitizeTurnTelemetry(value: unknown): AgentTurnTelemetry | undefined {
+  const sanitized = sanitizeOptionalJson(value);
+  if (!sanitized || !isJsonObject(sanitized)) {
+    return undefined;
+  }
+  const result: AgentTurnTelemetry = {};
+  const numericFields: TelemetryNumericField[] = [
+    "ttftMs",
+    "timeToRequestMs",
+    "durationMs",
+    "apiDurationMs",
+    "generationDurationMs",
+    "toolDurationMs",
+    "approvalWaitMs",
+    "outputTps",
+    "apiTurnCount",
+    "toolCallCount",
+  ];
+  for (const field of numericFields) {
+    const raw = sanitized[field];
+    if (typeof raw === "number" && Number.isFinite(raw)) {
+      result[field] = raw;
+    } else if (raw !== undefined && raw !== null) {
+      return undefined;
+    }
+  }
+  const stringFields: TelemetryStringField[] = ["stopReason", "model", "canonicalModel"];
+  for (const field of stringFields) {
+    const raw = sanitized[field];
+    if (typeof raw === "string") {
+      result[field] = raw;
+    } else if (raw !== undefined && raw !== null) {
+      return undefined;
+    }
+  }
+  if (sanitized.usage !== undefined && sanitized.usage !== null) {
+    const usage = sanitizeUsage(sanitized.usage);
+    if (!usage) {
+      return undefined;
+    }
+    result.usage = usage;
   }
   return Object.keys(result).length ? result : undefined;
 }

@@ -1,9 +1,11 @@
+import type { AgentTurnTelemetry } from "@getpaseo/protocol/agent-types";
 import type { StreamItem } from "@/types/stream";
 import { startsNewTurn, isTurnTrigger } from "@/agent-stream/turn-membership";
 
 export interface TurnTiming {
   completedAt: Date;
   durationMs: number | null;
+  telemetry?: AgentTurnTelemetry;
 }
 
 export interface StreamTurnTiming {
@@ -16,6 +18,7 @@ interface OpenTurn {
   lastItemAt: Date | null;
   assistantIds: readonly string[];
   previousItem: StreamItem | null;
+  telemetry?: AgentTurnTelemetry;
 }
 
 interface HeadTurnTiming {
@@ -43,6 +46,7 @@ function closeTurn(turn: OpenTurn, into: Map<string, TurnTiming>): void {
   const timing: TurnTiming = {
     completedAt: turn.lastItemAt,
     durationMs: turn.userAt ? Math.max(0, turn.lastItemAt.getTime() - turn.userAt.getTime()) : null,
+    ...(turn.telemetry ? { telemetry: turn.telemetry } : {}),
   };
   let footerIds = turn.assistantIds;
   if (footerIds.length === 0 && turn.previousItem?.kind === "tool_call") {
@@ -62,20 +66,25 @@ function walkTurns(
   let lastItemAt = from.lastItemAt;
   let assistantIds = [...from.assistantIds];
   let previousItem = from.previousItem;
+  let telemetry = from.telemetry;
   for (const item of items) {
     if (startsNewTurn(item, previousItem)) {
-      closeTurn({ userAt, lastItemAt, assistantIds, previousItem }, into);
+      closeTurn({ userAt, lastItemAt, assistantIds, previousItem, telemetry }, into);
       userAt = isTurnTrigger(item) ? item.timestamp : null;
       lastItemAt = null;
       assistantIds = [];
+      telemetry = undefined;
     }
     lastItemAt = item.timestamp;
     if (item.kind === "assistant_message") {
       assistantIds.push(item.id);
     }
+    if (item.kind !== "user_message" && item.kind !== "turn_summary" && item.telemetry) {
+      telemetry = item.telemetry;
+    }
     previousItem = item;
   }
-  return { userAt, lastItemAt, assistantIds, previousItem };
+  return { userAt, lastItemAt, assistantIds, previousItem, telemetry };
 }
 
 function areTimingsEqual(a: Map<string, TurnTiming>, b: Map<string, TurnTiming>): boolean {
@@ -87,7 +96,8 @@ function areTimingsEqual(a: Map<string, TurnTiming>, b: Map<string, TurnTiming>)
     if (
       !other ||
       other.completedAt.getTime() !== timing.completedAt.getTime() ||
-      other.durationMs !== timing.durationMs
+      other.durationMs !== timing.durationMs ||
+      other.telemetry !== timing.telemetry
     ) {
       return false;
     }

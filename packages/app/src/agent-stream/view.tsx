@@ -95,6 +95,7 @@ import {
   type InFlightTurnForkHandler,
   type TurnContentStrategy,
 } from "./turn-footer";
+import { TurnFooterAgentProvider, type TurnFooterAgentContextValue } from "./turn-footer-context";
 import { resolveBottomOverlayTailInset } from "./bottom-overlay-inset";
 import { layoutStream, type StreamLayoutItem } from "./layout";
 import {
@@ -401,6 +402,21 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
     const transformTimelineItem = useInstalledTimelineTransform(resolvedServerId);
 
     const client = useSessionStore((state) => state.sessions[resolvedServerId]?.client ?? null);
+    const agentProvider = useSessionStore(
+      (state) => state.sessions[resolvedServerId]?.agents.get(agentId)?.provider ?? null,
+    );
+    const agentModel = useSessionStore(
+      (state) => state.sessions[resolvedServerId]?.agents.get(agentId)?.model ?? null,
+    );
+    const turnFooterAgentContext = useMemo<TurnFooterAgentContextValue>(
+      () => ({
+        serverId: resolvedServerId,
+        agentId,
+        provider: agentProvider,
+        model: agentModel,
+      }),
+      [agentId, agentModel, agentProvider, resolvedServerId],
+    );
     const sessionStreamHead = useSessionStore((state) =>
       state.sessions[resolvedServerId]?.agentStreamHead?.get(agentId),
     );
@@ -1205,63 +1221,65 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
       [effectiveStreamItems, effectiveStreamHead],
     );
     return (
-      <ChatFind
-        agentId={agentId}
-        serverId={resolvedServerId}
-        epoch={timelineEpoch}
-        items={findItems}
-        viewportRef={viewportRef}
-        revealLoadedMessage={revealLoadedMessage}
-        visibleMessageIds={mountedMessageIds}
-      >
-        <ToolCallSheetProvider>
-          <AssistantSelectionCopySurface style={stylesheet.container}>
-            <MessageOuterSpacingProvider disableOuterSpacing>
-              <ToolCallExpansionContext.Provider value={toolCallExpansion}>
-                <UserMessageExpansionContext.Provider value={userMessageExpansion}>
-                  {streamRenderStrategy.render({
-                    readingRowReplacements: presentation.readingRowReplacements,
-                    agentId,
-                    segments: renderModel.segments,
-                    historyRowRevision,
-                    liveHeadRowRevision: expandedToolCallGroups,
-                    boundary,
-                    renderers,
-                    listEmptyComponent,
-                    viewportRef,
-                    routeBottomAnchorRequest,
-                    isAuthoritativeHistoryReady,
-                    isInitialHistoryLoading,
-                    revealInitialHistory,
-                    onNearBottomChange: nearBottom.set,
-                    onReadingPositionChange: handleReadingPositionChange,
-                    onNearHistoryStart: loadOlder,
-                    isLoadingOlderHistory: isLoadingOlder,
-                    hasOlderHistory: hasOlder,
-                    olderHistoryProgressKey: progressKey,
-                    scrollEnabled: streamScrollEnabled,
-                    listStyle: stylesheet.list,
-                    baseListContentContainerStyle: stylesheet.listContentContainer,
-                    forwardListContentContainerStyle: stylesheet.forwardListContentContainer,
-                    contentMaxWidth,
-                  })}
-                </UserMessageExpansionContext.Provider>
-              </ToolCallExpansionContext.Provider>
-            </MessageOuterSpacingProvider>
-            <ChatOutlineRail
-              prompts={chatOutline.prompts}
-              activePrompt={chatOutline.activePrompt}
-              onJumpToPrompt={chatOutline.jumpToPrompt}
-            />
-            <ScrollToBottomButton
-              nearBottom={nearBottom}
-              isTimelineDetached={isTimelineDetached}
-              bottomOffset={scrollToBottomOffset}
-              onPress={scrollToBottom}
-            />
-          </AssistantSelectionCopySurface>
-        </ToolCallSheetProvider>
-      </ChatFind>
+      <TurnFooterAgentProvider value={turnFooterAgentContext}>
+        <ChatFind
+          agentId={agentId}
+          serverId={resolvedServerId}
+          epoch={timelineEpoch}
+          items={findItems}
+          viewportRef={viewportRef}
+          revealLoadedMessage={revealLoadedMessage}
+          visibleMessageIds={mountedMessageIds}
+        >
+          <ToolCallSheetProvider>
+            <AssistantSelectionCopySurface style={stylesheet.container}>
+              <MessageOuterSpacingProvider disableOuterSpacing>
+                <ToolCallExpansionContext.Provider value={toolCallExpansion}>
+                  <UserMessageExpansionContext.Provider value={userMessageExpansion}>
+                    {streamRenderStrategy.render({
+                      readingRowReplacements: presentation.readingRowReplacements,
+                      agentId,
+                      segments: renderModel.segments,
+                      historyRowRevision,
+                      liveHeadRowRevision: expandedToolCallGroups,
+                      boundary,
+                      renderers,
+                      listEmptyComponent,
+                      viewportRef,
+                      routeBottomAnchorRequest,
+                      isAuthoritativeHistoryReady,
+                      isInitialHistoryLoading,
+                      revealInitialHistory,
+                      onNearBottomChange: nearBottom.set,
+                      onReadingPositionChange: handleReadingPositionChange,
+                      onNearHistoryStart: loadOlder,
+                      isLoadingOlderHistory: isLoadingOlder,
+                      hasOlderHistory: hasOlder,
+                      olderHistoryProgressKey: progressKey,
+                      scrollEnabled: streamScrollEnabled,
+                      listStyle: stylesheet.list,
+                      baseListContentContainerStyle: stylesheet.listContentContainer,
+                      forwardListContentContainerStyle: stylesheet.forwardListContentContainer,
+                      contentMaxWidth,
+                    })}
+                  </UserMessageExpansionContext.Provider>
+                </ToolCallExpansionContext.Provider>
+              </MessageOuterSpacingProvider>
+              <ChatOutlineRail
+                prompts={chatOutline.prompts}
+                activePrompt={chatOutline.activePrompt}
+                onJumpToPrompt={chatOutline.jumpToPrompt}
+              />
+              <ScrollToBottomButton
+                nearBottom={nearBottom}
+                isTimelineDetached={isTimelineDetached}
+                bottomOffset={scrollToBottomOffset}
+                onPress={scrollToBottom}
+              />
+            </AssistantSelectionCopySurface>
+          </ToolCallSheetProvider>
+        </ChatFind>
+      </TurnFooterAgentProvider>
     );
   },
 );

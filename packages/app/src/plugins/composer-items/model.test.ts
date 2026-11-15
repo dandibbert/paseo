@@ -58,6 +58,8 @@ function installed(): InstalledPlugin {
     themes: [],
     timelineTransformers: [],
     timelineRenderers: [],
+    turnFooterItems: [],
+    contextWindowItems: [],
   };
 }
 

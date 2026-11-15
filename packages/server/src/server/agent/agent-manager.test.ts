@@ -13363,7 +13363,7 @@ test.each([
       .toEqual([
         {
           name: "agent.turn.after",
-          event: {
+          event: expect.objectContaining({
             agent: {
               id: agent.id,
               workspaceId: null,
@@ -13376,7 +13376,7 @@ test.each([
             },
             turnId: "hook-turn",
             outcome,
-          },
+          }),
         },
       ]);
     expect(timelineStore.itemReads).toBe(readsBeforeDispatch);

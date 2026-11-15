@@ -1,4 +1,4 @@
-import type { AgentTimelineItem } from "@getpaseo/protocol/agent-types";
+import type { AgentTimelineItem, AgentTurnTelemetry } from "@getpaseo/protocol/agent-types";
 import type { AgentStreamEventPayload } from "@getpaseo/protocol/messages";
 import { selectAgentTimelineState, useSessionStore } from "@/stores/session-store";
 import type { AssistantMessageItem, StreamItem, TodoEntry } from "@/types/stream";
@@ -133,6 +133,7 @@ interface TimelineResponseEntry {
   turnId?: string;
   item: AgentTimelineItem;
   timestamp: string;
+  telemetry?: AgentTurnTelemetry;
 }
 
 export interface ProcessTimelineResponseInput {
@@ -180,6 +181,7 @@ interface TimelineUnit {
   sourceSeqRanges: TimelineSeqRange[];
   event: AgentStreamEventPayload;
   timestamp: Date;
+  telemetry?: AgentTurnTelemetry;
 }
 
 interface TimelinePathResult {
@@ -825,6 +827,9 @@ function reconcileOverlappingProjectedAssistant(params: {
     text: projectedText,
     timestamp: unit.timestamp,
     timelineCursor: { epoch: params.epoch, seq: unit.seqEnd },
+    ...((unit.telemetry ?? match.current.telemetry)
+      ? { telemetry: unit.telemetry ?? match.current.telemetry }
+      : {}),
   };
   const replaceMatch = (items: StreamItem[], index: number) => {
     const next = [...items];
@@ -941,7 +946,7 @@ function applyCanonicalForwardUnit(params: {
   unit: TimelineUnit;
   epoch: string;
 }): { tail: StreamItem[]; head: StreamItem[]; acknowledgedClientMessageIds: string[] } {
-  const { event, timestamp, seqEnd } = params.unit;
+  const { event, timestamp, seqEnd, telemetry } = params.unit;
   const timelineCursor = { epoch: params.epoch, seq: seqEnd };
   if (event.type === "timeline" && event.item.type === "user_message") {
     const applied = applyStreamEvent({
@@ -963,6 +968,7 @@ function applyCanonicalForwardUnit(params: {
       tail: reduceStreamUpdate(params.tail, event, timestamp, {
         source: "canonical",
         timelineCursor,
+        telemetry,
       }),
       head: params.head,
       acknowledgedClientMessageIds: [],
@@ -993,6 +999,7 @@ function applyCanonicalForwardUnit(params: {
       head: reduceStreamUpdate([], event, timestamp, {
         source: "canonical",
         timelineCursor,
+        telemetry,
       }),
       acknowledgedClientMessageIds: [],
     };
@@ -1005,6 +1012,7 @@ function applyCanonicalForwardUnit(params: {
     timestamp,
     source: "canonical",
     timelineCursor,
+    telemetry,
   });
   return {
     tail: applied.tail,
@@ -1141,10 +1149,11 @@ function applyAcceptedTimelinePage(input: {
     });
   }
   const olderTail = hydrateStreamState(
-    acceptedUnits.map(({ event, timestamp, seqEnd }) => ({
+    acceptedUnits.map(({ event, timestamp, seqEnd, telemetry }) => ({
       event,
       timestamp,
       timelineCursor: { epoch: payload.epoch, seq: seqEnd },
+      ...(telemetry ? { telemetry } : {}),
     })),
     {
       source: "canonical",
@@ -1279,6 +1288,7 @@ export function processTimelineResponse(
       ...(entry.turnId ? { turnId: entry.turnId } : {}),
     } as AgentStreamEventPayload,
     timestamp: new Date(entry.timestamp),
+    telemetry: entry.telemetry,
   }));
 
   const toHydratedEvents = (
@@ -1287,11 +1297,13 @@ export function processTimelineResponse(
     event: AgentStreamEventPayload;
     timestamp: Date;
     timelineCursor: { epoch: string; seq: number };
+    telemetry?: AgentTurnTelemetry;
   }> =>
-    units.map(({ event, timestamp, seqEnd }) => ({
+    units.map(({ event, timestamp, seqEnd, telemetry }) => ({
       event,
       timestamp,
       timelineCursor: { epoch: payload.epoch, seq: seqEnd },
+      telemetry,
     }));
 
   // ------------------------------------------------------------------

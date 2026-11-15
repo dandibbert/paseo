@@ -12,7 +12,11 @@ function user(id: string, timestamp: Date): StreamItem {
   };
 }
 
-function assistant(id: string, timestamp: Date, text = id): StreamItem {
+function assistant(
+  id: string,
+  timestamp: Date,
+  text = id,
+): Extract<StreamItem, { kind: "assistant_message" }> {
   return {
     kind: "assistant_message",
     id,
@@ -246,4 +250,26 @@ it("times a heartbeat that ends with tools and no assistant text", () => {
     activeTurnStartedAt: null,
   });
   assert.equal(timing.byItemId.get("last")?.durationMs, 5000);
+});
+
+it("carries per-turn telemetry onto the turn timing", () => {
+  const telemetry = { ttftMs: 420, outputTps: 68.5, apiTurnCount: 2 };
+  const tail: StreamItem[] = [
+    user("u1", new Date("2026-05-15T00:00:00.000Z")),
+    {
+      ...assistant("a1", new Date("2026-05-15T00:00:05.000Z")),
+      telemetry,
+    },
+  ];
+  const timing = deriveStreamTurnTiming({
+    isTurnActive: false,
+    activeTurnStartedAt: null,
+    tail,
+    head: [],
+  });
+  assert.deepEqual(timing.byItemId.get("a1"), {
+    completedAt: new Date("2026-05-15T00:00:05.000Z"),
+    durationMs: 5000,
+    telemetry,
+  });
 });

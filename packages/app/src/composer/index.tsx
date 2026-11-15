@@ -300,12 +300,15 @@ function buildRealtimeVoiceButtonStyle(pressed: boolean, voiceButtonDisabled: bo
 function buildAgentStateSelector(serverId: string, agentId: string) {
   return (state: ReturnType<typeof useSessionStore.getState>) => {
     const agent = state.sessions[serverId]?.agents?.get(agentId) ?? null;
+    const lastUsage = agent ? (agent.lastUsage ?? null) : null;
     return {
-      status: agent?.status ?? null,
-      contextWindowMaxTokens: agent?.lastUsage?.contextWindowMaxTokens ?? null,
-      contextWindowUsedTokens: agent?.lastUsage?.contextWindowUsedTokens ?? null,
-      totalCostUsd: agent?.lastUsage?.totalCostUsd ?? null,
-      model: agent?.model ?? null,
+      status: agent ? agent.status : null,
+      contextWindowMaxTokens: lastUsage ? (lastUsage.contextWindowMaxTokens ?? null) : null,
+      contextWindowUsedTokens: lastUsage ? (lastUsage.contextWindowUsedTokens ?? null) : null,
+      totalCostUsd: lastUsage ? (lastUsage.totalCostUsd ?? null) : null,
+      usage: lastUsage,
+      provider: agent ? agent.provider : null,
+      model: agent ? (agent.model ?? null) : null,
     };
   };
 }
@@ -2294,6 +2297,9 @@ function ComposerContentImpl({
             maxTokens={agentState.contextWindowMaxTokens}
             usedTokens={agentState.contextWindowUsedTokens}
             totalCostUsd={agentState.totalCostUsd}
+            usage={agentState.usage}
+            provider={agentState.provider}
+            model={agentState.model}
             toolbarRing={TOOLBAR_RINGS[controlSizing]}
           />
         </View>
@@ -2305,6 +2311,9 @@ function ComposerContentImpl({
       agentState.contextWindowMaxTokens,
       agentState.contextWindowUsedTokens,
       agentState.totalCostUsd,
+      agentState.usage,
+      agentState.provider,
+      agentState.model,
       controlSizing,
     ],
   );

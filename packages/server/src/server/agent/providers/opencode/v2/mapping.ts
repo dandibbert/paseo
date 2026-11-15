@@ -42,6 +42,10 @@ export function usageFromV2(session: SessionInfo): AgentUsage {
     inputTokens: session.tokens.input,
     outputTokens: session.tokens.output,
     cachedInputTokens: session.tokens.cache.read,
+    ...(session.tokens.cache.write > 0
+      ? { cacheCreationInputTokens: session.tokens.cache.write }
+      : {}),
+    ...(session.tokens.reasoning > 0 ? { reasoningTokens: session.tokens.reasoning } : {}),
     totalCostUsd: session.cost,
   };
 }

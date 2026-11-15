@@ -14,6 +14,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { isNative } from "@/constants/platform";
 import { useHostReportsUsage } from "@/usage";
+import type { AgentUsage } from "@getpaseo/protocol/agent-types";
 import type { Theme } from "@/styles/theme";
 import { TOOLBAR_DISC_SIZE, type ToolbarRing } from "@/components/ui/control-geometry";
 import { ContextWindowDetails } from "./context-window-details";
@@ -26,6 +27,9 @@ interface ContextWindowMeterProps {
   maxTokens: number | null;
   usedTokens: number | null;
   totalCostUsd?: number | null;
+  usage?: AgentUsage | null;
+  provider?: string | null;
+  model?: string | null;
   showPercentage?: boolean;
   /** The ring's box and stroke when it sits in an icon toolbar. */
   toolbarRing?: ToolbarRing;
@@ -156,6 +160,9 @@ export function ContextWindowMeter({
   maxTokens,
   usedTokens,
   totalCostUsd,
+  usage = null,
+  provider = null,
+  model = null,
   showPercentage = false,
   toolbarRing,
 }: ContextWindowMeterProps) {
@@ -232,6 +239,10 @@ export function ContextWindowMeter({
             agentId={agentId}
             context={context}
             sessionCost={formattedSessionCost}
+            totalCostUsd={totalCostUsd ?? null}
+            usage={usage}
+            provider={provider}
+            model={model}
             showTitle={false}
             refreshable
           />
@@ -273,6 +284,10 @@ export function ContextWindowMeter({
             agentId={agentId}
             context={context}
             sessionCost={formattedSessionCost}
+            totalCostUsd={totalCostUsd ?? null}
+            usage={usage}
+            provider={provider}
+            model={model}
             showTitle
             refreshable={false}
           />
@@ -307,6 +322,10 @@ export function ContextWindowMeter({
           agentId={agentId}
           context={context}
           sessionCost={formattedSessionCost}
+          totalCostUsd={totalCostUsd ?? null}
+          usage={usage}
+          provider={provider}
+          model={model}
           showTitle
           refreshable
         />

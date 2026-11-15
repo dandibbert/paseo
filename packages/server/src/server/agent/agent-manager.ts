@@ -6,6 +6,7 @@ import type { AgentToolResult } from "@getpaseo/plugin/server";
 import type { RuntimeCleanupCandidate } from "./idle-runtime-cleanup/index.js";
 import { AgentNotFoundError, ensureAgentLoaded } from "./agent-loading.js";
 import { projectTimelineRows } from "./timeline-projection.js";
+import { TurnTelemetryTracker } from "./turn-telemetry.js";
 import type { PluginLifecycle } from "../plugins/lifecycle/index.js";
 import { describeHookAgent, publishAgentStream } from "../plugins/lifecycle/index.js";
 import { applyRecordPatch } from "../record-patch.js";
@@ -887,6 +888,7 @@ export class AgentManager {
   private readonly collectingRuntimes = new Set<string>();
   private readonly lifecycleMutationTails = new Map<string, Promise<void>>();
   private readonly agentStreamCoalescer: AgentStreamCoalescer;
+  private readonly turnTelemetry = new TurnTelemetryTracker();
   private mcpBaseUrl: string | null;
   private readonly mcpAuthToken: string | null;
   private sessionOpenGeneration = 0;
@@ -3571,6 +3573,12 @@ export class AgentManager {
   private openActiveTurn(agent: ActiveManagedAgent, turnId: string, startedAt: Date): void {
     agent.activeTurnId = turnId;
     agent.activeTurnStartedAt = startedAt;
+    this.turnTelemetry.startTurn({
+      agentId: agent.id,
+      turnId,
+      startedAtMs: startedAt.getTime(),
+      model: agent.runtimeInfo?.model ?? agent.config.model,
+    });
   }
 
   private applyActiveTurnTerminal(
@@ -5283,6 +5291,12 @@ export class AgentManager {
     if (!options?.fromHistory) {
       recordLiveWorkspaceActivity(agent, event);
       this.touchUpdatedAt(agent);
+      this.turnTelemetry.observeRawEvent({
+        agentId: agent.id,
+        turnId: eventTurnId,
+        event,
+        model: agent.runtimeInfo?.model ?? agent.config.model,
+      });
       if (this.agentStreamCoalescer.handle(agent.id, event)) {
         this.traceCoalescerBuffered(agent, event, eventTurnId);
         return false;
@@ -5301,7 +5315,7 @@ export class AgentManager {
 
     const flags: StreamEventFlags = { shouldDispatchEvent: true, shouldNotifyWaiters: true };
 
-    const dispatchPromise = this.dispatchStreamEventByType({
+    const dispatchResult = this.dispatchStreamEventByType({
       agent,
       event,
       options,
@@ -5310,8 +5324,10 @@ export class AgentManager {
       terminalDisposition,
       flags,
     });
-    if (dispatchPromise) {
-      await dispatchPromise;
+    if (dispatchResult instanceof Promise) {
+      await dispatchResult;
+    } else if (dispatchResult) {
+      event = dispatchResult;
     }
 
     if (!options?.fromHistory) {
@@ -5412,7 +5428,7 @@ export class AgentManager {
     eventTurnId: string | undefined;
     terminalDisposition: ActiveTurnTerminalDisposition;
     flags: StreamEventFlags;
-  }): Promise<void> | undefined {
+  }): Promise<void> | AgentStreamEvent | undefined {
     const { agent, event, options, isForegroundEvent, eventTurnId, terminalDisposition, flags } =
       params;
     switch (event.type) {
@@ -5420,17 +5436,10 @@ export class AgentManager {
         this.onStreamThreadStarted(agent);
         return undefined;
       case "usage_updated":
-        agent.lastUsage = event.usage;
-        this.emitState(agent);
+        this.onStreamUsageUpdated(agent, event.usage);
         return undefined;
       case "mode_changed":
-        this.applyObservedMode(agent, event.currentModeId);
-        agent.availableModes = event.availableModes;
-        if (agent.runtimeInfo) {
-          agent.runtimeInfo = { ...agent.runtimeInfo, modeId: event.currentModeId };
-        }
-        flags.shouldDispatchEvent = false;
-        this.emitState(agent);
+        this.onStreamModeChanged(agent, event, flags);
         return undefined;
       case "model_changed":
         agent.runtimeInfo = event.runtimeInfo;
@@ -5461,14 +5470,14 @@ export class AgentManager {
       case "timeline":
         return this.onStreamTimelineEvent({ agent, event, options, flags });
       case "turn_completed":
-        this.onStreamTurnCompleted({
+        return this.onStreamTurnCompleted({
           agent,
           event,
           eventTurnId,
           isForegroundEvent,
           terminalDisposition,
+          fromHistory: options?.fromHistory === true,
         });
-        return undefined;
       case "turn_failed":
         return this.onStreamTurnFailed({
           agent,
@@ -5500,6 +5509,28 @@ export class AgentManager {
       default:
         return undefined;
     }
+  }
+
+  private onStreamUsageUpdated(agent: ActiveManagedAgent, usage: AgentUsage): void {
+    agent.lastUsage =
+      usage.totalCostUsd !== undefined || agent.lastUsage?.totalCostUsd === undefined
+        ? usage
+        : { ...usage, totalCostUsd: agent.lastUsage.totalCostUsd };
+    this.emitState(agent);
+  }
+
+  private onStreamModeChanged(
+    agent: ActiveManagedAgent,
+    event: Extract<AgentStreamEvent, { type: "mode_changed" }>,
+    flags: StreamEventFlags,
+  ): void {
+    this.applyObservedMode(agent, event.currentModeId);
+    agent.availableModes = event.availableModes;
+    if (agent.runtimeInfo) {
+      agent.runtimeInfo = { ...agent.runtimeInfo, modeId: event.currentModeId };
+    }
+    flags.shouldDispatchEvent = false;
+    this.emitState(agent);
   }
 
   private onStreamThreadStarted(agent: ActiveManagedAgent): void {
@@ -5560,8 +5591,10 @@ export class AgentManager {
     eventTurnId: string | undefined;
     isForegroundEvent: boolean;
     terminalDisposition: ActiveTurnTerminalDisposition;
-  }): void {
-    const { agent, event, eventTurnId, isForegroundEvent, terminalDisposition } = params;
+    fromHistory: boolean;
+  }): Extract<AgentStreamEvent, { type: "turn_completed" }> {
+    const { agent, event, eventTurnId, isForegroundEvent, terminalDisposition, fromHistory } =
+      params;
     this.logger.trace(
       {
         agentId: agent.id,
@@ -5573,9 +5606,31 @@ export class AgentManager {
       },
       "agent.manager.turn.completed",
     );
-    if (terminalDisposition === "stale") return;
+    if (terminalDisposition === "stale") return event;
+    const previousLastUsage = agent.lastUsage;
     if (event.usage) {
       agent.lastUsage = { ...agent.lastUsage, ...event.usage };
+    }
+    if (event.telemetry?.usage) {
+      agent.lastUsage = { ...agent.lastUsage, ...event.telemetry.usage };
+    }
+    let nextEvent = event;
+    if (!fromHistory) {
+      const { telemetry, targetRow } = this.turnTelemetry.finalizeTurn({
+        agentId: agent.id,
+        turnId: eventTurnId,
+        providerTelemetry: event.telemetry,
+        turnUsage: event.usage,
+        fallbackUsage: agent.lastUsage ?? previousLastUsage,
+        model: agent.runtimeInfo?.model ?? agent.config.model,
+      });
+      if (telemetry) {
+        nextEvent = { ...event, telemetry };
+        this.timelineStore.enrichTurnTelemetry(agent.id, eventTurnId, telemetry, targetRow?.seq);
+        if (targetRow) {
+          this.enqueueDurableTimelineUpdate(agent.id, { ...targetRow, telemetry });
+        }
+      }
     }
     // If no usage on turn_completed, keep lastUsage as-is so context window
     // data accumulated during streaming isn't lost when the provider omits
@@ -5591,6 +5646,7 @@ export class AgentManager {
       this.emitState(agent);
     }
     void this.refreshRuntimeInfo(agent);
+    return nextEvent;
   }
 
   private async onStreamTurnFailed(params: {
@@ -5618,6 +5674,9 @@ export class AgentManager {
       "handleStreamEvent: turn_failed",
     );
     if (terminalDisposition === "stale") return;
+    if (!options?.fromHistory) {
+      this.turnTelemetry.discardTurn(agent.id, eventTurnId);
+    }
     if (!isForegroundEvent && !agent.activeForegroundTurnId) {
       agent.lifecycle = "error";
     }
@@ -5660,6 +5719,9 @@ export class AgentManager {
       "agent.manager.turn.canceled",
     );
     if (terminalDisposition === "stale") return;
+    if (!options?.fromHistory) {
+      this.turnTelemetry.discardTurn(agent.id, eventTurnId);
+    }
     if (!isForegroundEvent && !agent.activeForegroundTurnId && !agent.pendingReplacement) {
       agent.lifecycle = "idle";
     }
@@ -5928,6 +5990,9 @@ export class AgentManager {
   ): AgentTimelineRow {
     item = limitAgentTimelineItemContent(item);
     const row = this.timelineStore.append(agentId, item, options);
+    if (options?.turnId) {
+      this.turnTelemetry.recordCommittedRow(agentId, options.turnId, row);
+    }
     this.enqueueDurableTimelineAppend(agentId, row);
     return row;
   }

@@ -920,6 +920,16 @@ function resolveOpenCodeModelLookupKeyFromAssistantMessage(
   return buildOpenCodeModelLookupKey(providerId, modelId);
 }
 
+function assignPositiveUsageNumber(
+  usage: AgentUsage,
+  key: "cacheCreationInputTokens" | "reasoningTokens",
+  value: number | undefined,
+): void {
+  if (value !== undefined && value > 0) {
+    assignUsageNumber(usage, key, value);
+  }
+}
+
 function mergeOpenCodeStepFinishUsage(
   usage: AgentUsage,
   part: {
@@ -952,7 +962,9 @@ function mergeOpenCodeStepFinishUsage(
 
   assignUsageNumber(usage, "inputTokens", inputTokens);
   assignUsageNumber(usage, "cachedInputTokens", cacheReadTokens);
+  assignPositiveUsageNumber(usage, "cacheCreationInputTokens", cacheWriteTokens);
   assignUsageNumber(usage, "outputTokens", outputTokens);
+  assignPositiveUsageNumber(usage, "reasoningTokens", reasoningTokens);
   if (totalTokens > 0) {
     usage.contextWindowUsedTokens = totalTokens;
   }

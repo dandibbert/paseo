@@ -8787,6 +8787,7 @@ export class Session {
                 seqEnd: entry.seqEnd,
                 sourceSeqRanges: entry.sourceSeqRanges,
                 turnId: undefined as string | undefined,
+                telemetry: undefined as typeof entry.telemetry,
                 collapsed: (
                   source
                     ? this.supportsForSource(CLIENT_CAPS.reasoningMergeEnum, source)
@@ -8796,6 +8797,9 @@ export class Session {
                   : entry.collapsed.filter((value) => value !== "reasoning_merge"),
               };
               payloadEntry.turnId = entry.turnId;
+              if (entry.telemetry !== undefined) {
+                payloadEntry.telemetry = entry.telemetry;
+              }
               return payloadEntry;
             }),
             error: null,

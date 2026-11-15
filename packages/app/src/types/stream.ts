@@ -2,6 +2,7 @@ import type { AgentMessage } from "@getpaseo/protocol/agent-message";
 import type {
   AgentProvider,
   AgentTimelineItem,
+  AgentTurnTelemetry,
   JsonValue,
   ToolCallDetail,
 } from "@getpaseo/protocol/agent-types";
@@ -715,6 +716,7 @@ export interface AssistantMessageItem {
   timelineCursor?: TimelinePosition;
   text: string;
   timestamp: Date;
+  telemetry?: AgentTurnTelemetry;
   /** Display-only fields, assigned after source-item plugin transforms. */
 }
 
@@ -733,6 +735,7 @@ export interface ThoughtItem {
   text: string;
   timestamp: Date;
   status: ThoughtStatus;
+  telemetry?: AgentTurnTelemetry;
 }
 
 export type OrchestratorToolCallStatus = "executing" | "completed" | "failed";
@@ -769,6 +772,7 @@ export interface ToolCallItem {
   turnId?: string;
   timestamp: Date;
   payload: ToolCallPayload;
+  telemetry?: AgentTurnTelemetry;
 }
 
 export type AgentToolCallItem = ToolCallItem & {
@@ -796,6 +800,7 @@ export interface NotificationItem {
   timestamp: Date;
   level: NotificationLevel;
   message: string;
+  telemetry?: AgentTurnTelemetry;
 }
 
 export interface CompactionItem {
@@ -807,6 +812,7 @@ export interface CompactionItem {
   status: "loading" | "completed";
   trigger?: "auto" | "manual";
   preTokens?: number;
+  telemetry?: AgentTurnTelemetry;
 }
 
 export interface PluginTimelineStreamItem {
@@ -824,6 +830,7 @@ export interface PluginTimelineStreamItem {
   itemKind: string;
   version: number;
   data: JsonValue;
+  telemetry?: AgentTurnTelemetry;
 }
 
 /**
@@ -866,6 +873,7 @@ export interface TodoListItem {
   provider: AgentProvider;
   items: TodoEntry[];
   activity: TaskActivity;
+  telemetry?: AgentTurnTelemetry;
 }
 
 export type StreamUpdateSource = "live" | "canonical";
@@ -874,6 +882,7 @@ interface StreamUpdateOptions {
   source?: StreamUpdateSource;
   reservedItemIds?: ReadonlySet<string>;
   timelineCursor?: TimelinePosition;
+  telemetry?: AgentTurnTelemetry;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -1604,6 +1613,69 @@ function reduceTimelineEvent(
   }
 }
 
+function attachTelemetryToChangedItem(
+  previous: StreamItem[],
+  items: StreamItem[],
+  telemetry: AgentTurnTelemetry | undefined,
+): StreamItem[] {
+  if (!telemetry || items.length === 0) return items;
+  let targetIndex = -1;
+  for (let index = items.length - 1; index >= 0; index -= 1) {
+    if (items[index] !== previous[index] && items[index]?.kind !== "user_message") {
+      targetIndex = index;
+      break;
+    }
+  }
+  if (targetIndex < 0) {
+    const last = items[items.length - 1];
+    if (last && last.kind !== "user_message") {
+      targetIndex = items.length - 1;
+    }
+  }
+  if (targetIndex < 0) return items;
+  const target = items[targetIndex]!;
+  if (target.kind === "user_message" || target.kind === "turn_summary") return items;
+  return [
+    ...items.slice(0, targetIndex),
+    { ...target, telemetry } as StreamItem,
+    ...items.slice(targetIndex + 1),
+  ];
+}
+
+function attachTurnTelemetryToItems(
+  items: StreamItem[],
+  telemetry: AgentTurnTelemetry | undefined,
+  turnId: string | undefined,
+): StreamItem[] {
+  if (!telemetry || items.length === 0) return items;
+  let targetIndex = -1;
+  for (let index = items.length - 1; index >= 0; index -= 1) {
+    const item = items[index]!;
+    if (item.kind === "user_message" || item.kind === "turn_summary") {
+      if (!turnId && targetIndex >= 0) break;
+      continue;
+    }
+    if (turnId && item.turnId !== turnId) {
+      continue;
+    }
+    if (item.kind === "assistant_message") {
+      targetIndex = index;
+      break;
+    }
+    if (targetIndex < 0) {
+      targetIndex = index;
+    }
+  }
+  if (targetIndex < 0) return items;
+  const target = items[targetIndex]!;
+  if (target.kind === "user_message" || target.kind === "turn_summary") return items;
+  return [
+    ...items.slice(0, targetIndex),
+    { ...target, telemetry } as StreamItem,
+    ...items.slice(targetIndex + 1),
+  ];
+}
+
 /**
  * Reduce a single AgentManager stream event into the UI timeline
  */
@@ -1616,23 +1688,32 @@ export function reduceStreamUpdate(
   const source = options?.source ?? "live";
   switch (event.type) {
     case "timeline": {
-      const updated = applyTimelineTurnId(
+      const updated = attachTelemetryToChangedItem(
         state,
-        reduceTimelineEvent(
+        applyTimelineTurnId(
           state,
+          reduceTimelineEvent(
+            state,
+            event,
+            timestamp,
+            source,
+            options?.reservedItemIds,
+            options?.timelineCursor,
+          ),
           event,
-          timestamp,
-          source,
-          options?.reservedItemIds,
-          options?.timelineCursor,
         ),
-        event,
+        options?.telemetry,
       );
       return event.item.type === "reasoning" ? updated : finalizeActiveThoughts(updated);
     }
+    case "turn_completed":
+      return attachTurnTelemetryToItems(
+        finalizeActiveThoughts(state),
+        event.telemetry,
+        event.turnId,
+      );
     case "thread_started":
     case "turn_started":
-    case "turn_completed":
     case "turn_failed":
     case "turn_canceled":
     case "permission_requested":
@@ -1697,12 +1778,20 @@ export function hydrateStreamState(
     event: AgentStreamEventPayload;
     timestamp: Date;
     timelineCursor?: TimelinePosition;
+    telemetry?: AgentTurnTelemetry;
   }>,
   options?: Pick<StreamUpdateOptions, "source" | "reservedItemIds">,
 ): StreamItem[] {
-  const hydrated = events.reduce<StreamItem[]>((state, { event, timestamp, timelineCursor }) => {
-    return reduceStreamUpdate(state, event, timestamp, { ...options, timelineCursor });
-  }, []);
+  const hydrated = events.reduce<StreamItem[]>(
+    (state, { event, timestamp, timelineCursor, telemetry }) => {
+      return reduceStreamUpdate(state, event, timestamp, {
+        ...options,
+        timelineCursor,
+        telemetry,
+      });
+    },
+    [],
+  );
 
   return finalizeActiveThoughts(hydrated);
 }
@@ -1983,6 +2072,7 @@ export function applyStreamEvent(params: {
   timestamp: Date;
   source?: StreamUpdateSource;
   timelineCursor?: TimelinePosition;
+  telemetry?: AgentTurnTelemetry;
   unmatchedUserMessageInsert?: "tail" | "head";
 }): ApplyStreamEventResult {
   const { tail, head, event, timestamp } = params;
@@ -2060,6 +2150,7 @@ export function applyStreamEvent(params: {
       source,
       reservedItemIds,
       timelineCursor: params.timelineCursor,
+      telemetry: params.telemetry,
     });
     if (reduced !== nextHead) {
       nextHead = reduced;
@@ -2072,6 +2163,7 @@ export function applyStreamEvent(params: {
   const reduced = reduceStreamUpdate(nextTail, event, timestamp, {
     source,
     timelineCursor: params.timelineCursor,
+    telemetry: params.telemetry,
   });
   if (reduced !== nextTail) {
     nextTail = reduced;

@@ -1,7 +1,13 @@
+import type { AgentUsage } from "@getpaseo/protocol/agent-types";
 import { Text, View } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
 import { useTranslation } from "react-i18next";
-import { AgentUsage } from "@/usage";
+import {
+  hasReplacingSessionCostPluginItem,
+  PluginContextWindowItems,
+  usePluginContextWindowItems,
+} from "@/plugins/context-window-items";
+import { AgentUsage as AgentAccountUsage } from "@/usage";
 import { formatTokenCount } from "./context-window-meter.utils";
 
 interface ContextWindowDetailsProps {
@@ -13,6 +19,10 @@ interface ContextWindowDetailsProps {
     maxTokens: number;
   } | null;
   sessionCost: string | null;
+  totalCostUsd?: number | null;
+  usage?: AgentUsage | null;
+  provider?: string | null;
+  model?: string | null;
   /** The hover card and tooltip title themselves; the sheet's header carries the title instead. */
   showTitle: boolean;
   /** Whether the usage cards have a Refresh button; without one they show their freshness. */
@@ -28,10 +38,16 @@ export function ContextWindowDetails({
   agentId,
   context,
   sessionCost,
+  totalCostUsd = null,
+  usage = null,
+  provider = null,
+  model = null,
   showTitle,
   refreshable,
 }: ContextWindowDetailsProps) {
   const { t } = useTranslation();
+  const pluginItems = usePluginContextWindowItems(serverId);
+  const hideBuiltInSessionCost = hasReplacingSessionCostPluginItem(pluginItems);
   return (
     <>
       <View style={styles.summary}>
@@ -51,11 +67,21 @@ export function ContextWindowDetails({
         ) : (
           <Text style={styles.detail}>{t("contextWindow.noData")}</Text>
         )}
-        {sessionCost ? (
+        {sessionCost && !hideBuiltInSessionCost ? (
           <Text style={styles.detail}>{t("contextWindow.sessionCost", { cost: sessionCost })}</Text>
         ) : null}
+        <PluginContextWindowItems
+          targets={pluginItems}
+          agentId={agentId}
+          model={model}
+          provider={provider}
+          usedTokens={context?.usedTokens ?? null}
+          maxTokens={context?.maxTokens ?? null}
+          totalCostUsd={totalCostUsd}
+          usage={usage}
+        />
       </View>
-      <AgentUsage serverId={serverId} agentId={agentId} refreshable={refreshable} />
+      <AgentAccountUsage serverId={serverId} agentId={agentId} refreshable={refreshable} />
     </>
   );
 }

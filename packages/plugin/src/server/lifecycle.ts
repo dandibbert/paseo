@@ -3,6 +3,7 @@ import type {
   AgentPermissionRequest,
   AgentPermissionResponse,
   AgentSessionConfig,
+  AgentTurnTelemetry,
   JsonValue,
 } from "@getpaseo/protocol/agent-types";
 import type { PaseoApi } from "@getpaseo/client";
@@ -110,6 +111,7 @@ export interface PluginHookEvents {
      * started before the read, or when `turnId` is `null`.
      */
     outcome: PluginTurnOutcome;
+    telemetry?: AgentTurnTelemetry;
   };
   "agent.permission.before": { agent: PluginHookAgent; request: AgentPermissionRequest };
   "agent.permission.after": {

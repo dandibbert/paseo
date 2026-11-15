@@ -213,10 +213,29 @@ export interface AgentRunOptions {
 export interface AgentUsage {
   inputTokens?: number;
   cachedInputTokens?: number;
+  cacheCreationInputTokens?: number;
   outputTokens?: number;
+  reasoningTokens?: number;
   totalCostUsd?: number;
   contextWindowMaxTokens?: number;
   contextWindowUsedTokens?: number;
+}
+
+export interface AgentTurnTelemetry {
+  ttftMs?: number;
+  timeToRequestMs?: number;
+  durationMs?: number;
+  apiDurationMs?: number;
+  generationDurationMs?: number;
+  toolDurationMs?: number;
+  approvalWaitMs?: number;
+  outputTps?: number;
+  apiTurnCount?: number;
+  toolCallCount?: number;
+  stopReason?: string;
+  model?: string;
+  canonicalModel?: string;
+  usage?: AgentUsage;
 }
 
 export const TOOL_CALL_ICON_NAMES = [
@@ -411,7 +430,13 @@ export type AgentTimelineItem =
 export type AgentStreamEvent =
   | { type: "thread_started"; sessionId: string; provider: AgentProvider }
   | { type: "turn_started"; provider: AgentProvider; turnId?: string }
-  | { type: "turn_completed"; provider: AgentProvider; usage?: AgentUsage; turnId?: string }
+  | {
+      type: "turn_completed";
+      provider: AgentProvider;
+      usage?: AgentUsage;
+      telemetry?: AgentTurnTelemetry;
+      turnId?: string;
+    }
   | { type: "usage_updated"; provider: AgentProvider; usage: AgentUsage; turnId?: string }
   | {
       type: "mode_changed";

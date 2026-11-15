@@ -32,7 +32,13 @@ import { useToolCallExpanded } from "@/tool-calls/expansion-context";
 import { useTargetAgentTitle } from "@/tool-calls/use-target-agent-title";
 import type { DaemonClient } from "@getpaseo/client/internal/daemon-client";
 import type { AgentMessage } from "@getpaseo/protocol/agent-message";
-import type { AgentCapabilityFlags, ToolCallDetail } from "@getpaseo/protocol/agent-types";
+import type {
+  AgentCapabilityFlags,
+  AgentTurnTelemetry,
+  ToolCallDetail,
+} from "@getpaseo/protocol/agent-types";
+import { useTurnFooterAgentContext } from "@/agent-stream/turn-footer-context";
+import { PluginTurnFooterItems, usePluginTurnFooterItems } from "@/plugins/turn-footer-items";
 import type { AgentAttachment } from "@getpaseo/protocol/messages";
 import MaskedView from "@react-native-masked-view/masked-view";
 import {
@@ -555,6 +561,8 @@ interface AssistantTurnFooterProps {
   getContent?: () => string;
   completedAt?: Date;
   durationMs?: number | null;
+  turnId?: string | null;
+  telemetry?: AgentTurnTelemetry | null;
   onFork?: (target: AssistantForkTarget) => Promise<void> | void;
 }
 
@@ -587,6 +595,13 @@ const assistantTurnFooterStylesheet = StyleSheet.create((theme) => ({
     alignItems: "center",
     minWidth: 0,
   },
+  labelButtonWithPlugins: {
+    flexShrink: 1,
+    minHeight: 24,
+    flexDirection: "row",
+    alignItems: "center",
+    minWidth: 0,
+  },
   label: {
     width: "100%",
     flexShrink: 0,
@@ -603,6 +618,61 @@ const assistantTurnFooterStylesheet = StyleSheet.create((theme) => ({
 
 const TIMESTAMP_REVEAL_MS = 3000;
 
+function AssistantTurnFooterActions({
+  getContent,
+  onFork,
+}: {
+  getContent?: () => string;
+  onFork?: (target: AssistantForkTarget) => Promise<void> | void;
+}) {
+  if (!getContent && !onFork) {
+    return null;
+  }
+  return (
+    <View style={assistantTurnFooterStylesheet.actions}>
+      {getContent ? (
+        <TurnCopyButton
+          getContent={getContent}
+          containerStyle={assistantTurnFooterStylesheet.copyButton}
+        />
+      ) : null}
+      {onFork ? <AssistantForkMenu onFork={onFork} /> : null}
+    </View>
+  );
+}
+
+function AssistantTurnFooterPlugins({
+  targets,
+  agentContext,
+  turnId,
+  completedAt,
+  durationMs,
+  telemetry,
+}: {
+  targets: ReturnType<typeof usePluginTurnFooterItems>;
+  agentContext: ReturnType<typeof useTurnFooterAgentContext>;
+  turnId: string | null;
+  completedAt?: Date;
+  durationMs?: number | null;
+  telemetry: AgentTurnTelemetry | null;
+}) {
+  if (!agentContext || targets.length === 0) {
+    return null;
+  }
+  return (
+    <PluginTurnFooterItems
+      targets={targets}
+      agentId={agentContext.agentId}
+      turnId={turnId}
+      model={telemetry?.model ?? agentContext.model}
+      provider={agentContext.provider}
+      completedAt={completedAt ?? null}
+      durationMs={durationMs ?? null}
+      telemetry={telemetry}
+    />
+  );
+}
+
 /**
  * Footer rendered next to the copy button at the end of an assistant turn.
  * Shows the turn duration and swaps to the end timestamp when both are known.
@@ -612,9 +682,13 @@ export const AssistantTurnFooter = memo(function AssistantTurnFooter({
   getContent,
   completedAt,
   durationMs,
+  turnId = null,
+  telemetry = null,
   onFork,
 }: AssistantTurnFooterProps) {
   const { t } = useTranslation();
+  const agentContext = useTurnFooterAgentContext();
+  const pluginTurnFooterItems = usePluginTurnFooterItems(agentContext?.serverId ?? null);
   const [hovered, setHovered] = useState(false);
   const [pressedReveal, setPressedReveal] = useState(false);
   const revealTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -661,24 +735,21 @@ export const AssistantTurnFooter = memo(function AssistantTurnFooter({
     },
     [onFork],
   );
-  const canFork = Boolean(onFork);
+  const hasPlugins = Boolean(agentContext && pluginTurnFooterItems.length > 0);
 
   return (
     <View style={assistantTurnFooterStylesheet.container}>
-      {getContent || canFork ? (
-        <View style={assistantTurnFooterStylesheet.actions}>
-          {getContent ? (
-            <TurnCopyButton
-              getContent={getContent}
-              containerStyle={assistantTurnFooterStylesheet.copyButton}
-            />
-          ) : null}
-          {canFork ? <AssistantForkMenu onFork={handleFork} /> : null}
-        </View>
-      ) : null}
+      <AssistantTurnFooterActions
+        getContent={getContent}
+        onFork={onFork ? handleFork : undefined}
+      />
       {primaryLabel ? (
         <Pressable
-          style={assistantTurnFooterStylesheet.labelButton}
+          style={
+            hasPlugins
+              ? assistantTurnFooterStylesheet.labelButtonWithPlugins
+              : assistantTurnFooterStylesheet.labelButton
+          }
           onPress={handlePress}
           onHoverIn={handleHoverIn}
           onHoverOut={handleHoverOut}
@@ -712,6 +783,14 @@ export const AssistantTurnFooter = memo(function AssistantTurnFooter({
           ) : null}
         </Pressable>
       ) : null}
+      <AssistantTurnFooterPlugins
+        targets={pluginTurnFooterItems}
+        agentContext={agentContext}
+        turnId={turnId}
+        completedAt={completedAt}
+        durationMs={durationMs}
+        telemetry={telemetry}
+      />
     </View>
   );
 });

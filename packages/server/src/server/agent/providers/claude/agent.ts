@@ -1,6 +1,6 @@
 import { setImmediate } from "node:timers/promises";
 import { ClaudeRuntimeSafety } from "./runtime-safety.js";
-import type { ProviderOptions } from "@getpaseo/protocol/agent-types";
+import type { AgentTurnTelemetry, ProviderOptions } from "@getpaseo/protocol/agent-types";
 import { applyProviderOptionsPatch } from "../../option-controls.js";
 import { assertChangesAreLive, validateProviderOptions } from "../../provider-options.js";
 import type { ProviderPlugin, ProviderSkill } from "@getpaseo/protocol/messages";
@@ -2770,6 +2770,44 @@ class ClaudeContextUsageState {
     }
   }
 
+  buildResultTelemetry(
+    message: SDKResultMessage,
+    modelId: string | null | undefined,
+    usage: AgentUsage | undefined,
+  ): AgentTurnTelemetry | undefined {
+    const raw = message as unknown as Record<string, unknown>;
+    const resolvedModel = readTrimmedString(modelId) ?? undefined;
+    const canonicalModel = extractCanonicalModel(raw.modelUsage, resolvedModel);
+    const telemetryUsage = buildTelemetryUsage(usage, raw.usage);
+    const stopReason =
+      readTrimmedString(raw.stop_reason) ?? readTrimmedString(raw.terminal_reason) ?? undefined;
+
+    const telemetry: AgentTurnTelemetry = {};
+    assignDefinedTelemetryField(
+      telemetry,
+      "ttftMs",
+      readNonNegativeNumber(raw.ttft_ms) ?? readNonNegativeNumber(raw.ttft_stream_ms),
+    );
+    assignDefinedTelemetryField(
+      telemetry,
+      "timeToRequestMs",
+      readNonNegativeNumber(raw.time_to_request_ms),
+    );
+    assignDefinedTelemetryField(telemetry, "durationMs", readNonNegativeNumber(raw.duration_ms));
+    assignDefinedTelemetryField(
+      telemetry,
+      "apiDurationMs",
+      readNonNegativeNumber(raw.duration_api_ms),
+    );
+    assignDefinedTelemetryField(telemetry, "apiTurnCount", readNonNegativeNumber(raw.num_turns));
+    assignDefinedTelemetryField(telemetry, "stopReason", stopReason);
+    assignDefinedTelemetryField(telemetry, "model", resolvedModel);
+    assignDefinedTelemetryField(telemetry, "canonicalModel", canonicalModel);
+    assignDefinedTelemetryField(telemetry, "usage", telemetryUsage);
+
+    return Object.keys(telemetry).length > 0 ? telemetry : undefined;
+  }
+
   private streamUsedTokens(): number | undefined {
     const inputUsage = this.streamRequestInputUsage;
     if (!inputUsage || typeof this.streamRequestOutputTokens !== "number") {
@@ -2813,6 +2851,51 @@ class ClaudeContextUsageState {
       provider: "claude",
       usage,
     };
+  }
+}
+
+function readNonNegativeNumber(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : undefined;
+}
+
+function extractCanonicalModel(
+  modelUsage: unknown,
+  resolvedModel: string | undefined,
+): string | undefined {
+  const modelUsageRecord = toObjectRecord(modelUsage);
+  if (!modelUsageRecord) {
+    return undefined;
+  }
+  let targetEntry = resolvedModel ? toObjectRecord(modelUsageRecord[resolvedModel]) : undefined;
+  if (!targetEntry && Object.keys(modelUsageRecord).length === 1) {
+    targetEntry = toObjectRecord(Object.values(modelUsageRecord)[0]);
+  }
+  return readTrimmedString(targetEntry?.canonicalModel) ?? undefined;
+}
+
+function buildTelemetryUsage(
+  usage: AgentUsage | undefined,
+  rawUsageValue: unknown,
+): AgentUsage | undefined {
+  const rawUsage = toObjectRecord(rawUsageValue);
+  const cacheCreation = readNonNegativeNumber(rawUsage?.cache_creation_input_tokens);
+  if (!usage && cacheCreation === undefined) {
+    return undefined;
+  }
+  const merged: AgentUsage = usage ? { ...usage } : {};
+  if (cacheCreation !== undefined && cacheCreation > 0) {
+    merged.cacheCreationInputTokens = cacheCreation;
+  }
+  return merged;
+}
+
+function assignDefinedTelemetryField<K extends keyof AgentTurnTelemetry>(
+  telemetry: AgentTurnTelemetry,
+  key: K,
+  value: AgentTurnTelemetry[K] | undefined,
+): void {
+  if (value !== undefined) {
+    telemetry[key] = value;
   }
 }
 
@@ -5774,7 +5857,13 @@ class ClaudeAgentSession implements AgentSession {
           },
         });
       }
-      events.push({ type: "turn_completed", provider: "claude", usage });
+      const telemetry = this.convertTelemetry(message, usage);
+      events.push({
+        type: "turn_completed",
+        provider: "claude",
+        usage,
+        ...(telemetry ? { telemetry } : {}),
+      });
       return;
     }
     const errorMessage =
@@ -5946,6 +6035,17 @@ class ClaudeAgentSession implements AgentSession {
 
   private convertUsage(message: SDKResultMessage): AgentUsage | undefined {
     return this.contextUsage.buildResultUsage(message, this.lastRuntimeModel ?? this.config.model);
+  }
+
+  private convertTelemetry(
+    message: SDKResultMessage,
+    usage: AgentUsage | undefined,
+  ): AgentTurnTelemetry | undefined {
+    return this.contextUsage.buildResultTelemetry(
+      message,
+      this.lastRuntimeModel ?? this.config.model,
+      usage,
+    );
   }
 
   private handlePermissionRequest: CanUseTool = async (

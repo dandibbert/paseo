@@ -2,7 +2,12 @@ import type { WorkspaceRef, AgentRef, ProjectRef, TerminalRef } from "../refs.js
 import type { PluginText } from "../text.js";
 import type { ComponentType } from "react";
 import type { PluginPaseoApi } from "./reference-api.js";
-import type { AgentTimelineItem, JsonValue } from "@getpaseo/protocol/agent-types";
+import type {
+  AgentTimelineItem,
+  AgentTurnTelemetry,
+  AgentUsage,
+  JsonValue,
+} from "@getpaseo/protocol/agent-types";
 import type { ZodType, input as ZodInput, output as ZodOutput } from "zod";
 import type { PluginFile } from "./file.js";
 import type {
@@ -255,6 +260,8 @@ export interface PluginClientContext extends PluginCommandCapabilities, PluginCl
   addTimelineRenderer<Schema extends ZodType>(
     contribution: PluginTimelineRendererContribution<Schema>,
   ): PluginCleanup;
+  addTurnFooterItem(contribution: PluginTurnFooterItemContribution): PluginCleanup;
+  addContextWindowItem(contribution: PluginContextWindowItemContribution): PluginCleanup;
   openPanel(id: string, options: PluginClientOpenPanelOptions): void;
   /**
    * Subscribes to a plugin subscription on this client's host. Paseo re-subscribes after a
@@ -311,6 +318,38 @@ export interface PluginScreenContribution<Text extends PluginText = string> {
 export interface PluginSurfaceContribution {
   id: string;
   Component: ComponentType<PluginSurfaceProps>;
+}
+
+export interface PluginTurnFooterItemProps extends PluginHostProps {
+  agentId: string;
+  turnId: string | null;
+  model: string | null;
+  provider: string | null;
+  completedAt: Date | null;
+  durationMs: number | null;
+  telemetry: AgentTurnTelemetry | null;
+}
+
+export interface PluginTurnFooterItemContribution {
+  id: string;
+  Component: ComponentType<PluginTurnFooterItemProps>;
+}
+
+export interface PluginContextWindowItemProps extends PluginHostProps {
+  agentId: string;
+  model: string | null;
+  provider: string | null;
+  usedTokens: number | null;
+  maxTokens: number | null;
+  totalCostUsd: number | null;
+  usage: AgentUsage | null;
+}
+
+export interface PluginContextWindowItemContribution {
+  id: string;
+  /** When true, hides the built-in provider sessionCost line while this plugin item is active. */
+  replacesSessionCost?: boolean;
+  Component: ComponentType<PluginContextWindowItemProps>;
 }
 
 /** @deprecated Use `PluginSidebarItemContribution` with `addSidebarHeaderItem`. */
