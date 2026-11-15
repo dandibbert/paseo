@@ -3,7 +3,6 @@ import { useCallback, useMemo, type ReactElement } from "react";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
-import { Archive } from "lucide-react-native";
 import { useTimeAgo } from "@/hooks/use-time-ago";
 import { type AggregatedAgent } from "@/hooks/use-aggregated-agents";
 import { useProviderIcon } from "@/components/provider-icons";
@@ -13,6 +12,7 @@ import {
   type AgentHistoryOpenTarget,
 } from "@/components/agent-history-actions";
 import { HighlightedText } from "@/components/ui/highlighted-text";
+import { ArchivedBadge } from "@/components/archived-badge";
 import { StatusBadge } from "@/components/ui/status-badge";
 import type { MenuTriggerState } from "@/components/ui/menu";
 import { findHighlightRanges } from "@/components/ui/highlighted-text-segments";
@@ -57,7 +57,6 @@ const refreshMapping = (theme: Theme) => ({
   tintColor: theme.colors.foregroundMuted,
   colors: [theme.colors.foregroundMuted],
 });
-const ThemedArchive = withUnistyles(Archive);
 const ThemedRefreshControl = withUnistyles(RefreshControl);
 
 function SessionProviderIcon({
@@ -127,13 +126,12 @@ function SessionRowBadges({
   showAttentionIndicator: boolean;
 }) {
   const { t } = useTranslation();
-  const archivedIcon = useMemo(() => <ThemedArchive uniProps={mutedIconMapping} />, []);
   const pendingCount = agent.pendingPermissionCount ?? 0;
   const showAttention = showAttentionIndicator && agent.requiresAttention;
   return (
     <>
       {agent.archivedAt ? (
-        <StatusBadge label={t("agentList.badges.archived")} leading={archivedIcon} />
+        <ArchivedBadge />
       ) : null}
       {!agent.archivedAt && agent.status !== "idle" ? (
         <StatusBadge
