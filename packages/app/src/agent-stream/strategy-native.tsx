@@ -31,6 +31,10 @@ import { useTranslation } from "react-i18next";
 import type { StreamItem } from "@/types/stream";
 import type { Theme } from "@/styles/theme";
 import { useStableEvent } from "@/hooks/use-stable-event";
+import {
+  createMarkdownScrollGuard,
+  MarkdownScrollGuardProvider,
+} from "@/components/markdown/scroll-guard";
 import { shouldAnimateNativeScrollToBottom } from "./native-scroll-animation";
 import { useRevisedHistoryRows } from "./history-row-revision";
 import { useBottomAnchorController } from "./bottom-anchor-controller";
@@ -333,6 +337,7 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
       onRelease: releaseDisclosure,
     }),
   );
+  const [markdownScrollGuard] = useState(() => createMarkdownScrollGuard());
   const cancelDisclosureHold = useStableEvent(() => {
     disclosureHold.cancel();
     setEndHold(null);
@@ -523,6 +528,9 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
     const previousOffsetY = scrollOffsetYRef.current;
     scrollOffsetYRef.current = contentOffset.y;
     scrollKeyboardDismiss.onScroll(event);
+    if (isUserScrollActiveRef.current) {
+      markdownScrollGuard.noteScroll();
+    }
 
     streamViewportMetricsRef.current = {
       contentHeight: Math.max(0, contentSize.height),
@@ -562,6 +570,7 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
     finishInitialFill();
     clearPendingUserScrollEnd();
     isUserScrollActiveRef.current = true;
+    markdownScrollGuard.beginDrag();
     scrollKeyboardDismiss.onScrollBeginDrag(event);
     // The gesture takes the viewport from a disclosure hold. Size changes from a streaming row can
     // keep the hold's quiet frames from ever passing, and a held row that scrolls away would leave
@@ -582,6 +591,7 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
   // Drag end is deferred a frame so momentum can take ownership.
   const handleScrollEndDrag = useStableEvent((event: NativeSyntheticEvent<NativeScrollEvent>) => {
     scrollKeyboardDismiss.onScrollEndDrag(event);
+    markdownScrollGuard.endDrag();
     isReleasedAtEndRef.current = isScrollEventAtEnd(event);
 
     clearPendingUserScrollEnd();
@@ -596,6 +606,9 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
 
   const handleMomentumScrollBegin = useStableEvent(() => {
     clearPendingUserScrollEnd();
+    if (isUserScrollActiveRef.current) {
+      markdownScrollGuard.beginMomentum();
+    }
   });
 
   const handleMomentumScrollEnd = useStableEvent(
@@ -607,6 +620,7 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
       }
       clearPendingUserScrollEnd();
       isUserScrollActiveRef.current = false;
+      markdownScrollGuard.endMomentum();
       bottomAnchorController.endUserScroll({
         isAtEnd: isReleasedAtEndRef.current || isScrollEventAtEnd(event),
       });
@@ -733,48 +747,50 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
   }, [historyStartPaginationState, hasOlderHistory, retryHistoryStart, t]);
 
   return (
-    <View style={viewportStyle}>
-      <LegendList<StreamItem>
-        ref={listRef}
-        data={rows}
-        renderItem={renderItem}
-        extraData={renderHistoryMountedRow}
-        keyExtractor={keyExtractor}
-        testID="agent-chat-scroll"
-        nativeID="agent-chat-scroll-native-virtualized"
-        ListHeaderComponent={historyStartContent}
-        ListFooterComponent={liveAuxiliaryContent ?? undefined}
-        contentContainerStyle={listContentContainerStyle}
-        automaticallyAdjustContentInsets={false}
-        automaticallyAdjustsScrollIndicatorInsets={false}
-        contentInsetAdjustmentBehavior="never"
-        style={[listStyle, { opacity: historyStartPaginationState.visible ? 1 : 0 }]}
-        onLayout={handleListLayout}
-        onScroll={handleScroll}
-        onScrollBeginDrag={handleScrollBeginDrag}
-        onScrollEndDrag={handleScrollEndDrag}
-        onMomentumScrollBegin={handleMomentumScrollBegin}
-        onMomentumScrollEnd={handleMomentumScrollEnd}
-        scrollEventThrottle={16}
-        onContentSizeChange={handleContentSizeChange}
-        onItemSizeChanged={handleItemSizeChanged}
-        onReady={handleListPlaced}
-        maintainVisibleContentPosition={maintainVisibleContentPosition}
-        renderScrollComponent={renderScrollComponent}
-        recycleItems={false}
-        alignItemsAtEnd
-        initialScrollAtEnd
-        drawDistance={NATIVE_STREAM_DRAW_DISTANCE}
-        getEstimatedItemSize={getEstimatedItemSize}
-        scrollEnabled={scrollEnabled}
-        showsVerticalScrollIndicator
-      />
-      {!historyStartPaginationState.visible ? (
-        <View pointerEvents="none" testID="agent-initial-fill" style={initialFillStyle}>
-          <ThemedLoadingSpinner size="large" uniProps={foregroundMutedColorMapping} />
-        </View>
-      ) : null}
-    </View>
+    <MarkdownScrollGuardProvider value={markdownScrollGuard}>
+      <View style={viewportStyle}>
+        <LegendList<StreamItem>
+          ref={listRef}
+          data={rows}
+          renderItem={renderItem}
+          extraData={renderHistoryMountedRow}
+          keyExtractor={keyExtractor}
+          testID="agent-chat-scroll"
+          nativeID="agent-chat-scroll-native-virtualized"
+          ListHeaderComponent={historyStartContent}
+          ListFooterComponent={liveAuxiliaryContent ?? undefined}
+          contentContainerStyle={listContentContainerStyle}
+          automaticallyAdjustContentInsets={false}
+          automaticallyAdjustsScrollIndicatorInsets={false}
+          contentInsetAdjustmentBehavior="never"
+          style={[listStyle, { opacity: historyStartPaginationState.visible ? 1 : 0 }]}
+          onLayout={handleListLayout}
+          onScroll={handleScroll}
+          onScrollBeginDrag={handleScrollBeginDrag}
+          onScrollEndDrag={handleScrollEndDrag}
+          onMomentumScrollBegin={handleMomentumScrollBegin}
+          onMomentumScrollEnd={handleMomentumScrollEnd}
+          scrollEventThrottle={16}
+          onContentSizeChange={handleContentSizeChange}
+          onItemSizeChanged={handleItemSizeChanged}
+          onReady={handleListPlaced}
+          maintainVisibleContentPosition={maintainVisibleContentPosition}
+          renderScrollComponent={renderScrollComponent}
+          recycleItems={false}
+          alignItemsAtEnd
+          initialScrollAtEnd
+          drawDistance={NATIVE_STREAM_DRAW_DISTANCE}
+          getEstimatedItemSize={getEstimatedItemSize}
+          scrollEnabled={scrollEnabled}
+          showsVerticalScrollIndicator
+        />
+        {!historyStartPaginationState.visible ? (
+          <View pointerEvents="none" testID="agent-initial-fill" style={initialFillStyle}>
+            <ThemedLoadingSpinner size="large" uniProps={foregroundMutedColorMapping} />
+          </View>
+        ) : null}
+      </View>
+    </MarkdownScrollGuardProvider>
   );
 }
 
