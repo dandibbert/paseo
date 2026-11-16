@@ -1192,6 +1192,7 @@ export class Session {
         emit: (msg) => this.emit(msg),
         emitLifecycleIntent: (intent) => this.emitLifecycleIntent(intent),
       },
+      delivery: this.delivery,
       clientId: this.clientId,
       paseoHome: this.paseoHome,
       serverId,

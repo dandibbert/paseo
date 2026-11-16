@@ -231,20 +231,29 @@ interface DesktopHost {
  */
 export class DesktopHostBroker {
   private readonly hosts = new Set<DesktopHost>();
-  private readonly pending = new Map<string, (report: DesktopHostReport) => void>();
+  private readonly pending = new Map<
+    string,
+    { host: DesktopHost; resolve: (report: DesktopHostReport | null) => void }
+  >();
 
   register(host: DesktopHost): () => void {
     this.hosts.add(host);
     return () => {
       this.hosts.delete(host);
+      for (const [commandId, entry] of this.pending) {
+        if (entry.host === host) {
+          this.pending.delete(commandId);
+          entry.resolve(null);
+        }
+      }
     };
   }
 
   report(commandId: string, report: DesktopHostReport): boolean {
-    const resolve = this.pending.get(commandId);
-    if (!resolve) return false;
+    const entry = this.pending.get(commandId);
+    if (!entry) return false;
     this.pending.delete(commandId);
-    resolve(report);
+    entry.resolve(report);
     return true;
   }
 
@@ -264,8 +273,8 @@ export class DesktopHostBroker {
       };
     }
     const commandId = randomUUID();
-    const reported = new Promise<DesktopHostReport>((resolve) => {
-      this.pending.set(commandId, resolve);
+    const reported = new Promise<DesktopHostReport | null>((resolve) => {
+      this.pending.set(commandId, { host, resolve });
     });
     let timer: ReturnType<typeof setTimeout> | undefined;
     const timedOut = new Promise<null>((resolve) => {

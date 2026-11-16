@@ -3,6 +3,7 @@ import pino from "pino";
 import type { SessionOutboundMessage } from "../../messages.js";
 import type { ManagedAgent } from "../../agent/agent-manager.js";
 import { DesktopHostBroker, type Installation } from "../../install-update/index.js";
+import { SessionDelivery } from "../owned-subscriptions/index.js";
 import {
   InstallUpdateSessionController,
   type InstallUpdateLifecycleIntent,
@@ -155,5 +156,92 @@ describe("install update session controller", () => {
     expect((await broker.update({ checkOnly: true }, 10)).payload.error).toContain(
       "No Paseo Desktop window",
     );
+  });
+
+  it("delivers desktop host update commands with an owned delivery proof and detaches on socket close", async () => {
+    const broker = new DesktopHostBroker();
+    const sent: Array<{ source: object; message: SessionOutboundMessage; permitted: boolean }> = [];
+    const delivery = new SessionDelivery((source, message) => {
+      sent.push({ source, message, permitted: delivery.permits(source, message) });
+    });
+    const source = {};
+    delivery.attach(source, true);
+    const controller = new InstallUpdateSessionController({
+      clientId: "desktop-host",
+      daemonVersion: "0.16.0-beta.1",
+      desktopManaged: true,
+      listAgents: () => [],
+      agentBusyReason: () => null,
+      emit: (msg) => {
+        delivery.reply(msg);
+      },
+      emitLifecycleIntent: () => {},
+      delivery,
+      logger: pino({ level: "silent" }),
+      broker,
+      detect: async () => ({ kind: "desktop" }),
+    });
+
+    await delivery.request(
+      source,
+      {
+        type: "daemon.desktop_host.register.request",
+        requestId: "reg",
+        releaseChannel: "beta",
+        appVersion: "0.16.0-beta.1",
+      },
+      async () => {
+        await controller.dispatch({
+          type: "daemon.desktop_host.register.request",
+          requestId: "reg",
+          releaseChannel: "beta",
+          appVersion: "0.16.0-beta.1",
+        });
+      },
+    );
+
+    const updating = broker.update({ checkOnly: true });
+    const commandEntry = sent.find(
+      (entry) => entry.message.type === "daemon.desktop_host.update.command",
+    );
+    expect(commandEntry).toBeDefined();
+    expect(commandEntry?.permitted).toBe(true);
+
+    const commandId = (
+      commandEntry!.message as Extract<
+        SessionOutboundMessage,
+        { type: "daemon.desktop_host.update.command" }
+      >
+    ).payload.commandId;
+    await delivery.request(
+      source,
+      {
+        type: "daemon.desktop_host.update.report.request",
+        requestId: "rep",
+        commandId,
+        status: "up_to_date",
+        currentVersion: "0.16.0-beta.1",
+        latestVersion: "0.16.0-beta.1",
+        error: null,
+      },
+      async () => {
+        await controller.dispatch({
+          type: "daemon.desktop_host.update.report.request",
+          requestId: "rep",
+          commandId,
+          status: "up_to_date",
+          currentVersion: "0.16.0-beta.1",
+          latestVersion: "0.16.0-beta.1",
+          error: null,
+        });
+      },
+    );
+    expect((await updating).payload).toMatchObject({ status: "up_to_date" });
+
+    await delivery.detach(source);
+    expect((await broker.update({ checkOnly: true }, 10)).payload.error).toContain(
+      "No Paseo Desktop window",
+    );
+    await delivery.close();
   });
 });

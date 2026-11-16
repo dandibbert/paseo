@@ -251,6 +251,20 @@ describe("desktop host broker", () => {
       "No Paseo Desktop window",
     );
   });
+
+  it("stops waiting immediately when the registered desktop host disconnects mid-command", async () => {
+    const broker = new DesktopHostBroker();
+    let unregister!: () => void;
+    unregister = broker.register({
+      releaseChannel: "beta",
+      appVersion: "0.16.0-beta.1",
+      command: () => {
+        queueMicrotask(() => unregister());
+      },
+    });
+    const outcome = await broker.update({ checkOnly: true }, 60_000);
+    expect(outcome.payload.error).toContain("did not answer");
+  });
 });
 
 describe("busy agents", () => {
