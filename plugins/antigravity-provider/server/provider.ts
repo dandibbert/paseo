@@ -20,7 +20,9 @@ const capabilities = [
   "session.persistence",
 ] as const;
 
-export function createAntigravityProvider(onLaunch?: (launch: ProviderLaunch) => void): ProviderRegistration {
+export function createAntigravityProvider(
+  onLaunch?: (launch: ProviderLaunch) => void,
+): ProviderRegistration {
   return {
     id: "antigravity",
     label: "Antigravity",
