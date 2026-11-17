@@ -76,7 +76,7 @@ function readEnvelope(output: string): Record<string, unknown> | null {
 function versionIsSafe(output: string): boolean {
   const match = /^(?:agy\s+)?v?(\d+)\.(\d+)\.(\d+)(?:[-+][\w.-]+)?$/i.exec(output.trim());
   if (!match) return false;
-  const [major, minor, patch] = match.slice(1, 4).map(Number);
+  const [major = 0, minor = 0, patch = 0] = match.slice(1, 4).map(Number);
   const [minMajor, minMinor, minPatch] = VERSION_MIN;
   return major > minMajor ||
     (major === minMajor && (minor > minMinor || (minor === minMinor && patch >= minPatch)));
@@ -124,11 +124,12 @@ export function parseAgyQuota(stdout: string, stderr = ""): UsageReport {
   if (!["usage", "quota"].includes(stringValue(command?.name)?.toLowerCase() ?? ""))
     return { status: "error", error: "agy returned a different command instead of /usage" };
   const data = object(command?.data);
-  if (!Array.isArray(data?.groups))
+  const rawGroups = data?.groups;
+  if (!Array.isArray(rawGroups))
     return unavailable({ kind: "no_quota", detail: "agy /usage returned no quota groups" });
 
   const groups: Array<{ name: string; windows: UsageWindow[] }> = [];
-  for (const group of data.groups) {
+  for (const group of rawGroups) {
     const entry = object(group);
     if (!entry) continue;
     const groupName = stringValue(entry.name);
