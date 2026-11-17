@@ -83,7 +83,7 @@ describe("native Antigravity /usage quota conversion", () => {
   });
 
   it("never turns missing or invalid percentages into invented 0 or 100% bars", () => {
-    const payload = structuredClone(sample);
+    const payload = structuredClone(sample) as unknown as { command: { data: { groups: Array<{ buckets: Array<Record<string, unknown>> }> } } };
     payload.command.data.groups[0]!.buckets = [
       { id: "absent", name: "Weekly", window: "weekly", remaining_fraction: null, reset_time: "" },
       { id: "spent", name: "Five Hour", window: "5h", remaining_fraction: 0, reset_time: "not-a-date" },
