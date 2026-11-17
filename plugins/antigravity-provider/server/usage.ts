@@ -48,7 +48,8 @@ async function defaultRunner(
 
 function object(value: unknown): Record<string, unknown> | null {
   return value !== null && typeof value === "object" && !Array.isArray(value)
-    ? value as Record<string, unknown> : null;
+    ? (value as Record<string, unknown>)
+    : null;
 }
 
 function stringValue(value: unknown): string | null {
@@ -75,15 +76,20 @@ function versionIsSafe(output: string): boolean {
   if (!match) return false;
   const [major = 0, minor = 0, patch = 0] = match.slice(1, 4).map(Number);
   const [minMajor, minMinor, minPatch] = VERSION_MIN;
-  return major > minMajor ||
-    (major === minMajor && (minor > minMinor || (minor === minMinor && patch >= minPatch)));
+  return (
+    major > minMajor ||
+    (major === minMajor && (minor > minMinor || (minor === minMinor && patch >= minPatch)))
+  );
 }
 
 function windowName(value: string): { label: string; short: string } {
   switch (value.toLowerCase()) {
-    case "5h": return { label: "5-hour", short: "5h" };
-    case "weekly": return { label: "Weekly", short: "wk" };
-    default: return { label: value || "Current window", short: value };
+    case "5h":
+      return { label: "5-hour", short: "5h" };
+    case "weekly":
+      return { label: "Weekly", short: "wk" };
+    default:
+      return { label: value || "Current window", short: value };
   }
 }
 
@@ -112,7 +118,8 @@ export function parseAgyQuota(stdout: string, stderr = ""): UsageReport {
   const payload = readEnvelope(stdout);
   if (!payload) return { status: "error", error: "agy /usage returned no valid JSON" };
   if (payload.status === "ERROR") {
-    const reason = stringValue(payload.error) ?? stringValue(payload.response) ?? "No quota summary reported";
+    const reason =
+      stringValue(payload.error) ?? stringValue(payload.response) ?? "No quota summary reported";
     return unavailable({ kind: "no_quota", detail: reason });
   }
   if (payload.status !== "SUCCESS" || payload.num_turns !== 0)
@@ -132,7 +139,8 @@ export function parseAgyQuota(stdout: string, stderr = ""): UsageReport {
   return {
     status: "available",
     windows: groups.flatMap((windows, index) =>
-      windows.map((window) => ({ ...window, summary: index === 0 }))),
+      windows.map((window) => ({ ...window, summary: index === 0 })),
+    ),
   };
 }
 
@@ -140,7 +148,12 @@ function quotaBucket(raw: unknown, groupName: string): UsageWindow | null {
   const bucket = object(raw);
   if (!bucket) return null;
   const remaining = bucket.remaining_fraction;
-  if (typeof remaining !== "number" || !Number.isFinite(remaining) || remaining < 0 || remaining > 1)
+  if (
+    typeof remaining !== "number" ||
+    !Number.isFinite(remaining) ||
+    remaining < 0 ||
+    remaining > 1
+  )
     return null;
   const id = stringValue(bucket.id) ?? stringValue(bucket.name);
   if (!id) return null;
@@ -205,28 +218,52 @@ export function createAntigravityUsageSource(run: AgyQuotaRunner = defaultRunner
         // An AGY-less daemon should not show an empty, broken Usage card.
         return [];
       }
-      return [{ key: "default", label: "Antigravity CLI", harness: "Antigravity", input: { account: "default" } }];
+      return [
+        {
+          key: "default",
+          label: "Antigravity CLI",
+          harness: "Antigravity",
+          input: { account: "default" },
+        },
+      ];
     },
     async fetch(input: unknown): Promise<UsageReport> {
       inputSchema.parse(input);
       try {
         if (!(await safeVersion()))
-          return unavailable({ kind: "no_quota", detail: "Upgrade agy to 1.1.15 or newer to read quota safely" });
+          return unavailable({
+            kind: "no_quota",
+            detail: "Upgrade agy to 1.1.15 or newer to read quota safely",
+          });
         // Exactly four arguments: no conversation, model, input-format or --disable-slash-commands.
-        const { stdout, stderr } = await execute(["-p", "/usage", "--output-format", "json"], QUOTA_TIMEOUT_MS);
+        const { stdout, stderr } = await execute(
+          ["-p", "/usage", "--output-format", "json"],
+          QUOTA_TIMEOUT_MS,
+        );
         return parseAgyQuota(stdout, stderr);
       } catch (error) {
         const failure = object(error);
-        const message = [failure?.stdout, failure?.stderr, error instanceof Error ? error.message : ""]
-          .filter((value): value is string => typeof value === "string").join("\n");
+        const message = [
+          failure?.stdout,
+          failure?.stderr,
+          error instanceof Error ? error.message : "",
+        ]
+          .filter((value): value is string => typeof value === "string")
+          .join("\n");
         if (SIGNED_OUT.test(message))
           return unavailable({ kind: "rejected", status: 401, refreshedBy: "agy" });
-        return { status: "error", error: "Unable to read agy /usage; check that agy is signed in and reachable on the daemon host" };
+        return {
+          status: "error",
+          error:
+            "Unable to read agy /usage; check that agy is signed in and reachable on the daemon host",
+        };
       }
     },
   };
   return {
     registration: () => registration,
-    rememberLaunch(next: ProviderLaunch) { launch = next; },
+    rememberLaunch(next: ProviderLaunch) {
+      launch = next;
+    },
   };
 }
