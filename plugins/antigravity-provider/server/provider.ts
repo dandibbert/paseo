@@ -20,7 +20,7 @@ const capabilities = [
   "session.persistence",
 ] as const;
 
-export function createAntigravityProvider(): ProviderRegistration {
+export function createAntigravityProvider(onLaunch?: (launch: ProviderLaunch) => void): ProviderRegistration {
   return {
     id: "antigravity",
     label: "Antigravity",
@@ -28,6 +28,7 @@ export function createAntigravityProvider(): ProviderRegistration {
     command: ["agy"],
     description: "Antigravity CLI on your host",
     async status({ launch }) {
+      if (launch) onLaunch?.(launch);
       if (!launch)
         return {
           available: false,
@@ -36,6 +37,7 @@ export function createAntigravityProvider(): ProviderRegistration {
       return getStatus(launch);
     },
     async getCatalogCacheKey({ launch }) {
+      if (launch) onLaunch?.(launch);
       if (!launch) return undefined;
       const env = Object.entries(launch.env).sort(([left], [right]) => left.localeCompare(right));
       return createHash("sha256")
@@ -47,6 +49,7 @@ export function createAntigravityProvider(): ProviderRegistration {
         throw new AntigravityError("Provider protocol version 1 is required");
       if (!request.launch)
         throw new AntigravityError("The daemon must supply the Antigravity launch");
+      onLaunch?.(request.launch);
       const negotiated = negotiateProviderCapabilities(request.capabilities, capabilities);
       return createConnection(request.launch, negotiated);
     },
