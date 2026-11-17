@@ -125,50 +125,55 @@ export function parseAgyQuota(stdout: string, stderr = ""): UsageReport {
   if (!Array.isArray(rawGroups))
     return unavailable({ kind: "no_quota", detail: "agy /usage returned no quota groups" });
 
-  const groups: Array<{ name: string; windows: UsageWindow[] }> = [];
-  for (const group of rawGroups) {
-    const entry = object(group);
-    if (!entry) continue;
-    const groupName = stringValue(entry.name);
-    if (!groupName || !Array.isArray(entry.buckets)) continue;
-    const shortGroup = groupShortName(groupName);
-    const windows: UsageWindow[] = [];
-    const ids = new Set<string>();
-    for (const rawBucket of entry.buckets) {
-      const bucket = object(rawBucket);
-      if (!bucket) continue;
-      const remaining = bucket.remaining_fraction;
-      if (typeof remaining !== "number" || !Number.isFinite(remaining) || remaining < 0 || remaining > 1) continue;
-      const id = stringValue(bucket.id) ?? stringValue(bucket.name);
-      if (!id) continue;
-      const key = `${groupName}/${id}`;
-      if (ids.has(key)) continue;
-      ids.add(key);
-      const window = windowName(stringValue(bucket.window) ?? stringValue(bucket.name) ?? "");
-      const usedPct = Math.round((1 - remaining) * 1_000) / 10;
-      windows.push(windowFromUsedPct({
-        id: key,
-        label: `${groupName} · ${window.label}`,
-        shortLabel: `${shortGroup} ${window.short}`.trim(),
-        utilizationPct: usedPct,
-        resetsAt: resetTimestamp(bucket.reset_time),
-        tone: toneFromUsedPct(usedPct),
-      }));
-    }
-    if (windows.length) groups.push({ name: groupName, windows });
-  }
-
+  const groups = quotaGroups(rawGroups);
   if (!groups.length)
     return unavailable({ kind: "no_quota", detail: "agy /usage returned no usable quota windows" });
-  // Keep both 5-hour and weekly windows of the first available model group
-  // visible by default; other model groups remain expandable and pinnable.
+  // Both limits of the first model family appear in the compact summary.
   return {
     status: "available",
-    windows: groups.flatMap((group, groupIndex) =>
-      group.windows.map((window) => ({ ...window, summary: groupIndex === 0 }))),
+    windows: groups.flatMap((windows, index) =>
+      windows.map((window) => ({ ...window, summary: index === 0 }))),
   };
 }
 
+function quotaBucket(raw: unknown, groupName: string): UsageWindow | null {
+  const bucket = object(raw);
+  if (!bucket) return null;
+  const remaining = bucket.remaining_fraction;
+  if (typeof remaining !== "number" || !Number.isFinite(remaining) || remaining < 0 || remaining > 1)
+    return null;
+  const id = stringValue(bucket.id) ?? stringValue(bucket.name);
+  if (!id) return null;
+  const window = windowName(stringValue(bucket.window) ?? stringValue(bucket.name) ?? "");
+  const usedPct = Math.round((1 - remaining) * 1_000) / 10;
+  return windowFromUsedPct({
+    id: groupName + "/" + id,
+    label: groupName + " · " + window.label,
+    shortLabel: (groupShortName(groupName) + " " + window.short).trim(),
+    utilizationPct: usedPct,
+    resetsAt: resetTimestamp(bucket.reset_time),
+    tone: toneFromUsedPct(usedPct),
+  });
+}
+
+function quotaGroups(rawGroups: unknown[]): UsageWindow[][] {
+  const groups: UsageWindow[][] = [];
+  for (const raw of rawGroups) {
+    const group = object(raw);
+    const name = stringValue(group?.name);
+    if (!name || !Array.isArray(group?.buckets)) continue;
+    const windows: UsageWindow[] = [];
+    const ids = new Set<string>();
+    for (const rawBucket of group.buckets) {
+      const window = quotaBucket(rawBucket, name);
+      if (!window || ids.has(window.id)) continue;
+      ids.add(window.id);
+      windows.push(window);
+    }
+    if (windows.length) groups.push(windows);
+  }
+  return groups;
+}
 /**
  * The built-in AGY CLI provider may use a configured command/argv/environment.
  * Remember that launch so quota queries use the same installation and login;
