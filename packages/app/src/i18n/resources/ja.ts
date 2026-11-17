@@ -2117,6 +2117,7 @@ export const ja: TranslationResources = {
     hostUnavailable: "ダウンロードホストが利用できません。",
     cancelled: "ダウンロードがキャンセルされました。",
     failed: "ファイルのダウンロードに失敗しました。",
+    httpFailed: "ファイルのダウンロードに失敗しました (HTTP {{status}}).",
     shareFile: "ファイルを共有",
     shareFileNamed: "{{fileName}}を共有",
   },
