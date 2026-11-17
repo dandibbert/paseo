@@ -1,6 +1,5 @@
-import { execFile } from "node:child_process";
 import { tmpdir } from "node:os";
-import { promisify } from "node:util";
+import { probe } from "./internal/process.js";
 import { z } from "zod";
 import type { ProviderLaunch } from "@getpaseo/plugin/server/provider";
 import {
@@ -24,10 +23,8 @@ import {
  */
 const inputSchema = z.object({ account: z.literal("default") }).strict();
 const VERSION_MIN = [1, 1, 15] as const;
-const VERSION_TIMEOUT_MS = 4_000;
-const QUOTA_TIMEOUT_MS = 17_000; // Paseo's usage-source deadline is 20 seconds.
-const MAX_BUFFER = 2 * 1024 * 1024;
-const execFileAsync = promisify(execFile);
+const VERSION_TIMEOUT_MS = 3_000;
+const QUOTA_TIMEOUT_MS = 15_000; // Version and quota together fit Paseo's 20s deadline.
 
 export type AgyQuotaRunner = (
   command: string,
@@ -40,13 +37,13 @@ async function defaultRunner(
   args: readonly string[],
   options: { env: NodeJS.ProcessEnv; timeoutMs: number },
 ): Promise<{ stdout: string; stderr?: string }> {
-  return execFileAsync(command, [...args], {
+  const stdout = await probe({
+    launch: { command, args: [], env: options.env as Record<string, string> },
+    args: [...args],
     cwd: tmpdir(),
-    env: options.env,
-    timeout: options.timeoutMs,
-    maxBuffer: MAX_BUFFER,
-    windowsHide: true,
+    timeoutMs: options.timeoutMs,
   });
+  return { stdout };
 }
 
 function object(value: unknown): Record<string, unknown> | null {
@@ -182,7 +179,7 @@ export function createAntigravityUsageSource(run: AgyQuotaRunner = defaultRunner
   const execute = async (args: readonly string[], timeoutMs: number) => {
     const command = launch?.command ?? process.env.PASEO_ANTIGRAVITY_BIN ?? "agy";
     const prefix = launch?.args ?? [];
-    const env = { ...process.env, ...(launch?.env ?? {}) };
+    const env = { ...process.env, ...launch?.env };
     return run(command, [...prefix, ...args], { env, timeoutMs });
   };
   const safeVersion = async () => {
