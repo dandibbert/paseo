@@ -1,0 +1,21 @@
+name: AGY formatting preview (temporary)
+on:
+  pull_request:
+    paths:
+      - "plugins/antigravity-provider/**"
+      - ".github/workflows/agy-format-preview.yml"
+jobs:
+  preview:
+    if: github.head_ref == 'feat/antigravity-plan-usage'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: node scripts/npm-retry.mjs ci
+      - name: Show exact oxfmt output for source review
+        run: |
+          npx oxfmt plugins/antigravity-provider/server/provider.ts plugins/antigravity-provider/server/usage.ts plugins/antigravity-provider/server/usage.test.ts
+          node -e "const fs=require('node:fs');for(const p of process.argv.slice(1))console.log('AGY_FORMAT_FILE',p,JSON.stringify(fs.readFileSync(p,'utf8')))" plugins/antigravity-provider/server/provider.ts plugins/antigravity-provider/server/usage.ts plugins/antigravity-provider/server/usage.test.ts
