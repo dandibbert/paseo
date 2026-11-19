@@ -1,6 +1,13 @@
 import { ProviderCliUpdateError } from "./provider-cli-update.js";
 import { resolveAgentBusyReason, type AgentBusyReason } from "./agent-busy.js";
 import type { AttachedAgentTool, PluginAgentToolsRuntime } from "../plugins/agent-tools.js";
+import type {
+  ContinuationCheckpointEvent,
+  ManagedWakeAdmissionResult,
+  ManagedWakeReserveInput,
+  OriginTurnFence,
+  RunIdentity,
+} from "../managed-continuations/index.js";
 import { ProviderOptionsValidationError } from "./provider-options.js";
 import type { AgentToolResult } from "@getpaseo/plugin/server";
 import type { RuntimeCleanupCandidate } from "./idle-runtime-cleanup/index.js";
@@ -286,6 +293,7 @@ export type AgentManagerEvent =
   | { type: "provider_subagent"; event: ProviderSubagentStoreEvent }
   | { type: "background_work"; agentId: string; items: AgentBackgroundWorkItem[] }
   | { type: "timeline_replacement"; agentId: string; epoch: string }
+  | { type: "continuation_checkpoint"; agentId: string; checkpoint: ContinuationCheckpointEvent }
   | {
       type: "agent_stream";
       agentId: string;
@@ -403,6 +411,9 @@ export interface AgentManagerOptions {
     agentId: string;
     expectedTurnId: string;
   }) => Promise<void>;
+  daemonInstanceId?: string;
+  isRestartRecoveryPending?: (agentId: string) => boolean;
+  resolveOriginFence?: (fenceId: string) => Promise<OriginTurnFence | null>;
   logger: Logger;
 }
 
@@ -883,6 +894,22 @@ export class AgentManager {
   private readonly foregroundMutationTails = new Map<string, Promise<void>>();
   private readonly replacementMutationTails = new Map<string, Promise<void>>();
   private readonly runs = new AgentRunState();
+  private readonly daemonInstanceId: string;
+  private readonly isRestartRecoveryPending: (agentId: string) => boolean;
+  private readonly resolveOriginFence?: (fenceId: string) => Promise<OriginTurnFence | null>;
+  private readonly managedWakeReservations = new Map<
+    string,
+    {
+      reservationId: string;
+      agentId: string;
+      batchId: string;
+      batchMessageId: string;
+      run: RunIdentity;
+      committed: boolean;
+    }
+  >();
+  private readonly managedWakeReservationsById = new Map<string, string>();
+  private activeManagedWakeCommitAgentId: string | null = null;
   private readonly subscribers = new Set<SubscriptionRecord>();
   private readonly idFactory: () => string;
   private readonly registry?: AgentStorage;
@@ -929,17 +956,20 @@ export class AgentManager {
     this.pluginAgentTools = options.pluginAgentTools;
     this.timelineStore = options.timelineStore ?? new InMemoryAgentTimelineStore();
     this.idFactory = options.idFactory ?? (() => randomUUID());
-    this.registry = options?.registry;
-    this.durableTimelineStore = options?.durableTimelineStore;
-    this.onAgentAttention = options?.onAgentAttention;
-    this.onWorkspaceStateMayHaveChanged = options?.onWorkspaceStateMayHaveChanged;
-    this.mcpBaseUrl = options?.mcpBaseUrl ?? null;
-    this.mcpAuthToken = options?.mcpAuthToken ?? null;
+    this.registry = options.registry;
+    this.durableTimelineStore = options.durableTimelineStore;
+    this.onAgentAttention = options.onAgentAttention;
+    this.onWorkspaceStateMayHaveChanged = options.onWorkspaceStateMayHaveChanged;
+    this.mcpBaseUrl = options.mcpBaseUrl ?? null;
+    this.mcpAuthToken = options.mcpAuthToken ?? null;
     this.configurePaseoTools(options);
     this.resolvePaseoToolPolicy = options.resolvePaseoToolPolicy ?? (() => undefined);
     this.appendSystemPrompt = options.appendSystemPrompt ?? "";
     this.genuiSystemPrompt = options.genuiSystemPrompt !== false;
     this.logger = options.logger.child({ module: "agent", component: "agent-manager" });
+    this.daemonInstanceId = options.daemonInstanceId ?? randomUUID();
+    this.isRestartRecoveryPending = options.isRestartRecoveryPending ?? (() => false);
+    this.resolveOriginFence = options.resolveOriginFence;
     this.rescueTimeouts = {
       reloadSessionCloseMs:
         options.rescueTimeouts?.reloadSessionCloseMs ?? RELOAD_SESSION_CLOSE_TIMEOUT_MS,
@@ -1167,6 +1197,9 @@ export class AgentManager {
   }
 
   hasInFlightRun(agentId: string): boolean {
+    if (this.managedWakeReservations.has(agentId)) {
+      return true;
+    }
     const agent = this.agents.get(agentId);
     if (!agent) {
       return false;
@@ -1177,6 +1210,132 @@ export class AgentManager {
       Boolean(agent.activeForegroundTurnId) ||
       this.runs.hasRun(agentId)
     );
+  }
+
+  hasManagedWakeReservation(agentId: string): boolean {
+    return this.managedWakeReservations.has(agentId);
+  }
+
+  getDaemonInstanceId(): string {
+    return this.daemonInstanceId;
+  }
+
+  emitContinuationCheckpoint(checkpoint: ContinuationCheckpointEvent): void {
+    this.dispatch({
+      type: "continuation_checkpoint",
+      agentId: checkpoint.agentId,
+      checkpoint,
+    });
+  }
+
+  private async evaluateManagedWakeRejectionLocked(
+    input: ManagedWakeReserveInput,
+  ): Promise<Exclude<ManagedWakeAdmissionResult, { status: "reserved" }> | null> {
+    if (this.isRestartRecoveryPending(input.agentId)) {
+      return { status: "restart_recovery_pending" };
+    }
+    if (this.registry) {
+      const stored = await this.registry.get(input.agentId);
+      if (stored?.archivedAt) return { status: "archived" };
+    }
+    const agent = this.agents.get(input.agentId);
+    if (!agent) {
+      return { status: "unavailable", detail: "agent_not_loaded" };
+    }
+    if (this.hasPendingPermissions(input.agentId)) {
+      return { status: "permission_pending" };
+    }
+    const pendingRun = this.runs.getPendingRun(input.agentId);
+    if (agent.lifecycle === "initializing" || pendingRun?.start.status === "pending") {
+      return { status: "starting" };
+    }
+    if (
+      agent.lifecycle !== "idle" ||
+      this.hasInFlightRun(input.agentId) ||
+      agent.pendingReplacement ||
+      this.managedWakeReservations.has(input.agentId)
+    ) {
+      return { status: "busy" };
+    }
+    if (input.creatorFenceId && this.resolveOriginFence) {
+      const fence = await this.resolveOriginFence(input.creatorFenceId);
+      if (!fence || fence.state === "pending") {
+        return { status: "busy", detail: "origin_turn_fence_pending" };
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Atomically reserves an idle-only foreground slot inside the per-Agent `runForegroundMutation`
+   * critical section. Never calls `steerOrReplaceActiveTurn` or `replaceAdmittedForegroundTurn`.
+   */
+  async tryReserveManagedWake(input: ManagedWakeReserveInput): Promise<ManagedWakeAdmissionResult> {
+    return this.runForegroundMutation(input.agentId, async () => {
+      const rejection = await this.evaluateManagedWakeRejectionLocked(input);
+      if (rejection) return rejection;
+
+      const reservationId = `mwres_${randomUUID()}`;
+      const run: RunIdentity = {
+        daemonInstanceId: this.daemonInstanceId,
+        runToken: randomUUID(),
+      };
+      this.managedWakeReservations.set(input.agentId, {
+        reservationId,
+        agentId: input.agentId,
+        batchId: input.batchId,
+        batchMessageId: input.batchMessageId,
+        run,
+        committed: false,
+      });
+      this.managedWakeReservationsById.set(reservationId, input.agentId);
+      return { status: "reserved", reservationId, run };
+    });
+  }
+
+  async commitManagedWake(input: {
+    reservationId: string;
+    serializedPrompt: AgentPromptInput;
+    options?: AgentRunOptions;
+    promptStart?: ForegroundPromptStart;
+  }): Promise<{ run: RunIdentity; iterator: AsyncGenerator<AgentStreamEvent> }> {
+    const agentId = this.managedWakeReservationsById.get(input.reservationId);
+    if (!agentId) {
+      throw new Error(`Unknown or released managed-wake reservation: ${input.reservationId}`);
+    }
+    return this.runForegroundMutation(agentId, async () => {
+      const current = this.managedWakeReservations.get(agentId);
+      if (!current || current.reservationId !== input.reservationId || current.committed) {
+        throw new Error(`Managed-wake reservation no longer valid: ${input.reservationId}`);
+      }
+      current.committed = true;
+      this.activeManagedWakeCommitAgentId = agentId;
+      try {
+        const iterator = this.streamAgent(
+          agentId,
+          input.serializedPrompt,
+          input.options,
+          input.promptStart,
+        );
+        return { run: current.run, iterator };
+      } finally {
+        this.activeManagedWakeCommitAgentId = null;
+        this.managedWakeReservations.delete(agentId);
+        this.managedWakeReservationsById.delete(input.reservationId);
+      }
+    });
+  }
+
+  async releaseManagedWake(reservationId: string, _reason: string): Promise<void> {
+    const agentId = this.managedWakeReservationsById.get(reservationId);
+    if (!agentId) return;
+    await this.runForegroundMutation(agentId, async () => {
+      const current = this.managedWakeReservations.get(agentId);
+      if (current?.reservationId === reservationId) {
+        this.managedWakeReservations.delete(agentId);
+      }
+      this.managedWakeReservationsById.delete(reservationId);
+    });
   }
 
   subscribe(callback: AgentSubscriber, options?: SubscribeOptions): () => void {
@@ -3480,6 +3639,12 @@ export class AgentManager {
       },
       "agent.manager.stream.request",
     );
+    if (
+      this.managedWakeReservations.has(agentId) &&
+      this.activeManagedWakeCommitAgentId !== agentId
+    ) {
+      throw new Error(`Agent ${agentId} has a reserved managed-wake slot`);
+    }
     if (existingAgent.activeForegroundTurnId || this.runs.hasRun(agentId)) {
       this.logger.trace(
         {
@@ -3883,6 +4048,9 @@ export class AgentManager {
         const starting = this.runs.getPendingRun(agent.id);
         if (starting && starting.start.status !== "started" && starting !== stalledStart) {
           return { status: "starting" as const, run: starting };
+        }
+        if (this.managedWakeReservations.has(agent.id)) {
+          throw new Error(`Agent ${agent.id} has a reserved managed-wake slot`);
         }
         assertAdmission?.(agent);
         if (!this.hasInFlightRun(agent.id)) {
@@ -6342,7 +6510,7 @@ export class AgentManager {
       }
       if (
         subscriber.agentId &&
-        event.type === "background_work" &&
+        (event.type === "background_work" || event.type === "continuation_checkpoint") &&
         subscriber.agentId !== event.agentId
       ) {
         continue;
@@ -6381,6 +6549,9 @@ export class AgentManager {
     if (event.type === "agent_removed") return event.internal;
     if (event.type === "agent_stream") return this.agents.get(event.agentId)?.internal === true;
     if (event.type === "background_work") return this.agents.get(event.agentId)?.internal === true;
+    if (event.type === "continuation_checkpoint") {
+      return this.agents.get(event.agentId)?.internal === true;
+    }
     if (event.type !== "provider_subagent") return false;
     const parentAgentId =
       event.event.type === "upsert"

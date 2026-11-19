@@ -39,8 +39,23 @@ export function createObservationBuffer(signal: AbortSignal) {
         !terminal &&
         result.final?.status !== "running" &&
         result.final?.status !== "initializing"
-      )
-        push(result);
+      ) {
+        const pendingContinuations = result.final?.pendingContinuationsCount;
+        if (pendingContinuations !== undefined && pendingContinuations > 0) {
+          resolvedBeforeInitial.clear();
+          return;
+        }
+        if (result.final?.continuationState === "needs_attention") {
+          push({
+            status: "error",
+            final: result.final,
+            lastMessage: result.lastMessage,
+            error: result.final.continuationBlockedError ?? "continuation_needs_attention",
+          });
+        } else {
+          push(result);
+        }
+      }
       resolvedBeforeInitial.clear();
     },
     push,

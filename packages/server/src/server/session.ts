@@ -2252,6 +2252,9 @@ export class Session {
           return;
         }
 
+        // Internal continuation checkpoints are not agent stream events.
+        if (event.type === "continuation_checkpoint") return;
+
         if (
           this.voiceSessions.isActiveForAgent(event.agentId) &&
           event.event.type === "permission_requested" &&

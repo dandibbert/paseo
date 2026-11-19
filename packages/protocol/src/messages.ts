@@ -977,6 +977,10 @@ export const AgentSnapshotPayloadSchema = z.object({
   // Background agent: hidden from default discovery, tabs, tracks and notifications.
   // Fixed at creation. Effective background also includes the workspace's flag.
   background: z.boolean().optional(),
+  pendingContinuationsCount: z.number().int().nonnegative().optional(),
+  continuationState: z.enum(["none", "waiting", "processing", "needs_attention"]).optional(),
+  continuationBlockedError: z.string().nullable().optional(),
+  continuationRevision: z.number().int().nonnegative().optional(),
 });
 
 export type AgentSnapshotPayload = z.infer<typeof AgentSnapshotPayloadSchema>;

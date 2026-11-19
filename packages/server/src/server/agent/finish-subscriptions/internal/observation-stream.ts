@@ -18,11 +18,37 @@ function isTerminal(snapshot: AgentSnapshotPayload, event?: AgentStreamEvent): b
     (event?.type === "turn_completed" || event?.type === "turn_canceled")
   );
 }
-function observeState(
+
+function hasActiveContinuations(snapshot: AgentSnapshotPayload): boolean {
+  return snapshot.pendingContinuationsCount !== undefined && snapshot.pendingContinuationsCount > 0;
+}
+
+function isIdleContinuationCheckpointEdge(
+  snapshot: AgentSnapshotPayload,
+  lastContinuationRevision: number,
+): boolean {
+  if (snapshot.status !== "idle") return false;
+  if (snapshot.pendingContinuationsCount !== 0) return false;
+  const revision = snapshot.continuationRevision;
+  return revision !== undefined && revision > lastContinuationRevision;
+}
+
+function trackContinuationCheckpoint(
+  snapshot: AgentSnapshotPayload,
+  tracker?: { lastRevision: number },
+): boolean {
+  if (!tracker || snapshot.continuationRevision === undefined) return false;
+  const checkpointEdge = isIdleContinuationCheckpointEdge(snapshot, tracker.lastRevision);
+  tracker.lastRevision = Math.max(tracker.lastRevision, snapshot.continuationRevision);
+  return checkpointEdge;
+}
+
+export function observeFinishState(
   buffer: ReturnType<typeof createObservationBuffer>,
   snapshot: AgentSnapshotPayload | null,
   event?: AgentStreamEvent,
   lastMessage: string | null = null,
+  continuationTracker?: { lastRevision: number },
 ): void {
   if (!snapshot) {
     buffer.push({ status: "idle", final: null, lastMessage: null, error: null });
@@ -40,15 +66,32 @@ function observeState(
       lastMessage,
       error: null,
     });
-  } else if (isTerminal(snapshot, event)) {
+    return;
+  }
+
+  const terminalTurn = isTerminal(snapshot, event);
+  const checkpointEdge = trackContinuationCheckpoint(snapshot, continuationTracker);
+
+  if (!terminalTurn && !checkpointEdge) return;
+  if (hasActiveContinuations(snapshot)) return;
+
+  if (snapshot.continuationState === "needs_attention") {
     buffer.push({
-      status: snapshot.status === "error" ? "error" : "idle",
+      status: "error",
       final: snapshot,
       lastMessage,
-      error: snapshot.lastError ?? null,
-      ...(event?.type === "turn_canceled" ? { reason: "was canceled" as const } : {}),
+      error: snapshot.continuationBlockedError ?? "continuation_needs_attention",
     });
+    return;
   }
+
+  buffer.push({
+    status: snapshot.status === "error" ? "error" : "idle",
+    final: snapshot,
+    lastMessage,
+    error: snapshot.lastError ?? null,
+    ...(event?.type === "turn_canceled" ? { reason: "was canceled" as const } : {}),
+  });
 }
 
 /** One continuous source feeds a bounded buffer while the caller awaits dispatch. */
@@ -71,9 +114,11 @@ export async function openFinishObservation(
     .use(
       record.serverId,
       async (host) => {
+        const continuationTracker = { lastRevision: -1 };
         const release = await host.observe(
           record.childAgentId,
-          (snapshot, event, lastMessage) => observeState(buffer, snapshot, event, lastMessage),
+          (snapshot, event, lastMessage) =>
+            observeFinishState(buffer, snapshot, event, lastMessage, continuationTracker),
           lifetime,
           (error) => buffer.fail(error),
         );
