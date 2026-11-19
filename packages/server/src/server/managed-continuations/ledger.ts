@@ -313,6 +313,64 @@ export class ManagedContinuationLedger {
   // One-Shot `send_later` & Two-Phase Fallback Coverage & Exact Cancel
   // =========================================================================
 
+  private async resolveFallbackCoverageLocked(
+    agentId: string,
+    fallbackForTaskId: string,
+  ): Promise<
+    | { kind: "skip"; coveredByEventId: string }
+    | {
+        kind: "schedule";
+        coverageState: OneShotWakeup["coverageState"];
+        primaryEventId?: string;
+      }
+  > {
+    const leases = (await this.store.listLeases()).records;
+    const primaryLease = leases.find(
+      (l) =>
+        l.agentId === agentId &&
+        l.kind === "managed-command" &&
+        l.continuationId === fallbackForTaskId,
+    );
+    if (!primaryLease) {
+      return { kind: "schedule", coverageState: "armed" };
+    }
+    const isNonReactivatable =
+      primaryLease.state === "canceled" ||
+      (primaryLease.state === "blocked" &&
+        Boolean(primaryLease.blockedReason) &&
+        NON_REACTIVATABLE_BLOCK_REASONS.has(primaryLease.blockedReason!));
+    if (isNonReactivatable) {
+      throw new FallbackForbiddenError(
+        `Cannot schedule fallback for task ${fallbackForTaskId}: primary state=${primaryLease.state} (${primaryLease.blockedReason ?? "canceled"})`,
+      );
+    }
+    if (primaryLease.state === "settled" && primaryLease.eventId) {
+      return { kind: "skip", coveredByEventId: primaryLease.eventId };
+    }
+    if (!primaryLease.eventId) {
+      return { kind: "schedule", coverageState: "armed" };
+    }
+    const primaryEvent = await this.store.readEvent(primaryLease.eventId);
+    if (!primaryEvent) {
+      return { kind: "schedule", coverageState: "armed" };
+    }
+    if (isHealthyInFlightEventState(primaryEvent.state)) {
+      return {
+        kind: "schedule",
+        coverageState: "suspended_by_primary",
+        primaryEventId: primaryEvent.eventId,
+      };
+    }
+    if (primaryEvent.state === "uncertain" || primaryEvent.state === "blocked") {
+      return {
+        kind: "schedule",
+        coverageState: "reactivated",
+        primaryEventId: primaryEvent.eventId,
+      };
+    }
+    return { kind: "schedule", coverageState: "armed" };
+  }
+
   async scheduleOneShot(input: {
     wakeId: string;
     leaseId: string;
@@ -350,64 +408,18 @@ export class ManagedContinuationLedger {
       let primaryEventId: string | undefined;
 
       if (input.fallbackForTaskId) {
-        const leases = (await this.store.listLeases()).records;
-        const primaryLease = leases.find(
-          (l) =>
-            l.agentId === input.agentId &&
-            l.kind === "managed-command" &&
-            l.continuationId === input.fallbackForTaskId,
+        const decision = await this.resolveFallbackCoverageLocked(
+          input.agentId,
+          input.fallbackForTaskId,
         );
-
-        if (primaryLease) {
-          // Guardrail #1: Do not allow fallback to resurrect user stop / budget / auth revocation / archive.
-          if (
-            primaryLease.state === "canceled" ||
-            (primaryLease.state === "blocked" &&
-              primaryLease.blockedReason &&
-              NON_REACTIVATABLE_BLOCK_REASONS.has(primaryLease.blockedReason))
-          ) {
-            throw new FallbackForbiddenError(
-              `Cannot schedule fallback for task ${input.fallbackForTaskId}: primary state=${primaryLease.state} (${primaryLease.blockedReason ?? "canceled"})`,
-            );
-          }
-
-          // Only skip if primary Wake Turn has ALREADY normally settled!
-          if (primaryLease.state === "settled" && primaryLease.eventId) {
-            return {
-              status: "skipped_covered_by_task_event",
-              coveredByEventId: primaryLease.eventId,
-            };
-          }
-
-          // If primary event is healthy and in flight (pending/batched/dispatching/accepted),
-          // create fallback in suspended_by_primary so it can still reactivate on unexpected failure.
-          if (primaryLease.eventId) {
-            const primaryEvent = await this.store.readEvent(primaryLease.eventId);
-            if (
-              primaryEvent &&
-              (primaryEvent.state === "pending" ||
-                primaryEvent.state === "batched" ||
-                primaryEvent.state === "dispatching" ||
-                primaryEvent.state === "accepted")
-            ) {
-              primaryEventId = primaryEvent.eventId;
-              coverageState = "suspended_by_primary";
-            } else if (
-              primaryEvent &&
-              (primaryEvent.state === "uncertain" || primaryEvent.state === "blocked")
-            ) {
-              primaryEventId = primaryEvent.eventId;
-              coverageState = "reactivated";
-            } else {
-              coverageState = "armed";
-            }
-          } else {
-            coverageState = "armed";
-          }
-        } else {
-          // Primary task had notifyOnExit: false (no primary lease) -> fallback is armed normally.
-          coverageState = "armed";
+        if (decision.kind === "skip") {
+          return {
+            status: "skipped_covered_by_task_event",
+            coveredByEventId: decision.coveredByEventId,
+          };
         }
+        coverageState = decision.coverageState;
+        primaryEventId = decision.primaryEventId;
       }
 
       const fence = await this.getOrCreateOriginFence(input.origin);
@@ -453,6 +465,30 @@ export class ManagedContinuationLedger {
     });
   }
 
+  private async cancelWakeupEventIfPresentLocked(
+    wakeId: string,
+    eventId: string | undefined,
+  ): Promise<CancelWakeupResult | null> {
+    if (!eventId) return null;
+    const event = await this.store.readEvent(eventId);
+    if (!event) return null;
+    if (event.state === "accepted") {
+      return { canceled: false, wakeId, reason: "already_accepted" };
+    }
+    if (event.state === "uncertain" || event.state === "dispatching") {
+      return { canceled: false, wakeId, reason: "dispatch_uncertain" };
+    }
+    if (event.state === "canceled" || event.state === "blocked") {
+      return { canceled: false, wakeId, reason: "already_settled" };
+    }
+    await this.store.writeEvent({
+      ...event,
+      state: "canceled",
+      updatedAt: this.nowIso(),
+    });
+    return null;
+  }
+
   /**
    * Exact one-shot cancellation semantics (Spec v0.4.1 §6.2 & Guardrail #3):
    * - `suspended_by_primary` IS cancelable (releases fallback Lease, emits checkpoint, never cancels primary Task).
@@ -479,27 +515,8 @@ export class ManagedContinuationLedger {
         return { canceled: false, wakeId, reason: "already_settled" };
       }
 
-      // Check associated WakeEvent if already moved to outbox.
-      if (wakeup.eventId) {
-        const event = await this.store.readEvent(wakeup.eventId);
-        if (event) {
-          if (event.state === "accepted") {
-            return { canceled: false, wakeId, reason: "already_accepted" };
-          }
-          if (event.state === "uncertain" || event.state === "dispatching") {
-            return { canceled: false, wakeId, reason: "dispatch_uncertain" };
-          }
-          if (event.state === "canceled" || event.state === "blocked") {
-            return { canceled: false, wakeId, reason: "already_settled" };
-          }
-          // Still pending/batched (not dispatched) — cancel the event.
-          await this.store.writeEvent({
-            ...event,
-            state: "canceled",
-            updatedAt: this.nowIso(),
-          });
-        }
-      }
+      const eventRejection = await this.cancelWakeupEventIfPresentLocked(wakeId, wakeup.eventId);
+      if (eventRejection) return eventRejection;
 
       const now = this.nowIso();
       await this.store.writeWakeup({
@@ -526,6 +543,67 @@ export class ManagedContinuationLedger {
     });
   }
 
+  private async evaluateSuspendedFallbackLocked(
+    wakeup: OneShotWakeup,
+    now: string,
+  ): Promise<WakeEvent | null> {
+    const leases = (await this.store.listLeases()).records;
+    const primaryLease = leases.find(
+      (l) =>
+        l.agentId === wakeup.agentId &&
+        l.kind === "managed-command" &&
+        l.continuationId === wakeup.fallbackForTaskId,
+    );
+    if (!primaryLease) return null;
+    if (primaryLease.state === "settled") {
+      await this.coverFallbackLocked(wakeup, now);
+      return null;
+    }
+    const forbidReactivation =
+      primaryLease.state === "canceled" ||
+      (primaryLease.state === "blocked" &&
+        Boolean(primaryLease.blockedReason) &&
+        NON_REACTIVATABLE_BLOCK_REASONS.has(primaryLease.blockedReason!));
+    if (forbidReactivation) {
+      const targetState = primaryLease.state === "canceled" ? "canceled" : "blocked";
+      const reason = primaryLease.blockedReason ?? "primary_canceled";
+      await this.terminateFallbackLocked(wakeup, targetState, reason, now);
+      return null;
+    }
+    if (primaryLease.state === "blocked") {
+      return this.emitOneShotWakeEventLocked(
+        { ...wakeup, coverageState: "reactivated" },
+        "recovery-diagnostic",
+        true,
+        now,
+      );
+    }
+    return null;
+  }
+
+  private async evaluateDueWakeupLocked(wakeId: string): Promise<WakeEvent | null> {
+    const wakeup = await this.store.readWakeup(wakeId);
+    if (!wakeup || wakeup.state !== "scheduled") return null;
+    if (Date.parse(wakeup.dueAt) > this.clock()) return null;
+
+    const now = this.nowIso();
+    if (!wakeup.fallbackForTaskId) {
+      return this.emitOneShotWakeEventLocked(wakeup, "one-shot", false, now);
+    }
+    const terminalCoverage =
+      wakeup.coverageState === "covered" ||
+      wakeup.coverageState === "canceled" ||
+      wakeup.coverageState === "blocked";
+    if (terminalCoverage) return null;
+    if (wakeup.coverageState === "suspended_by_primary") {
+      return this.evaluateSuspendedFallbackLocked(wakeup, now);
+    }
+    if (wakeup.coverageState === "reactivated") {
+      return this.emitOneShotWakeEventLocked(wakeup, "recovery-diagnostic", true, now);
+    }
+    return this.emitOneShotWakeEventLocked(wakeup, "one-shot", false, now);
+  }
+
   /**
    * Evaluates due one-shots at the current clock timestamp and writes durable WakeEvents.
    * Enforces Guardrail #1 (no reactivation after user stop / policy block) and read-only
@@ -540,71 +618,9 @@ export class ManagedContinuationLedger {
       if (candidate.state !== "scheduled") continue;
       if (Date.parse(candidate.dueAt) > nowMs) continue;
 
-      const event = await this.withAgentLane(candidate.agentId, async () => {
-        const wakeup = await this.store.readWakeup(candidate.wakeId);
-        if (!wakeup || wakeup.state !== "scheduled") return null;
-        if (Date.parse(wakeup.dueAt) > this.clock()) return null;
-
-        const now = this.nowIso();
-
-        if (wakeup.fallbackForTaskId) {
-          if (
-            wakeup.coverageState === "covered" ||
-            wakeup.coverageState === "canceled" ||
-            wakeup.coverageState === "blocked"
-          ) {
-            return null;
-          }
-
-          if (wakeup.coverageState === "suspended_by_primary") {
-            // Do NOT fire duplicate prompt while primary is healthy. Check primary health.
-            const leases = (await this.store.listLeases()).records;
-            const primaryLease = leases.find(
-              (l) =>
-                l.agentId === wakeup.agentId &&
-                l.kind === "managed-command" &&
-                l.continuationId === wakeup.fallbackForTaskId,
-            );
-            if (!primaryLease) return null;
-            if (primaryLease.state === "settled") {
-              await this.coverFallbackLocked(wakeup, now);
-              return null;
-            }
-            if (
-              primaryLease.state === "canceled" ||
-              (primaryLease.state === "blocked" &&
-                primaryLease.blockedReason &&
-                NON_REACTIVATABLE_BLOCK_REASONS.has(primaryLease.blockedReason))
-            ) {
-              await this.terminateFallbackLocked(
-                wakeup,
-                primaryLease.state === "canceled" ? "canceled" : "blocked",
-                primaryLease.blockedReason ?? "primary_canceled",
-                now,
-              );
-              return null;
-            }
-            if (primaryLease.state === "blocked") {
-              // Non-human, policy-allowed failure => reactivate as read-only diagnostic!
-              return this.emitOneShotWakeEventLocked(
-                { ...wakeup, coverageState: "reactivated" },
-                "recovery-diagnostic",
-                true,
-                now,
-              );
-            }
-            // Primary still healthy in flight -> stay suspended.
-            return null;
-          }
-
-          if (wakeup.coverageState === "reactivated") {
-            return this.emitOneShotWakeEventLocked(wakeup, "recovery-diagnostic", true, now);
-          }
-        }
-
-        return this.emitOneShotWakeEventLocked(wakeup, "one-shot", false, now);
-      });
-
+      const event = await this.withAgentLane(candidate.agentId, () =>
+        this.evaluateDueWakeupLocked(candidate.wakeId),
+      );
       if (event) {
         emitted.push(event);
       }
@@ -670,6 +686,62 @@ export class ManagedContinuationLedger {
   // Immutable DispatchBatch & Fence Gate & Reconciliation
   // =========================================================================
 
+  private verifyFrozenBatchUnchanged(
+    existing: DispatchBatch,
+    uniqueEventIds: readonly string[],
+    batchMessageId: string,
+    promptDigest: string,
+  ): DispatchBatch {
+    const sameEvents =
+      existing.eventIds.length === uniqueEventIds.length &&
+      existing.eventIds.every((id, idx) => id === uniqueEventIds[idx]);
+    if (
+      !sameEvents ||
+      existing.batchMessageId !== batchMessageId ||
+      existing.promptDigest !== promptDigest
+    ) {
+      throw new ImmutableBatchError(
+        `Frozen batch ${existing.batchId} is immutable; cannot alter eventIds, batchMessageId, or promptDigest`,
+      );
+    }
+    return existing;
+  }
+
+  private async collectBatchEventsAndLeasesLocked(
+    agentId: string,
+    batchId: string,
+    uniqueEventIds: readonly string[],
+  ): Promise<{ events: WakeEvent[]; linkedLeases: ContinuationLease[] }> {
+    const events: WakeEvent[] = [];
+    const allLeases = (await this.store.listLeases()).records;
+    const linkedLeases: ContinuationLease[] = [];
+
+    for (const eventId of uniqueEventIds) {
+      const event = await this.store.readEvent(eventId);
+      if (!event) throw new Error(`WakeEvent not found for batch freeze: ${eventId}`);
+      if (event.agentId !== agentId) {
+        throw new Error(`WakeEvent ${eventId} does not belong to agent ${agentId}`);
+      }
+      if (event.state !== "pending") {
+        throw new ImmutableBatchError(
+          `WakeEvent ${eventId} is in state ${event.state} and cannot be added to batch ${batchId}`,
+        );
+      }
+      events.push(event);
+
+      const lease = allLeases.find((l) => l.agentId === agentId && l.eventId === event.eventId);
+      if (!lease) continue;
+      const fence = await this.store.readFence(lease.creatorFenceId);
+      if (!fence || fence.state === "pending") {
+        throw new OriginFencePendingError(
+          `OriginTurnFence ${lease.creatorFenceId} is still pending; cannot freeze/dispatch batch before creator turn settles`,
+        );
+      }
+      linkedLeases.push(lease);
+    }
+    return { events, linkedLeases };
+  }
+
   async freezeBatch(input: {
     batchId: string;
     batchMessageId: string;
@@ -690,20 +762,12 @@ export class ManagedContinuationLedger {
     return this.withAgentLane(input.agentId, async () => {
       const existing = await this.store.readBatch(input.batchId);
       if (existing) {
-        // Enforce strict immutability: eventIds, batchMessageId, and promptDigest may NEVER mutate.
-        const sameEvents =
-          existing.eventIds.length === uniqueEventIds.length &&
-          existing.eventIds.every((id, idx) => id === uniqueEventIds[idx]);
-        if (
-          !sameEvents ||
-          existing.batchMessageId !== input.batchMessageId ||
-          existing.promptDigest !== promptDigest
-        ) {
-          throw new ImmutableBatchError(
-            `Frozen batch ${input.batchId} is immutable; cannot alter eventIds, batchMessageId, or promptDigest`,
-          );
-        }
-        return existing;
+        return this.verifyFrozenBatchUnchanged(
+          existing,
+          uniqueEventIds,
+          input.batchMessageId,
+          promptDigest,
+        );
       }
 
       // Validate autonomous turn budget before freezing.
@@ -715,39 +779,11 @@ export class ManagedContinuationLedger {
         );
       }
 
-      const events: WakeEvent[] = [];
-      const allLeases = (await this.store.listLeases()).records;
-      const linkedLeases: ContinuationLease[] = [];
-
-      for (const eventId of uniqueEventIds) {
-        const event = await this.store.readEvent(eventId);
-        if (!event) {
-          throw new Error(`WakeEvent not found for batch freeze: ${eventId}`);
-        }
-        if (event.agentId !== input.agentId) {
-          throw new Error(`WakeEvent ${eventId} does not belong to agent ${input.agentId}`);
-        }
-        if (event.state !== "pending") {
-          throw new ImmutableBatchError(
-            `WakeEvent ${eventId} is in state ${event.state} and cannot be added to batch ${input.batchId}`,
-          );
-        }
-        events.push(event);
-
-        const lease = allLeases.find(
-          (l) => l.agentId === input.agentId && l.eventId === event.eventId,
-        );
-        if (lease) {
-          // Dereference authoritative Fence Store — NEVER trust a cached copy.
-          const fence = await this.store.readFence(lease.creatorFenceId);
-          if (!fence || fence.state === "pending") {
-            throw new OriginFencePendingError(
-              `OriginTurnFence ${lease.creatorFenceId} is still pending; cannot freeze/dispatch batch before creator turn settles`,
-            );
-          }
-          linkedLeases.push(lease);
-        }
-      }
+      const { events, linkedLeases } = await this.collectBatchEventsAndLeasesLocked(
+        input.agentId,
+        input.batchId,
+        uniqueEventIds,
+      );
 
       const now = this.nowIso();
       const batch: DispatchBatch = {
@@ -981,6 +1017,115 @@ export class ManagedContinuationLedger {
   // Wake Turn Settlement, User Stop Guardrail & Explicit Human Takeover
   // =========================================================================
 
+  private async eagerCoverFallbacksForTaskLocked(
+    agentId: string,
+    taskId: string,
+    allWakeups: readonly OneShotWakeup[],
+    now: string,
+  ): Promise<string[]> {
+    const covered: string[] = [];
+    for (const w of allWakeups) {
+      const eligible =
+        w.agentId === agentId &&
+        w.fallbackForTaskId === taskId &&
+        w.state === "scheduled" &&
+        (w.coverageState === "armed" || w.coverageState === "suspended_by_primary");
+      if (!eligible) continue;
+      await this.coverFallbackLocked(w, now);
+      covered.push(w.wakeId);
+    }
+    return covered;
+  }
+
+  private async settleCompletedWakeTurnLocked(
+    agentId: string,
+    boundLeases: readonly ContinuationLease[],
+    allWakeups: readonly OneShotWakeup[],
+    now: string,
+  ): Promise<{
+    settledLeaseIds: string[];
+    coveredWakeIds: string[];
+    reactivatedWakeIds: string[];
+  }> {
+    const settledLeaseIds: string[] = [];
+    const coveredWakeIds: string[] = [];
+    let hadHumanTakeover = false;
+
+    for (const lease of boundLeases) {
+      if (lease.takeoverByHuman) hadHumanTakeover = true;
+      await this.store.writeLease({
+        ...lease,
+        state: "settled",
+        blockedReason: undefined,
+        updatedAt: now,
+      });
+      settledLeaseIds.push(lease.leaseId);
+      if (lease.kind === "managed-command") {
+        const covered = await this.eagerCoverFallbacksForTaskLocked(
+          agentId,
+          lease.continuationId,
+          allWakeups,
+          now,
+        );
+        coveredWakeIds.push(...covered);
+      }
+    }
+
+    if (hadHumanTakeover) {
+      await this.appendAuditEntryLocked(agentId, {
+        kind: "takeover_settled",
+        reason: "explicit_human_takeover_completed",
+      });
+    }
+
+    const summary = await this.evaluateAndEmitCheckpoint(agentId, "wake_turn_completed");
+    if (hadHumanTakeover && summary.continuationState !== "needs_attention") {
+      await this.appendAuditEntryLocked(agentId, {
+        kind: "needs_attention_cleared",
+        reason: "no_remaining_blockers_after_takeover",
+      });
+    }
+    return { settledLeaseIds, coveredWakeIds, reactivatedWakeIds: [] };
+  }
+
+  private async updateFallbacksOnNonCompletedTurnLocked(
+    agentId: string,
+    taskId: string,
+    allWakeups: readonly OneShotWakeup[],
+    outcomeKind: Exclude<WakeTurnOutcome["kind"], "completed">,
+    blockReason: LeaseBlockedReason,
+    now: string,
+  ): Promise<string[]> {
+    const isArchived = outcomeKind === "archived";
+    const forbidReactivation = isArchived || NON_REACTIVATABLE_BLOCK_REASONS.has(blockReason);
+    const reactivated: string[] = [];
+
+    for (const w of allWakeups) {
+      const eligible =
+        w.agentId === agentId &&
+        w.fallbackForTaskId === taskId &&
+        w.state === "scheduled" &&
+        (w.coverageState === "armed" || w.coverageState === "suspended_by_primary");
+      if (!eligible) continue;
+
+      if (forbidReactivation) {
+        const targetState = outcomeKind === "user_stop" || isArchived ? "canceled" : "blocked";
+        const reason = isArchived ? "archived" : blockReason;
+        await this.terminateFallbackLocked(w, targetState, reason, now);
+        continue;
+      }
+      if (outcomeKind === "provider_failure") {
+        await this.store.writeWakeup({
+          ...w,
+          coverageState: "reactivated",
+          updatedAt: now,
+        });
+        reactivated.push(w.wakeId);
+      }
+    }
+    return reactivated;
+  }
+
   async settleWakeTurn(input: {
     agentId: string;
     wakeRun: RunIdentity;
@@ -1012,68 +1157,15 @@ export class ManagedContinuationLedger {
           l.wakeRun?.runToken === input.wakeRun.runToken,
       );
 
-      const settledLeaseIds: string[] = [];
-      const coveredWakeIds: string[] = [];
-      const reactivatedWakeIds: string[] = [];
       const allWakeups = (await this.store.listWakeups()).records;
-
       if (input.outcome.kind === "completed") {
-        let hadHumanTakeover = false;
-        for (const lease of boundLeases) {
-          if (lease.takeoverByHuman) hadHumanTakeover = true;
-          await this.store.writeLease({
-            ...lease,
-            state: "settled",
-            blockedReason: undefined,
-            updatedAt: now,
-          });
-          settledLeaseIds.push(lease.leaseId);
-
-          // Eager Cover any fallback suspended by this primary task!
-          if (lease.kind === "managed-command") {
-            for (const w of allWakeups) {
-              if (
-                w.agentId === input.agentId &&
-                w.fallbackForTaskId === lease.continuationId &&
-                (w.coverageState === "armed" || w.coverageState === "suspended_by_primary") &&
-                w.state === "scheduled"
-              ) {
-                await this.coverFallbackLocked(w, now);
-                coveredWakeIds.push(w.wakeId);
-              }
-            }
-          }
-        }
-
-        if (hadHumanTakeover) {
-          await this.appendAuditEntryLocked(input.agentId, {
-            kind: "takeover_settled",
-            reason: "explicit_human_takeover_completed",
-          });
-        }
-
-        const summary = await this.evaluateAndEmitCheckpoint(input.agentId, "wake_turn_completed");
-        if (hadHumanTakeover && summary.continuationState !== "needs_attention") {
-          await this.appendAuditEntryLocked(input.agentId, {
-            kind: "needs_attention_cleared",
-            reason: "no_remaining_blockers_after_takeover",
-          });
-        }
-        return { settledLeaseIds, coveredWakeIds, reactivatedWakeIds };
+        return this.settleCompletedWakeTurnLocked(input.agentId, boundLeases, allWakeups, now);
       }
 
-      // Non-completed outcomes:
-      const blockReason: LeaseBlockedReason =
-        input.outcome.kind === "user_stop"
-          ? "interrupted_by_user_stop"
-          : input.outcome.kind === "human_unrelated_prompt"
-            ? "human_takeover_required"
-            : input.outcome.kind === "authorization_revoked"
-              ? "authorization_revoked"
-              : "provider_unrecoverable";
-
+      const blockReason = resolveBlockReasonForOutcome(input.outcome.kind);
+      const auditKind = resolveAuditKindForOutcome(input.outcome.kind);
       const isArchived = input.outcome.kind === "archived";
-      const forbidReactivation = isArchived || NON_REACTIVATABLE_BLOCK_REASONS.has(blockReason);
+      const reactivatedWakeIds: string[] = [];
 
       for (const lease of boundLeases) {
         await this.store.writeLease({
@@ -1084,48 +1176,25 @@ export class ManagedContinuationLedger {
           updatedAt: now,
         });
         await this.appendAuditEntryLocked(input.agentId, {
-          kind:
-            input.outcome.kind === "user_stop"
-              ? "user_stop"
-              : input.outcome.kind === "authorization_revoked"
-                ? "authorization_revoked"
-                : "blocked",
+          kind: auditKind,
           reason: isArchived ? "archived" : blockReason,
           leaseId: lease.leaseId,
         });
-
         if (lease.kind === "managed-command") {
-          for (const w of allWakeups) {
-            if (
-              w.agentId === input.agentId &&
-              w.fallbackForTaskId === lease.continuationId &&
-              w.state === "scheduled" &&
-              (w.coverageState === "armed" || w.coverageState === "suspended_by_primary")
-            ) {
-              if (forbidReactivation) {
-                // Guardrail #1: User Stop / archive / budget / auth revocation MUST NEVER reactivate fallback!
-                await this.terminateFallbackLocked(
-                  w,
-                  input.outcome.kind === "user_stop" || isArchived ? "canceled" : "blocked",
-                  isArchived ? "archived" : blockReason,
-                  now,
-                );
-              } else if (input.outcome.kind === "provider_failure") {
-                // Unexpected non-human failure: allow read-only recovery-diagnostic reactivation.
-                await this.store.writeWakeup({
-                  ...w,
-                  coverageState: "reactivated",
-                  updatedAt: now,
-                });
-                reactivatedWakeIds.push(w.wakeId);
-              }
-            }
-          }
+          const reactivated = await this.updateFallbacksOnNonCompletedTurnLocked(
+            input.agentId,
+            lease.continuationId,
+            allWakeups,
+            input.outcome.kind,
+            blockReason,
+            now,
+          );
+          reactivatedWakeIds.push(...reactivated);
         }
       }
 
       await this.evaluateAndEmitCheckpoint(input.agentId, `wake_turn_${input.outcome.kind}`);
-      return { settledLeaseIds, coveredWakeIds, reactivatedWakeIds };
+      return { settledLeaseIds: [], coveredWakeIds: [], reactivatedWakeIds };
     });
   }
 
@@ -1200,6 +1269,45 @@ export class ManagedContinuationLedger {
   // Startup Reconcile (Spec §4.6 & Appendix B)
   // =========================================================================
 
+  private async reconcileSingleBatchOnStartup(
+    batch: DispatchBatch,
+    receiptProbe: ReceiptProbe,
+    now: string,
+  ): Promise<{
+    category: "retried" | "accepted" | "uncertain";
+    blockedLeaseIds: string[];
+  }> {
+    const outcome = await receiptProbe(batch);
+    const blockedLeaseIds: string[] = [];
+
+    await this.withAgentLane(batch.agentId, async () => {
+      const current = await this.store.readBatch(batch.batchId);
+      if (!current) return;
+      await this.applyDispatchOutcomeLocked(current, outcome);
+
+      if (outcome.status !== "accepted") return;
+      const leases = (await this.store.listLeases()).records.filter(
+        (l) =>
+          l.agentId === batch.agentId &&
+          l.dispatchBatchId === batch.batchId &&
+          l.state === "dispatch_reserved",
+      );
+      for (const l of leases) {
+        await this.store.writeLease({
+          ...l,
+          state: "blocked",
+          blockedReason: "wake_turn_aborted_by_daemon_restart",
+          updatedAt: now,
+        });
+        blockedLeaseIds.push(l.leaseId);
+      }
+    });
+
+    if (outcome.status === "not_submitted") return { category: "retried", blockedLeaseIds };
+    if (outcome.status === "accepted") return { category: "accepted", blockedLeaseIds };
+    return { category: "uncertain", blockedLeaseIds };
+  }
+
   async reconcileStartup(input: {
     restartRecoveryBarrier: () => Promise<void>;
     receiptProbe: ReceiptProbe;
@@ -1237,14 +1345,15 @@ export class ManagedContinuationLedger {
 
     // 1. Mark cross-epoch pending fences as `aborted_by_restart` (NEVER fake `settled`).
     for (const fence of fencesRes.records) {
-      if (fence.state === "pending" && fence.origin.daemonInstanceId !== this.daemonInstanceId) {
-        await this.store.writeFence({
-          ...fence,
-          state: "aborted_by_restart",
-          abortedAt: now,
-        });
-        abortedFenceIds.push(fence.fenceId);
+      if (fence.state !== "pending" || fence.origin.daemonInstanceId === this.daemonInstanceId) {
+        continue;
       }
+      await this.store.writeFence({
+        ...fence,
+        state: "aborted_by_restart",
+        abortedAt: now,
+      });
+      abortedFenceIds.push(fence.fenceId);
     }
 
     // 2. Reconcile cross-epoch `resumed_running` leases (no verified turn completion => blocked).
@@ -1281,37 +1390,12 @@ export class ManagedContinuationLedger {
         continue;
       }
 
-      const outcome = await input.receiptProbe(batch);
-      await this.withAgentLane(batch.agentId, async () => {
-        const current = await this.store.readBatch(batch.batchId);
-        if (!current) return;
-        await this.applyDispatchOutcomeLocked(current, outcome);
-
-        if (outcome.status === "not_submitted") {
-          retriedBatchIds.push(batch.batchId);
-        } else if (outcome.status === "accepted") {
-          acceptedBatchIds.push(batch.batchId);
-          // Cross-epoch accepted batch with no verified wake turn completion => block leases.
-          const leases = (await this.store.listLeases()).records.filter(
-            (l) =>
-              l.agentId === batch.agentId &&
-              l.dispatchBatchId === batch.batchId &&
-              l.state === "dispatch_reserved",
-          );
-          for (const l of leases) {
-            await this.store.writeLease({
-              ...l,
-              state: "blocked",
-              blockedReason: "wake_turn_aborted_by_daemon_restart",
-              updatedAt: now,
-            });
-            blockedLeaseIds.push(l.leaseId);
-          }
-        } else {
-          uncertainBatchIds.push(batch.batchId);
-        }
-        affectedAgents.add(batch.agentId);
-      });
+      const res = await this.reconcileSingleBatchOnStartup(batch, input.receiptProbe, now);
+      blockedLeaseIds.push(...res.blockedLeaseIds);
+      if (res.category === "retried") retriedBatchIds.push(batch.batchId);
+      else if (res.category === "accepted") acceptedBatchIds.push(batch.batchId);
+      else uncertainBatchIds.push(batch.batchId);
+      affectedAgents.add(batch.agentId);
     }
 
     const checkpointAgents: string[] = [];
@@ -1336,6 +1420,75 @@ export class ManagedContinuationLedger {
   // Reference-Closure Garbage Collection (Spec §5.3 & §11.1.5)
   // =========================================================================
 
+  private async deleteGcComponent(
+    members: readonly string[],
+    report: Pick<GcReport, "deletedLeases" | "deletedEvents" | "deletedBatches" | "deletedWakeups">,
+  ): Promise<void> {
+    for (const key of members) {
+      const [kind, id] = splitComponentKey(key);
+      if (kind === "lease") {
+        await this.store.deleteLease(id);
+        report.deletedLeases.push(id);
+      } else if (kind === "event") {
+        await this.store.deleteEvent(id);
+        report.deletedEvents.push(id);
+      } else if (kind === "batch") {
+        await this.store.deleteBatch(id);
+        report.deletedBatches.push(id);
+      } else if (kind === "wakeup") {
+        await this.store.deleteWakeup(id);
+        report.deletedWakeups.push(id);
+      }
+    }
+  }
+
+  private async retainGcComponent(
+    members: readonly string[],
+    index: GcRecordIndex,
+    cutoffMs: number,
+    now: string,
+    survivingLeaseFenceIds: Set<string>,
+    retainedUnresolvedIds: string[],
+    tombstonesWritten: string[],
+  ): Promise<void> {
+    for (const key of members) {
+      const [kind, id] = splitComponentKey(key);
+      if (kind === "lease") {
+        const lease = index.leasesById.get(id)!;
+        survivingLeaseFenceIds.add(lease.creatorFenceId);
+        if (lease.state !== "blocked" || Date.parse(lease.updatedAt) > cutoffMs) continue;
+        retainedUnresolvedIds.push(id);
+        const tPath = await this.store.writeTombstone({
+          kind: "lease",
+          recordId: lease.leaseId,
+          agentId: lease.agentId,
+          state: lease.state,
+          blockedReason: lease.blockedReason,
+          retainedReason: "unresolved_blocked",
+          originalUpdatedAt: lease.updatedAt,
+          recordedAt: now,
+        });
+        tombstonesWritten.push(tPath);
+      } else if (kind === "batch") {
+        const batch = index.batchesById.get(id)!;
+        const unresolved = batch.state === "uncertain" || batch.state === "blocked";
+        if (!unresolved || Date.parse(batch.updatedAt) > cutoffMs) continue;
+        retainedUnresolvedIds.push(id);
+        const tPath = await this.store.writeTombstone({
+          kind: "batch",
+          recordId: batch.batchId,
+          agentId: batch.agentId,
+          state: batch.state,
+          retainedReason:
+            batch.state === "uncertain" ? "unresolved_uncertain" : "unresolved_blocked",
+          originalUpdatedAt: batch.updatedAt,
+          recordedAt: now,
+        });
+        tombstonesWritten.push(tPath);
+      }
+    }
+  }
+
   async runGarbageCollection(options?: { retentionMs?: number }): Promise<GcReport> {
     const retentionMs = options?.retentionMs ?? DEFAULT_GC_RETENTION_MS;
     const cutoffMs = this.clock() - retentionMs;
@@ -1357,69 +1510,13 @@ export class ManagedContinuationLedger {
       ...wakeupsRes.corrupt,
     ];
 
-    const leasesById = new Map(leasesRes.records.map((l) => [l.leaseId, l]));
-    const eventsById = new Map(eventsRes.records.map((e) => [e.eventId, e]));
-    const batchesById = new Map(batchesRes.records.map((b) => [b.batchId, b]));
-    const wakeupsById = new Map(wakeupsRes.records.map((w) => [w.wakeId, w]));
-
-    // Build connected components across leases, events, batches, wakeups.
-    const parent = new Map<string, string>();
-    const find = (x: string): string => {
-      const p = parent.get(x);
-      if (!p || p === x) {
-        parent.set(x, x);
-        return x;
-      }
-      const root = find(p);
-      parent.set(x, root);
-      return root;
+    const index: GcRecordIndex = {
+      leasesById: new Map(leasesRes.records.map((l) => [l.leaseId, l])),
+      eventsById: new Map(eventsRes.records.map((e) => [e.eventId, e])),
+      batchesById: new Map(batchesRes.records.map((b) => [b.batchId, b])),
+      wakeupsById: new Map(wakeupsRes.records.map((w) => [w.wakeId, w])),
     };
-    const union = (a: string, b: string) => {
-      const ra = find(a);
-      const rb = find(b);
-      if (ra !== rb) parent.set(ra, rb);
-    };
-
-    for (const l of leasesRes.records) {
-      const lk = `lease:${l.leaseId}`;
-      find(lk);
-      if (l.eventId && eventsById.has(l.eventId)) union(lk, `event:${l.eventId}`);
-      if (l.dispatchBatchId && batchesById.has(l.dispatchBatchId)) {
-        union(lk, `batch:${l.dispatchBatchId}`);
-      }
-    }
-    for (const e of eventsRes.records) {
-      const ek = `event:${e.eventId}`;
-      find(ek);
-      if (e.batchId && batchesById.has(e.batchId)) union(ek, `batch:${e.batchId}`);
-      if (e.sourceWakeId && wakeupsById.has(e.sourceWakeId)) {
-        union(ek, `wakeup:${e.sourceWakeId}`);
-      }
-    }
-    for (const b of batchesRes.records) {
-      const bk = `batch:${b.batchId}`;
-      find(bk);
-      for (const eid of b.eventIds) {
-        if (eventsById.has(eid)) union(bk, `event:${eid}`);
-      }
-    }
-    for (const w of wakeupsRes.records) {
-      const wk = `wakeup:${w.wakeId}`;
-      find(wk);
-      if (w.leaseId && leasesById.has(w.leaseId)) union(wk, `lease:${w.leaseId}`);
-      if (w.eventId && eventsById.has(w.eventId)) union(wk, `event:${w.eventId}`);
-      if (w.primaryEventId && eventsById.has(w.primaryEventId)) {
-        union(wk, `event:${w.primaryEventId}`);
-      }
-    }
-
-    const components = new Map<string, string[]>();
-    for (const key of parent.keys()) {
-      const root = find(key);
-      const list = components.get(root) ?? [];
-      list.push(key);
-      components.set(root, list);
-    }
+    const components = buildGcComponents(index);
 
     const deletedLeases: string[] = [];
     const deletedEvents: string[] = [];
@@ -1432,97 +1529,23 @@ export class ManagedContinuationLedger {
     const survivingLeaseFenceIds = new Set<string>();
 
     for (const members of components.values()) {
-      let allSettled = true;
-      let allExpired = true;
-      let hasUnresolvedBlockedOrUncertain = false;
-
-      for (const key of members) {
-        const [kind, id] = splitComponentKey(key);
-        if (kind === "lease") {
-          const l = leasesById.get(id)!;
-          if (!SETTLED_LEASE_STATES.has(l.state)) allSettled = false;
-          if (l.state === "blocked") hasUnresolvedBlockedOrUncertain = true;
-          if (Date.parse(l.updatedAt) > cutoffMs) allExpired = false;
-        } else if (kind === "event") {
-          const e = eventsById.get(id)!;
-          if (e.state !== "accepted" && e.state !== "canceled") allSettled = false;
-          if (e.state === "uncertain" || e.state === "blocked") {
-            hasUnresolvedBlockedOrUncertain = true;
-          }
-          if (Date.parse(e.updatedAt) > cutoffMs) allExpired = false;
-        } else if (kind === "batch") {
-          const b = batchesById.get(id)!;
-          if (b.state !== "accepted") allSettled = false;
-          if (b.state === "uncertain" || b.state === "blocked") {
-            hasUnresolvedBlockedOrUncertain = true;
-          }
-          if (Date.parse(b.updatedAt) > cutoffMs) allExpired = false;
-        } else if (kind === "wakeup") {
-          const w = wakeupsById.get(id)!;
-          if (w.state !== "covered" && w.state !== "canceled") allSettled = false;
-          if (w.state === "blocked") hasUnresolvedBlockedOrUncertain = true;
-          if (Date.parse(w.updatedAt) > cutoffMs) allExpired = false;
-        }
-      }
-
-      if (allSettled && allExpired && !hasUnresolvedBlockedOrUncertain) {
-        for (const key of members) {
-          const [kind, id] = splitComponentKey(key);
-          if (kind === "lease") {
-            await this.store.deleteLease(id);
-            deletedLeases.push(id);
-          } else if (kind === "event") {
-            await this.store.deleteEvent(id);
-            deletedEvents.push(id);
-          } else if (kind === "batch") {
-            await this.store.deleteBatch(id);
-            deletedBatches.push(id);
-          } else if (kind === "wakeup") {
-            await this.store.deleteWakeup(id);
-            deletedWakeups.push(id);
-          }
-        }
+      if (isComponentEligibleForGc(members, index, cutoffMs)) {
+        await this.deleteGcComponent(members, {
+          deletedLeases,
+          deletedEvents,
+          deletedBatches,
+          deletedWakeups,
+        });
       } else {
-        for (const key of members) {
-          const [kind, id] = splitComponentKey(key);
-          if (kind === "lease") {
-            const l = leasesById.get(id)!;
-            survivingLeaseFenceIds.add(l.creatorFenceId);
-            if (l.state === "blocked" && Date.parse(l.updatedAt) <= cutoffMs) {
-              retainedUnresolvedIds.push(id);
-              const tPath = await this.store.writeTombstone({
-                kind: "lease",
-                recordId: l.leaseId,
-                agentId: l.agentId,
-                state: l.state,
-                blockedReason: l.blockedReason,
-                retainedReason: "unresolved_blocked",
-                originalUpdatedAt: l.updatedAt,
-                recordedAt: now,
-              });
-              tombstonesWritten.push(tPath);
-            }
-          } else if (kind === "batch") {
-            const b = batchesById.get(id)!;
-            if (
-              (b.state === "uncertain" || b.state === "blocked") &&
-              Date.parse(b.updatedAt) <= cutoffMs
-            ) {
-              retainedUnresolvedIds.push(id);
-              const tPath = await this.store.writeTombstone({
-                kind: "batch",
-                recordId: b.batchId,
-                agentId: b.agentId,
-                state: b.state,
-                retainedReason:
-                  b.state === "uncertain" ? "unresolved_uncertain" : "unresolved_blocked",
-                originalUpdatedAt: b.updatedAt,
-                recordedAt: now,
-              });
-              tombstonesWritten.push(tPath);
-            }
-          }
-        }
+        await this.retainGcComponent(
+          members,
+          index,
+          cutoffMs,
+          now,
+          survivingLeaseFenceIds,
+          retainedUnresolvedIds,
+          tombstonesWritten,
+        );
       }
     }
 
@@ -1568,9 +1591,7 @@ export class ManagedContinuationLedger {
       continuationState = "needs_attention";
       continuationBlockedError = blockedLeases[0]!.blockedReason ?? "internal_error";
     } else if (
-      pendingLeases.some(
-        (l) => l.state === "dispatch_reserved" || l.state === "resumed_running",
-      )
+      pendingLeases.some((l) => l.state === "dispatch_reserved" || l.state === "resumed_running")
     ) {
       continuationState = "processing";
     } else if (pendingLeases.length > 0) {
@@ -1598,10 +1619,7 @@ export class ManagedContinuationLedger {
     if (!event) {
       const leases = (await this.store.listLeases()).records;
       const lease = leases.find(
-        (l) =>
-          l.agentId === agentId &&
-          l.kind === "managed-command" &&
-          l.continuationId === taskId,
+        (l) => l.agentId === agentId && l.kind === "managed-command" && l.continuationId === taskId,
       );
       if (!lease) return "not_required";
       if (lease.state === "canceled") return "canceled";
@@ -1661,11 +1679,24 @@ export class ManagedContinuationLedger {
         await this.store.writeLease({
           ...lease,
           state: targetState,
-          blockedReason:
-            targetState === "blocked" ? (reason as LeaseBlockedReason) : undefined,
+          blockedReason: targetState === "blocked" ? (reason as LeaseBlockedReason) : undefined,
           updatedAt: now,
         });
       }
+    }
+  }
+
+  private async blockFallbacksForTaskLocked(
+    agentId: string,
+    taskId: string,
+    allWakeups: readonly OneShotWakeup[],
+    now: string,
+  ): Promise<void> {
+    for (const w of allWakeups) {
+      if (w.agentId !== agentId || w.fallbackForTaskId !== taskId || w.state !== "scheduled") {
+        continue;
+      }
+      await this.terminateFallbackLocked(w, "blocked", "autonomous_budget_exceeded", now);
     }
   }
 
@@ -1688,24 +1719,15 @@ export class ManagedContinuationLedger {
         });
       }
       const lease = allLeases.find((l) => l.agentId === agentId && l.eventId === eventId);
-      if (lease) {
-        await this.store.writeLease({
-          ...lease,
-          state: "blocked",
-          blockedReason: "autonomous_budget_exceeded",
-          updatedAt: now,
-        });
-        if (lease.kind === "managed-command") {
-          for (const w of allWakeups) {
-            if (
-              w.agentId === agentId &&
-              w.fallbackForTaskId === lease.continuationId &&
-              w.state === "scheduled"
-            ) {
-              await this.terminateFallbackLocked(w, "blocked", "autonomous_budget_exceeded", now);
-            }
-          }
-        }
+      if (!lease) continue;
+      await this.store.writeLease({
+        ...lease,
+        state: "blocked",
+        blockedReason: "autonomous_budget_exceeded",
+        updatedAt: now,
+      });
+      if (lease.kind === "managed-command") {
+        await this.blockFallbacksForTaskLocked(agentId, lease.continuationId, allWakeups, now);
       }
     }
 
@@ -1792,7 +1814,151 @@ export class ManagedContinuationLedger {
   }
 }
 
+interface GcRecordIndex {
+  leasesById: Map<string, ContinuationLease>;
+  eventsById: Map<string, WakeEvent>;
+  batchesById: Map<string, DispatchBatch>;
+  wakeupsById: Map<string, OneShotWakeup>;
+}
+
 function splitComponentKey(key: string): [string, string] {
   const idx = key.indexOf(":");
   return [key.slice(0, idx), key.slice(idx + 1)];
+}
+
+function isHealthyInFlightEventState(state: WakeEvent["state"]): boolean {
+  return (
+    state === "pending" || state === "batched" || state === "dispatching" || state === "accepted"
+  );
+}
+
+function resolveBlockReasonForOutcome(
+  kind: Exclude<WakeTurnOutcome["kind"], "completed">,
+): LeaseBlockedReason {
+  switch (kind) {
+    case "user_stop":
+      return "interrupted_by_user_stop";
+    case "human_unrelated_prompt":
+      return "human_takeover_required";
+    case "authorization_revoked":
+      return "authorization_revoked";
+    case "provider_failure":
+    case "archived":
+      return "provider_unrecoverable";
+  }
+}
+
+function resolveAuditKindForOutcome(
+  kind: Exclude<WakeTurnOutcome["kind"], "completed">,
+): AuditEntry["kind"] {
+  if (kind === "user_stop") return "user_stop";
+  if (kind === "authorization_revoked") return "authorization_revoked";
+  return "blocked";
+}
+
+function linkLeaseAndEventEdges(
+  index: GcRecordIndex,
+  ensure: (k: string) => void,
+  union: (a: string, b: string) => void,
+): void {
+  for (const l of index.leasesById.values()) {
+    const lk = `lease:${l.leaseId}`;
+    ensure(lk);
+    if (l.eventId && index.eventsById.has(l.eventId)) union(lk, `event:${l.eventId}`);
+    if (l.dispatchBatchId && index.batchesById.has(l.dispatchBatchId)) {
+      union(lk, `batch:${l.dispatchBatchId}`);
+    }
+  }
+  for (const e of index.eventsById.values()) {
+    const ek = `event:${e.eventId}`;
+    ensure(ek);
+    if (e.batchId && index.batchesById.has(e.batchId)) union(ek, `batch:${e.batchId}`);
+    if (e.sourceWakeId && index.wakeupsById.has(e.sourceWakeId)) {
+      union(ek, `wakeup:${e.sourceWakeId}`);
+    }
+  }
+}
+
+function linkBatchAndWakeupEdges(
+  index: GcRecordIndex,
+  ensure: (k: string) => void,
+  union: (a: string, b: string) => void,
+): void {
+  for (const b of index.batchesById.values()) {
+    const bk = `batch:${b.batchId}`;
+    ensure(bk);
+    for (const eid of b.eventIds) {
+      if (index.eventsById.has(eid)) union(bk, `event:${eid}`);
+    }
+  }
+  for (const w of index.wakeupsById.values()) {
+    const wk = `wakeup:${w.wakeId}`;
+    ensure(wk);
+    if (w.leaseId && index.leasesById.has(w.leaseId)) union(wk, `lease:${w.leaseId}`);
+    if (w.eventId && index.eventsById.has(w.eventId)) union(wk, `event:${w.eventId}`);
+    if (w.primaryEventId && index.eventsById.has(w.primaryEventId)) {
+      union(wk, `event:${w.primaryEventId}`);
+    }
+  }
+}
+
+function buildGcComponents(index: GcRecordIndex): Map<string, string[]> {
+  const parent = new Map<string, string>();
+  const find = (x: string): string => {
+    const p = parent.get(x);
+    if (!p || p === x) {
+      parent.set(x, x);
+      return x;
+    }
+    const root = find(p);
+    parent.set(x, root);
+    return root;
+  };
+  const union = (a: string, b: string) => {
+    const ra = find(a);
+    const rb = find(b);
+    if (ra !== rb) parent.set(ra, rb);
+  };
+  const ensure = (k: string) => {
+    find(k);
+  };
+  linkLeaseAndEventEdges(index, ensure, union);
+  linkBatchAndWakeupEdges(index, ensure, union);
+
+  const components = new Map<string, string[]>();
+  for (const key of parent.keys()) {
+    const root = find(key);
+    const list = components.get(root) ?? [];
+    list.push(key);
+    components.set(root, list);
+  }
+  return components;
+}
+
+function isRecordEligibleForGc(key: string, index: GcRecordIndex, cutoffMs: number): boolean {
+  const [kind, id] = splitComponentKey(key);
+  if (kind === "lease") {
+    const l = index.leasesById.get(id)!;
+    return SETTLED_LEASE_STATES.has(l.state) && Date.parse(l.updatedAt) <= cutoffMs;
+  }
+  if (kind === "event") {
+    const e = index.eventsById.get(id)!;
+    return (
+      (e.state === "accepted" || e.state === "canceled") && Date.parse(e.updatedAt) <= cutoffMs
+    );
+  }
+  if (kind === "batch") {
+    const b = index.batchesById.get(id)!;
+    return b.state === "accepted" && Date.parse(b.updatedAt) <= cutoffMs;
+  }
+  const w = index.wakeupsById.get(id)!;
+  return (w.state === "covered" || w.state === "canceled") && Date.parse(w.updatedAt) <= cutoffMs;
+}
+
+function isComponentEligibleForGc(
+  members: readonly string[],
+  index: GcRecordIndex,
+  cutoffMs: number,
+): boolean {
+  return members.every((key) => isRecordEligibleForGc(key, index, cutoffMs));
 }

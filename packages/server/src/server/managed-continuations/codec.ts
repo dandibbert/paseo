@@ -51,6 +51,10 @@ export function assertSafeServerId(id: string, label: string): string {
   return id;
 }
 
+function hasForbiddenControlChars(value: string): boolean {
+  return value.includes("\0") || value.includes("\r") || value.includes("\n");
+}
+
 /**
  * Validates that an `agentId` is a non-empty bounded string without control characters.
  * Because `agentId` is never used directly as a filename, it is always mapped via `sha256(agentId)`
@@ -61,7 +65,7 @@ export function assertValidAgentId(agentId: string): string {
     typeof agentId !== "string" ||
     agentId.length === 0 ||
     agentId.length > 256 ||
-    /[\0\r\n]/.test(agentId)
+    hasForbiddenControlChars(agentId)
   ) {
     throw new InvalidManagedIdError(`Invalid agentId: ${JSON.stringify(agentId)}`);
   }
@@ -77,7 +81,8 @@ export function assertValidLogicalEventId(eventId: string): string {
     typeof eventId !== "string" ||
     eventId.length === 0 ||
     eventId.length > 256 ||
-    /[\0\r\n\\]/.test(eventId) ||
+    hasForbiddenControlChars(eventId) ||
+    eventId.includes("\\") ||
     eventId.includes("..")
   ) {
     throw new InvalidManagedIdError(`Invalid eventId: ${JSON.stringify(eventId)}`);
@@ -137,10 +142,7 @@ export function validatePayloadRef(rootDir: string, payloadRef: string): string 
   }
   const resolvedRoot = path.resolve(rootDir);
   const resolvedTarget = path.resolve(resolvedRoot, normalized);
-  if (
-    resolvedTarget !== resolvedRoot &&
-    !resolvedTarget.startsWith(`${resolvedRoot}${path.sep}`)
-  ) {
+  if (resolvedTarget !== resolvedRoot && !resolvedTarget.startsWith(`${resolvedRoot}${path.sep}`)) {
     throw new InvalidManagedIdError(`payloadRef escapes root directory: ${payloadRef}`);
   }
   return normalized;
@@ -159,13 +161,16 @@ export interface ValidatedSendLaterSchedule {
   clamped: boolean;
 }
 
-/**
- * Validates `send_later(at)` per Spec v0.4.1 §6.2 & Guardrail #4:
- * - Must be a valid calendar ISO 8601 timestamp with explicit `Z` or `±HH:MM` timezone.
- * - Rejects `t < now - 60s` (`WAKE_TIME_IN_PAST`) and `t > now + 30d` (`WAKE_TIME_TOO_FAR`).
- * - Clamps `now - 60s <= t <= now + 10s` to `now + 10s` with `clamped: true`.
- */
-export function validateSendLaterAt(at: string, nowMs: number): ValidatedSendLaterSchedule {
+function assertValidTimezoneOffset(at: string, match: RegExpExecArray): void {
+  const tz = match[8]!;
+  const tzHour = match[10] ? Number(match[10]) : 0;
+  const tzMinute = match[11] ? Number(match[11]) : 0;
+  if (tz !== "Z" && (tzHour > 23 || tzMinute > 59)) {
+    throw new SendLaterTimeError("WAKE_TIME_INVALID", `Invalid timezone offset in at: ${at}`);
+  }
+}
+
+function parseValidatedIsoWithTimezone(at: string): number {
   if (typeof at !== "string" || at.trim() !== at || at.length === 0) {
     throw new SendLaterTimeError("WAKE_TIME_INVALID", "at must be a non-empty ISO 8601 string");
   }
@@ -187,19 +192,16 @@ export function validateSendLaterAt(at: string, nowMs: number): ValidatedSendLat
   const hour = Number(match[4]);
   const minute = Number(match[5]);
   const second = Number(match[6]);
-  const tz = match[8]!;
-  const tzHour = match[10] ? Number(match[10]) : 0;
-  const tzMinute = match[11] ? Number(match[11]) : 0;
 
-  if (month < 1 || month > 12 || day < 1 || day > 31) {
+  const invalidDateRange = month < 1 || month > 12 || day < 1 || day > 31;
+  const invalidClockRange = hour > 23 || minute > 59 || second > 59;
+  if (invalidDateRange) {
     throw new SendLaterTimeError("WAKE_TIME_INVALID", `Invalid calendar date in at: ${at}`);
   }
-  if (hour > 23 || minute > 59 || second > 59) {
+  if (invalidClockRange) {
     throw new SendLaterTimeError("WAKE_TIME_INVALID", `Invalid clock time in at: ${at}`);
   }
-  if (tz !== "Z" && (tzHour > 23 || tzMinute > 59)) {
-    throw new SendLaterTimeError("WAKE_TIME_INVALID", `Invalid timezone offset in at: ${at}`);
-  }
+  assertValidTimezoneOffset(at, match);
 
   // Verify exact calendar date (e.g. rejects 2026-02-30 or 2026-04-31).
   const checkUtc = new Date(Date.UTC(year, month - 1, day, hour, minute, second));
@@ -215,6 +217,17 @@ export function validateSendLaterAt(at: string, nowMs: number): ValidatedSendLat
   if (!Number.isFinite(parsedMs)) {
     throw new SendLaterTimeError("WAKE_TIME_INVALID", `Unparseable timestamp: ${at}`);
   }
+  return parsedMs;
+}
+
+/**
+ * Validates `send_later(at)` per Spec v0.4.1 §6.2 & Guardrail #4:
+ * - Must be a valid calendar ISO 8601 timestamp with explicit `Z` or `±HH:MM` timezone.
+ * - Rejects `t < now - 60s` (`WAKE_TIME_IN_PAST`) and `t > now + 30d` (`WAKE_TIME_TOO_FAR`).
+ * - Clamps `now - 60s <= t <= now + 10s` to `now + 10s` with `clamped: true`.
+ */
+export function validateSendLaterAt(at: string, nowMs: number): ValidatedSendLaterSchedule {
+  const parsedMs = parseValidatedIsoWithTimezone(at);
 
   if (parsedMs < nowMs - SEND_LATER_PAST_GRACE_MS) {
     throw new SendLaterTimeError(
