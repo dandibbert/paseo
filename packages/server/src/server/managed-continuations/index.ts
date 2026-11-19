@@ -4,3 +4,6 @@ export * from "./atomic-store.js";
 export * from "./ledger.js";
 export * from "./admission-types.js";
 export * from "./tasks/index.js";
+export * from "./policy.js";
+export * from "./one-shot-service.js";
+export * from "./tools-service.js";
