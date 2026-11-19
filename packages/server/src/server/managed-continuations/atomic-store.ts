@@ -224,15 +224,11 @@ export class ManagedContinuationStore {
   }
 
   async listBatches(): Promise<LoadCollectionResult<DispatchBatch>> {
-    return this.listDirectoryValidated(
-      this.batchesDir,
-      DispatchBatchSchema,
-      (record, fileName) => {
-        if (serverEntityFilename(record.batchId, "batchId") !== fileName) {
-          throw new Error(`Batch filename mismatch: ${fileName} vs ${record.batchId}`);
-        }
-      },
-    );
+    return this.listDirectoryValidated(this.batchesDir, DispatchBatchSchema, (record, fileName) => {
+      if (serverEntityFilename(record.batchId, "batchId") !== fileName) {
+        throw new Error(`Batch filename mismatch: ${fileName} vs ${record.batchId}`);
+      }
+    });
   }
 
   async deleteBatch(batchId: string): Promise<void> {
@@ -264,15 +260,11 @@ export class ManagedContinuationStore {
   }
 
   async listWakeups(): Promise<LoadCollectionResult<OneShotWakeup>> {
-    return this.listDirectoryValidated(
-      this.wakeupsDir,
-      OneShotWakeupSchema,
-      (record, fileName) => {
-        if (serverEntityFilename(record.wakeId, "wakeId") !== fileName) {
-          throw new Error(`Wakeup filename mismatch: ${fileName} vs ${record.wakeId}`);
-        }
-      },
-    );
+    return this.listDirectoryValidated(this.wakeupsDir, OneShotWakeupSchema, (record, fileName) => {
+      if (serverEntityFilename(record.wakeId, "wakeId") !== fileName) {
+        throw new Error(`Wakeup filename mismatch: ${fileName} vs ${record.wakeId}`);
+      }
+    });
   }
 
   async deleteWakeup(wakeId: string): Promise<void> {
@@ -384,10 +376,7 @@ export class ManagedContinuationStore {
     }
   }
 
-  private async readJsonValidated<T>(
-    targetPath: string,
-    schema: z.ZodType<T>,
-  ): Promise<T | null> {
+  private async readJsonValidated<T>(targetPath: string, schema: z.ZodType<T>): Promise<T | null> {
     try {
       await this.assertNoSymlink(targetPath);
       const raw = await fs.readFile(targetPath, "utf8");
