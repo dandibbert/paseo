@@ -3513,6 +3513,101 @@ test("cancelAgentRun succeeds when the provider queues completion before rejecti
   }
 });
 
+test.each([
+  { binding: "foreground", agentId: "00000000-0000-4000-8000-000000000307" },
+  { binding: "autonomous", agentId: "00000000-0000-4000-8000-000000000308" },
+] as const)(
+  "cancelAgentRun settles a $binding run bound to an already finalized turn",
+  async ({ binding, agentId }) => {
+    const fixture = await createControlledInterruptFixture({
+      name: `interrupt-finalized-${binding}`,
+      agentId,
+      turnId: "finalized-turn",
+      interrupt: async () => {},
+    });
+
+    try {
+      await fixture.startForegroundRun();
+      await expect(fixture.manager.cancelAgentRun(fixture.agentId)).resolves.toEqual({
+        status: "settled",
+      });
+
+      if (binding === "foreground") {
+        await fixture.startForegroundRun();
+      } else {
+        const running = waitForAgentLifecycle(fixture.manager, fixture.agentId, "running");
+        fixture.session.pushEvent({
+          type: "turn_started",
+          provider: "codex",
+          turnId: "finalized-turn",
+        });
+        await running;
+      }
+
+      const cancellation = await Promise.race([
+        fixture.manager.cancelAgentRun(fixture.agentId),
+        new Promise<"pending">((resolve) => setTimeout(() => resolve("pending"), 3_000)),
+      ]);
+      expect(cancellation).toEqual({ status: "settled" });
+      expect(fixture.manager.getAgent(fixture.agentId)).toMatchObject({
+        lifecycle: "idle",
+        activeForegroundTurnId: null,
+      });
+
+      await expect(fixture.manager.cancelAgentRun(fixture.agentId)).resolves.toEqual({
+        status: "not_running",
+      });
+      await fixture.startForegroundRun();
+      expect(fixture.manager.getAgent(fixture.agentId)).toMatchObject({
+        lifecycle: "running",
+        activeForegroundTurnId: "finalized-turn",
+      });
+    } finally {
+      await fixture.cleanup();
+    }
+  },
+  10_000,
+);
+
+test("the provider's terminal for a run bound to an already finalized turn settles the run", async () => {
+  const fixture = await createControlledInterruptFixture({
+    name: "interrupt-finalized-provider-terminal",
+    agentId: "00000000-0000-4000-8000-000000000309",
+    turnId: "finalized-provider-terminal-turn",
+    interrupt: async () => {},
+  });
+
+  try {
+    await fixture.startForegroundRun();
+    await expect(fixture.manager.cancelAgentRun(fixture.agentId)).resolves.toEqual({
+      status: "settled",
+    });
+
+    await fixture.startForegroundRun();
+    const idle = waitForAgentLifecycle(fixture.manager, fixture.agentId, "idle");
+    fixture.session.pushEvent({
+      type: "turn_completed",
+      provider: "codex",
+      turnId: "finalized-provider-terminal-turn",
+    });
+    const settlement = await Promise.race([
+      idle.then(() => "idle" as const),
+      new Promise<"pending">((resolve) => setTimeout(() => resolve("pending"), 1_000)),
+    ]);
+
+    expect(settlement).toBe("idle");
+    expect(fixture.manager.getAgent(fixture.agentId)).toMatchObject({
+      lifecycle: "idle",
+      activeForegroundTurnId: null,
+    });
+    await expect(fixture.manager.cancelAgentRun(fixture.agentId)).resolves.toEqual({
+      status: "not_running",
+    });
+  } finally {
+    await fixture.cleanup();
+  }
+}, 10_000);
+
 test("listProviderAvailability uses registered client keys, including custom providers", async () => {
   const customClient: AgentClient = {
     provider: "zai",
@@ -15378,6 +15473,115 @@ test("stops only a currently owned public background item with its current token
   ).rejects.toThrow();
   expect(stopped).toEqual(["one"]);
   await manager.closeAgent(agent.id);
+});
+
+test("lists and stops heartbeat background work across provider session closure", async () => {
+  const workdir = mkdtempSync(join(tmpdir(), "agent-background-heartbeat-"));
+  const stopped: string[] = [];
+  let activeSession: TestAgentSession | undefined;
+  class StoppableSession extends TestAgentSession {
+    async stopBackgroundWork(id: string) {
+      stopped.push(id);
+    }
+  }
+  class BackgroundWorkClient extends TestAgentClient {
+    override async createSession(config: AgentSessionConfig): Promise<AgentSession> {
+      activeSession = new StoppableSession(config);
+      return activeSession;
+    }
+  }
+  const manager = new AgentManager({
+    clients: { codex: new BackgroundWorkClient() },
+    registry: new AgentStorage(join(workdir, "agents"), logger),
+    logger,
+  });
+  const agent = await manager.createAgent({ provider: "codex", cwd: workdir }, undefined, {
+    workspaceId: undefined,
+  });
+  const events: AgentManagerEvent[] = [];
+  manager.subscribe((event) => events.push(event), { agentId: agent.id, replayState: false });
+  const heartbeat = {
+    agentId: agent.id,
+    scheduleId: "schedule-1",
+    name: "Check build",
+    createdAt: "2026-10-06T10:00:00.000Z",
+    stop: async () => {
+      stopped.push("schedule-1");
+      manager.removeHeartbeatBackgroundWork(agent.id, "schedule-1");
+    },
+  };
+  try {
+    manager.setHeartbeatBackgroundWork(heartbeat);
+    const [item] = manager.listAgentBackgroundWork(agent.id);
+    expect(item).toMatchObject({
+      kind: "heartbeat",
+      description: "Check build",
+      startedAt: heartbeat.createdAt,
+      canStop: true,
+      stopToken: expect.any(String),
+    });
+    manager.setHeartbeatBackgroundWork({ ...heartbeat, name: "Check CI" });
+    const renamed = { ...item, description: "Check CI" };
+
+    activeSession?.pushEvent({
+      type: "background_work",
+      provider: "codex",
+      items: [{ id: item.id, kind: "shell", description: null, canStop: true }],
+    });
+    await vi.waitFor(() =>
+      expect(manager.getAgentBackgroundWorkSummary(agent.id)).toEqual({ count: 2 }),
+    );
+    const providerItem = manager
+      .listAgentBackgroundWork(agent.id)
+      .find((row) => row.kind === "shell")!;
+    expect(providerItem.id).not.toBe(item.id);
+    expect(events).toContainEqual({
+      type: "background_work",
+      agentId: agent.id,
+      items: expect.arrayContaining([providerItem, renamed]),
+    });
+    await manager.stopAgentBackgroundWork({
+      agentId: agent.id,
+      itemId: providerItem.id,
+      stopToken: providerItem.stopToken!,
+    });
+    expect(stopped).toEqual([item.id]);
+
+    const eventsBeforeClose = events.length;
+    await manager.closeAgent(agent.id);
+    expect(manager.getAgent(agent.id)).toBeNull();
+    expect(manager.listAgentBackgroundWork(agent.id)).toEqual([renamed]);
+    expect(manager.getAgentBackgroundWorkSummary(agent.id)).toEqual({ count: 1 });
+    expect(events.slice(eventsBeforeClose)).toContainEqual({
+      type: "background_work",
+      agentId: agent.id,
+      items: [renamed],
+    });
+
+    const stop = { agentId: agent.id, itemId: item.id, stopToken: item.stopToken! };
+    await expect(manager.stopAgentBackgroundWork(stop)).rejects.toThrow();
+    await expect(
+      manager.stopAgentBackgroundWork({
+        ...stop,
+        stopToken: providerItem.stopToken!,
+        canManageAutomation: true,
+      }),
+    ).rejects.toThrow();
+    expect(stopped).toEqual([item.id]);
+    await manager.stopAgentBackgroundWork({ ...stop, canManageAutomation: true });
+    expect(stopped).toEqual([item.id, "schedule-1"]);
+    expect(manager.getAgentBackgroundWorkSummary(agent.id)).toBeUndefined();
+    expect(events.at(-1)).toEqual({ type: "background_work", agentId: agent.id, items: [] });
+
+    manager.setHeartbeatBackgroundWork(heartbeat);
+    await expect(
+      manager.stopAgentBackgroundWork({ ...stop, canManageAutomation: true }),
+    ).rejects.toThrow();
+    expect(manager.listAgentBackgroundWork(agent.id)[0].stopToken).not.toBe(item.stopToken);
+  } finally {
+    if (manager.getAgent(agent.id)) await manager.closeAgent(agent.id);
+    rmSync(workdir, { recursive: true, force: true });
+  }
 });
 
 test("turns keep distinct identities across an idle runtime collection and resume", async () => {
