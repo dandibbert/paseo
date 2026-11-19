@@ -2159,6 +2159,10 @@ export class VoiceAssistantWebSocketServer {
         workspaceTerminals: true,
         // COMPAT(secureAgentInput): added in personal v0.11.2, remove after 2027-04-13.
         terminalSecurePrompt: this.secureTerminalPromptBroker !== undefined,
+        // COMPAT(managedContinuations): added in v0.4.1, remove gate after 2027-11-19.
+        managedContinuations: true,
+        // COMPAT(managedTasks): added in v0.4.1, remove gate after 2027-11-19.
+        managedTasks: process.platform !== "win32",
         historyTextSearch: getActiveHistoryTextIndex() !== null,
         // COMPAT(genuiSystemPrompt): added in personal v0.11.4, remove gate after 2027-04-21.
         genuiSystemPrompt: true,

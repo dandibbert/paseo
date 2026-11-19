@@ -7,6 +7,10 @@ import {
   createFinishObservation,
   createJsonFinishSubscriptionStore,
 } from "./agent/finish-subscriptions/index.js";
+import {
+  ManagedContinuationsRuntime,
+  resolveBootstrapManagedContinuationPolicy,
+} from "./managed-continuations/index.js";
 import { createWorkspaceRuntimeStore } from "./workspace-runtime-store/index.js";
 import type { PluginRegistries } from "@getpaseo/protocol/plugin-registry";
 import { describeHookWorkspace } from "./plugins/lifecycle/index.js";
@@ -1036,6 +1040,7 @@ export async function createPaseoDaemon(
     path.join(config.paseoHome, "timelines"),
     logger,
   );
+  let managedContinuations: ManagedContinuationsRuntime | null = null;
   const agentManager = new AgentManager({
     durableTimelineStore,
     pluginLifecycle: pluginRuntime,
@@ -1051,6 +1056,10 @@ export async function createPaseoDaemon(
     mcpAuthToken: agentMcpAuthToken,
     resolvePaseoToolPolicy: (provider) =>
       resolvePaseoToolPolicy(provider, daemonConfigStore.get().providers),
+    resolveOriginFence: (fenceId) =>
+      managedContinuations
+        ? managedContinuations.ledgerStore.readFence(fenceId)
+        : Promise.resolve(null),
     logger,
   });
   const historyTextIndex = new HistoryTextIndex({
@@ -1550,6 +1559,13 @@ export async function createPaseoDaemon(
     }),
   });
 
+  managedContinuations = new ManagedContinuationsRuntime({
+    paseoHome: config.paseoHome,
+    agentManager,
+    daemonInstanceId: agentManager.getDaemonInstanceId(),
+    serverId,
+  });
+
   const idleRuntimeCleanup = createIdleRuntimeCleanup({
     enabled: daemonConfigStore.get().idleRuntimeCleanup !== false,
     runtimes: () => agentManager.getRuntimeCleanupCandidates(),
@@ -1629,6 +1645,9 @@ export async function createPaseoDaemon(
     createPaseoWorktree: createAgentCommandDependencies.createPaseoWorktree,
     browserToolsEnabled: browserToolsPolicy.isEnabled(),
     browserToolsBroker,
+    managedContinuations,
+    resolveManagedContinuationPolicy: (_agentId, provider) =>
+      resolveBootstrapManagedContinuationPolicy(provider),
     paseoToolPolicy:
       runtime.paseoToolPolicy ??
       (runtime.callerAgentId ? agentManager.getPaseoToolPolicy(runtime.callerAgentId) : undefined),
@@ -1944,6 +1963,10 @@ export async function createPaseoDaemon(
             providerSnapshotManager.settlePluginProviders();
             restartRecovery.resumePending();
             await finishSubscriptions.start();
+            await managedContinuations.start({
+              restartRecoveryBarrier: async () => undefined,
+              receiptProbe: () => ({ status: "uncertain", detail: "receipt_probe_unwired" }),
+            });
             wsServer.beginAcceptingConnections();
             const relaySecurityLogger = logger.child({ module: "relay-security" });
             relayRuntime = createRelayRuntime({
@@ -2035,6 +2058,7 @@ export async function createPaseoDaemon(
     // Freeze both ingress and registration before taking the agent closure snapshot.
     wsServer?.prepareForShutdown();
     await finishSubscriptions.close();
+    await managedContinuations?.stop({ killTasks: false });
     await wsServer?.agentMessages.close();
     agentManager.prepareForShutdown();
     await restartRecovery.captureRunningAgents();

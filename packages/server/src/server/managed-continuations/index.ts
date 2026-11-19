@@ -9,3 +9,4 @@ export * from "./one-shot-service.js";
 export * from "./tools-service.js";
 export * from "./runtime.js";
 export * from "./register-tools.js";
+export * from "./bootstrap-wiring.js";

@@ -118,6 +118,12 @@ import {
 } from "../../worktree/commands.js";
 import { registerBrowserTools } from "../../browser-tools/tools.js";
 import {
+  buildManagedToolCallerContext,
+  registerManagedContinuationTools,
+  type ManagedContinuationPolicyBundle,
+  type ManagedContinuationsRuntime,
+} from "../../managed-continuations/index.js";
+import {
   acceptRenderUiInput,
   RENDER_UI_DESCRIPTION,
   RENDER_UI_INPUT_SHAPE,
@@ -178,6 +184,11 @@ export interface PaseoToolHostDependencies {
   ) => Promise<string>;
   browserToolsEnabled?: boolean;
   browserToolsBroker?: BrowserToolsBroker | null;
+  managedContinuations?: ManagedContinuationsRuntime;
+  resolveManagedContinuationPolicy?: (
+    agentId: string,
+    provider: string | undefined,
+  ) => ManagedContinuationPolicyBundle;
   paseoToolPolicy?: ProviderPaseoToolsPolicy;
   paseoHome?: string;
   worktreesRoot?: string;
@@ -1499,6 +1510,19 @@ function createToolCatalog(
       broker: options.browserToolsBroker,
       callerAgentId,
       resolveCallerAgent,
+    });
+  }
+  if (options.managedContinuations) {
+    registerManagedContinuationTools({
+      registerTool,
+      toolsService: options.managedContinuations.tools,
+      resolveCallerContext: async () =>
+        buildManagedToolCallerContext({
+          callerAgentId,
+          callerAgent: resolveCallerAgent() ?? null,
+          agentManager: options.agentManager,
+          resolvePolicy: options.resolveManagedContinuationPolicy,
+        }),
     });
   }
 
