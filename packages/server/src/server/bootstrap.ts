@@ -441,6 +441,7 @@ export interface PaseoDaemonConfig {
   notifyOnAgentErrors?: boolean;
   appendSystemPrompt?: string;
   genuiSystemPrompt?: boolean;
+  managedBackgroundCommands?: boolean;
   terminalProfiles?: TerminalProfile[];
   agentProfiles?: AgentProfile[];
   skillSelection?: AgentSkillSelection;
@@ -617,6 +618,7 @@ function createInitialMutableDaemonConfig(config: ResolvedDaemonSettings): Mutab
     resumePrompt: config.resumePrompt ?? "Resume working.",
     appendSystemPrompt: config.appendSystemPrompt ?? "",
     genuiSystemPrompt: config.genuiSystemPrompt !== false,
+    managedBackgroundCommands: config.managedBackgroundCommands === true,
     pluginsEnabled: config.pluginsEnabled ?? false,
     plugins: config.plugins ?? {},
     skills: { selection: config.skillSelection },
@@ -1647,7 +1649,9 @@ export async function createPaseoDaemon(
     browserToolsBroker,
     managedContinuations,
     resolveManagedContinuationPolicy: (_agentId, provider) =>
-      resolveBootstrapManagedContinuationPolicy(provider),
+      resolveBootstrapManagedContinuationPolicy(provider, process.env, {
+        configEnabled: daemonConfigStore.get().managedBackgroundCommands === true,
+      }),
     paseoToolPolicy:
       runtime.paseoToolPolicy ??
       (runtime.callerAgentId ? agentManager.getPaseoToolPolicy(runtime.callerAgentId) : undefined),

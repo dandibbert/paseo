@@ -2996,6 +2996,11 @@ export const ko: TranslationResources = {
           hint: "차트, 표, 비교를 채팅 카드로 그릴 시점을 에이전트에 알려줍니다",
           accessibilityLabel: "채팅 카드 지침",
         },
+        managedContinuations: {
+          title: "백그라운드 명령 및 자동 깨우기",
+          hint: "에이전트가 관리형 백그라운드 셸 명령을 실행하고 일회성 깨우기를 예약하도록 허용합니다",
+          accessibilityLabel: "백그라운드 명령 및 자동 깨우기",
+        },
         systemPrompt: {
           title: "시스템 프롬프트",
           hint: "모든 에이전트에 시스템 프롬프트를 추가합니다",

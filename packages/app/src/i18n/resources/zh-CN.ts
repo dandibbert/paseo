@@ -2990,6 +2990,11 @@ export const zhCN: TranslationResources = {
           hint: "告诉 Agent 何时把图表、表格和对比画成聊天卡片",
           accessibilityLabel: "聊天卡片指引",
         },
+        managedContinuations: {
+          title: "后台命令与自动唤醒",
+          hint: "允许 Agent 运行托管后台 Shell 命令并安排一次性自动唤醒",
+          accessibilityLabel: "后台命令与自动唤醒",
+        },
         systemPrompt: {
           title: "System prompt",
           hint: "为所有 Agent 添加 system prompt",

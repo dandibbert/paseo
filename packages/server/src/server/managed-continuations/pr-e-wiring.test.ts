@@ -131,6 +131,20 @@ describe("Managed Continuations PR E — Bootstrap Wiring & Default-Deny Policy 
     expect(unknown.providerCapabilities.coldSessionResume).toBe(false);
   });
 
+  it("enables Host Shell and verified coldSessionResume (codex/claude) when GUI configEnabled is true", () => {
+    const codex = resolveBootstrapManagedContinuationPolicy("codex", {}, { configEnabled: true });
+    expect(codex.shellPolicy.hostEnabled).toBe(true);
+    expect(codex.shellPolicy.workspaceEnabled).toBe(true);
+    expect(codex.providerCapabilities.coldSessionResume).toBe(true);
+
+    const claude = resolveBootstrapManagedContinuationPolicy("claude", {}, { configEnabled: true });
+    expect(claude.providerCapabilities.coldSessionResume).toBe(true);
+
+    const other = resolveBootstrapManagedContinuationPolicy("other", {}, { configEnabled: true });
+    expect(other.shellPolicy.hostEnabled).toBe(true);
+    expect(other.providerCapabilities.coldSessionResume).toBe(false);
+  });
+
   it("rejects missing callerAgentId when building tool caller context", () => {
     expect(() =>
       buildManagedToolCallerContext({

@@ -3049,6 +3049,11 @@ export const fr: TranslationResources = {
           hint: "Indique aux agents quand afficher graphiques, tableaux et comparaisons en cartes de chat",
           accessibilityLabel: "Consignes des cartes de chat",
         },
+        managedContinuations: {
+          title: "Commandes en arrière-plan et réveil auto",
+          hint: "Autorise les agents à exécuter des commandes gérées en arrière-plan et programmer des réveils",
+          accessibilityLabel: "Commandes en arrière-plan et réveil automatique",
+        },
         systemPrompt: {
           title: "Prompt système",
           hint: "Ajoute un prompt système à tous les agents",

@@ -3044,6 +3044,11 @@ export const es: TranslationResources = {
           hint: "Indica a los agentes cuándo mostrar gráficos, tablas y comparaciones como tarjetas de chat",
           accessibilityLabel: "Instrucciones de tarjetas de chat",
         },
+        managedContinuations: {
+          title: "Comandos en segundo plano y reactivación",
+          hint: "Permite que los agentes ejecuten comandos gestionados en segundo plano y programen reactivaciones",
+          accessibilityLabel: "Comandos en segundo plano y reactivación",
+        },
         systemPrompt: {
           title: "Aviso del sistema",
           hint: "Agrega un mensaje del sistema a todos los agentes.",

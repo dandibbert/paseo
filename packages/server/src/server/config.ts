@@ -527,6 +527,12 @@ function resolveGenuiSystemPrompt(persisted: ReturnType<typeof loadPersistedConf
   return persisted.daemon?.genuiSystemPrompt !== false;
 }
 
+function resolveManagedBackgroundCommands(
+  persisted: ReturnType<typeof loadPersistedConfig>,
+): boolean {
+  return persisted.daemon?.managedBackgroundCommands === true;
+}
+
 function resolveUsageEnabled(persisted: ReturnType<typeof loadPersistedConfig>): boolean {
   return persisted.daemon?.usage?.enabled !== false;
 }
@@ -561,6 +567,7 @@ function resolveStaticLoadConfigSettings(
     autoArchiveAfterMerge: persisted.daemon?.autoArchiveAfterMerge ?? false,
     appendSystemPrompt: resolveAppendSystemPrompt(persisted),
     genuiSystemPrompt: resolveGenuiSystemPrompt(persisted),
+    managedBackgroundCommands: resolveManagedBackgroundCommands(persisted),
     ...resolveProfileLists(persisted),
     hostnames: mergeHostnames([
       persisted.daemon?.hostnames,
@@ -594,6 +601,7 @@ export type ResolvedDaemonSettings = Pick<
   | "notifyOnAgentErrors"
   | "appendSystemPrompt"
   | "genuiSystemPrompt"
+  | "managedBackgroundCommands"
   | "terminalProfiles"
   | "agentProfiles"
   | "skillSelection"

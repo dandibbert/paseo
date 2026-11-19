@@ -12,6 +12,8 @@ export interface ManagedContinuationPolicyBundle {
   providerCapabilities: ProviderContinuationCapabilities;
 }
 
+const DEFAULT_VERIFIED_COLD_RESUME_PROVIDERS = ["codex", "claude"] as const;
+
 /**
  * Default-deny policy resolver for Daemon bootstrap.
  *
@@ -23,8 +25,11 @@ export interface ManagedContinuationPolicyBundle {
 export function resolveBootstrapManagedContinuationPolicy(
   provider: string | undefined,
   env: NodeJS.ProcessEnv = process.env,
+  options?: { configEnabled?: boolean },
 ): ManagedContinuationPolicyBundle {
-  const allowShell = env.PASEO_EXPERIMENTAL_MANAGED_CONTINUATIONS_ALLOW_SHELL === "1";
+  const configEnabled = options?.configEnabled === true;
+  const allowShell =
+    configEnabled || env.PASEO_EXPERIMENTAL_MANAGED_CONTINUATIONS_ALLOW_SHELL === "1";
   const rawProviders = env.PASEO_EXPERIMENTAL_COLD_RESUME_PROVIDERS ?? "";
   const allowedColdResume = new Set(
     rawProviders
@@ -32,6 +37,11 @@ export function resolveBootstrapManagedContinuationPolicy(
       .map((entry) => entry.trim().toLowerCase())
       .filter(Boolean),
   );
+  if (configEnabled) {
+    for (const verified of DEFAULT_VERIFIED_COLD_RESUME_PROVIDERS) {
+      allowedColdResume.add(verified);
+    }
+  }
 
   const shellPolicy: ManagedShellAuthorizationPolicy = allowShell
     ? {

@@ -3025,6 +3025,11 @@ export const ptBR: TranslationResources = {
           hint: "Diz aos agentes quando mostrar gráficos, tabelas e comparações como cartões de chat",
           accessibilityLabel: "Instruções de cartões de chat",
         },
+        managedContinuations: {
+          title: "Comandos em segundo plano e reativação",
+          hint: "Permite que agentes executem comandos gerenciados em segundo plano e agendem reativações",
+          accessibilityLabel: "Comandos em segundo plano e reativação",
+        },
         systemPrompt: {
           title: "Prompt do sistema",
           hint: "Adiciona um prompt do sistema a todos os agentes",

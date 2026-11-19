@@ -3157,6 +3157,11 @@ export const en = {
           hint: "Tells agents when to draw charts, tables and comparisons as chat cards",
           accessibilityLabel: "Chat card instructions",
         },
+        managedContinuations: {
+          title: "Background commands & auto-wake",
+          hint: "Allow agents to run managed background shell commands and schedule one-shot wakeups",
+          accessibilityLabel: "Background commands and auto-wake",
+        },
         systemPrompt: {
           title: "System prompt",
           hint: "Adds a system prompt to all agents",

@@ -3011,6 +3011,11 @@ export const ja: TranslationResources = {
           hint: "グラフ、表、比較をチャットカードで表示するタイミングをエージェントに伝えます",
           accessibilityLabel: "チャットカードの指示",
         },
+        managedContinuations: {
+          title: "バックグラウンドコマンドと自動ウェイク",
+          hint: "エージェントが管理対象バックグラウンドコマンドと単発ウェイクアップを実行できるようにします",
+          accessibilityLabel: "バックグラウンドコマンドと自動ウェイク",
+        },
         systemPrompt: {
           title: "システムプロンプト",
           hint: "すべてのエージェントにシステムプロンプトを追加します",

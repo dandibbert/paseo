@@ -296,6 +296,7 @@ export function HostAgentsPage({ serverId }: { serverId: string }) {
           <BrowserToolsOptInCard serverId={serverId} />
           <AppendSystemPromptCard serverId={serverId} />
           <GenuiSystemPromptCard serverId={serverId} />
+          <ManagedContinuationsCard serverId={serverId} />
           <RestartRecoveryCard serverId={serverId} />
           <IdleRuntimeCleanupCard serverId={serverId} />
           <AgentErrorNotificationsCard serverId={serverId} />
@@ -1075,6 +1076,53 @@ function GenuiSystemPromptCard({ serverId }: { serverId: string }) {
           onValueChange={handleValueChange}
           accessibilityLabel={t("settings.host.orchestration.genuiPrompt.accessibilityLabel")}
           testID="host-page-genui-prompt-switch"
+        />
+      </View>
+    </View>
+  );
+}
+
+function ManagedContinuationsCard({ serverId }: { serverId: string }) {
+  const { t } = useTranslation();
+  const isConnected = useHostRuntimeIsConnected(serverId);
+  const { config, patchConfig } = useDaemonConfig(serverId);
+  const supported = useSessionStore(
+    (state) => state.sessions[serverId]?.serverInfo?.features?.managedContinuations === true,
+  );
+
+  const handleValueChange = useCallback(
+    (next: boolean) => {
+      void patchConfig({ managedBackgroundCommands: next }).catch((error) => {
+        console.error("[HostPage] Failed to update managed background commands", error);
+        Alert.alert(
+          t("settings.host.orchestration.managedContinuations.title"),
+          error instanceof Error ? error.message : String(error),
+        );
+      });
+    },
+    [patchConfig, t],
+  );
+
+  if (!isConnected || !supported) return null;
+
+  return (
+    <View style={settingsStyles.card} testID="host-page-managed-continuations-card">
+      <View style={settingsStyles.row}>
+        <View style={settingsStyles.rowContent}>
+          <Text style={settingsStyles.rowTitle}>
+            {t("settings.host.orchestration.managedContinuations.title")}
+          </Text>
+          <Text style={settingsStyles.rowHint}>
+            {t("settings.host.orchestration.managedContinuations.hint")}
+          </Text>
+        </View>
+        <Switch
+          value={config?.managedBackgroundCommands === true}
+          onValueChange={handleValueChange}
+          accessibilityLabel={t(
+            "settings.host.orchestration.managedContinuations.accessibilityLabel",
+          )}
+          testID="host-page-managed-continuations-switch"
         />
       </View>
     </View>
