@@ -4191,6 +4191,10 @@ export const ServerInfoStatusPayloadSchema = z
         terminalSecureInput: z.boolean().optional(),
         // COMPAT(secureAgentInput): added in personal v0.11.2, remove after 2027-04-13.
         terminalSecurePrompt: z.boolean().optional(),
+        // COMPAT(managedContinuations): added in v0.4.1, remove gate after 2027-11-19.
+        managedContinuations: z.boolean().optional(),
+        // COMPAT(managedTasks): added in v0.4.1, remove gate after 2027-11-19.
+        managedTasks: z.boolean().optional(),
         // COMPAT(historyTextSearch): added in v0.15.3-personal, remove gate after 2027-05-08.
         historyTextSearch: z.boolean().optional(),
         // COMPAT(genuiSystemPrompt): added in personal v0.11.4, remove gate after 2027-04-21.
