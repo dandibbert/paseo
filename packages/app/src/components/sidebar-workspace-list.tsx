@@ -4,6 +4,7 @@ import {
   groupSidebarProjectsByHost,
   projectLocationSummary,
 } from "@/components/sidebar/sidebar-order";
+import { useWorkspaceRowPress } from "../../modules/paseo-press-feedback";
 import { PressHighlight as Pressable } from "@/components/ui/press-highlight";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import {
@@ -1102,13 +1103,11 @@ function WorkspaceRowInner({
     ...dragAttributes
   } = dragHandleProps?.attributes ?? {};
 
-  const handlePress = useCallback(() => {
-    if (interaction.didLongPressRef.current) {
-      interaction.didLongPressRef.current = false;
-      return;
-    }
-    onPress();
-  }, [interaction.didLongPressRef, onPress]);
+  const { onPress: handlePress, feedback } = useWorkspaceRowPress({
+    didLongPressRef: interaction.didLongPressRef,
+    onPress,
+    selected,
+  });
 
   const accessibilityState = useMemo(() => ({ selected }), [selected]);
   const isEditingTitle = titleEditor !== null;
@@ -1203,6 +1202,7 @@ function WorkspaceRowInner({
                   onTogglePin={onTogglePin}
                 />
               </SidebarWorkspaceRowContent>
+              {feedback}
             </SidebarWorkspaceContextMenu>
           </View>
         );

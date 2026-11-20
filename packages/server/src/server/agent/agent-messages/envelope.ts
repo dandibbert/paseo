@@ -10,6 +10,10 @@ import type {
 const agentIdSchema = z.string().min(1);
 const sourceSchema = z.discriminatedUnion("kind", [
   z.object({
+    kind: z.literal("change-request-update"),
+    url: z.url({ protocol: /^https?$/ }),
+  }),
+  z.object({
     kind: z.literal("agent-message"),
     agentId: agentIdSchema,
     serverId: z.string().min(1).optional(),
@@ -76,6 +80,9 @@ function unescapeXml(value: string): string | null {
 
 export function formatAgentMessage(message: AgentMessage): string {
   const { source } = message;
+  if (source?.kind === "change-request-update") {
+    return `<paseo-system version="1" kind="change-request-update" source-url="${escapeXml(source.url)}" message-id="${escapeXml(message.id)}">\n${escapeXml(message.text)}\n</paseo-system>`;
+  }
   const attributes = source
     ? `kind="${source.kind}" source-agent-id="${escapeXml(source.agentId)}"`
     : 'kind="user-message"';
@@ -117,6 +124,7 @@ export function parseAgentMessage(text: string): AgentMessage | null {
     title: attributes.get("source-agent-title"),
     origin: attributes.get("origin"),
     eventIds: rawEventIds ? rawEventIds.split(",").filter(Boolean) : undefined,
+    url: attributes.get("source-url"),
   });
   if (!source.success) return null;
   return { id, source: source.data, text: body };
@@ -190,9 +198,8 @@ function projectAgentMessage(item: AgentTimelineItem): AgentTimelineItem | null 
   if (item.type !== "user_message") return item;
   const message = parseAgentMessage(item.text);
   if (!message) {
-    // Schedule bodies include their run ID, keeping identity stable across acceptance
-    // and provider replay even when the provider assigns its own message ID.
     if (!isSystemInjectedEnvelope(item.text)) return item;
+    // Schedule bodies include the run ID, keeping identity stable across replay.
     const text = item.text.slice("<paseo-system>\n".length, -"\n</paseo-system>".length);
     return {
       type: "tool_call",
@@ -206,6 +213,16 @@ function projectAgentMessage(item: AgentTimelineItem): AgentTimelineItem | null 
   const { source } = message;
   if (!source) {
     return { ...item, text: message.text, clientMessageId: message.id };
+  }
+  if (source.kind === "change-request-update") {
+    return {
+      type: "tool_call",
+      callId: `paseo-change-request:${message.id}`,
+      name: "change_request_update",
+      status: "completed",
+      error: null,
+      detail: { type: "plain_text", text: message.text },
+    };
   }
   return {
     type: "tool_call",

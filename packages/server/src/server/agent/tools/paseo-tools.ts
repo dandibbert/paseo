@@ -1,3 +1,5 @@
+import type { ChangeRequestWatches } from "../change-request-watches/index.js";
+import { changeRequestStatusSchema } from "../../../services/change-request-source.js";
 import { registerPluginTools } from "./plugin-tools.js";
 import type { FinishSubscriptions, FinishRegistration } from "../finish-subscriptions/index.js";
 import type { AgentMessageDelivery } from "../agent-messages/index.js";
@@ -144,6 +146,7 @@ import { isPaseoToolEnabled } from "../paseo-tool-policy.js";
 
 export interface PaseoToolHostDependencies {
   agentMessages?: () => AgentMessageDelivery;
+  changeRequestWatches?: ChangeRequestWatches;
   finishSubscriptions?: () => FinishSubscriptions;
   serverId?: string;
   hosts?: () => ToolHosts;
@@ -668,6 +671,82 @@ export function createPaseoAgentToolManifest(
   return { tools: createToolCatalog(options, "agent").tools };
 }
 
+async function parseToolInput(tool: PaseoToolDefinition, input: unknown): Promise<unknown> {
+  const inputSchema = tool.inputSchema;
+  if (!inputSchema) {
+    return input;
+  }
+  const schema =
+    typeof inputSchema === "object" &&
+    inputSchema !== null &&
+    typeof (inputSchema as { safeParseAsync?: unknown }).safeParseAsync === "function"
+      ? (inputSchema as z.ZodType)
+      : z.object(inputSchema as z.ZodRawShape).passthrough();
+  const result = await schema.safeParseAsync(input);
+  if (!result.success) {
+    throw new PaseoToolInputError(result.error.message, result.error.issues);
+  }
+  return result.data;
+}
+
+function registerSpeakTool(params: {
+  registerTool: (
+    name: string,
+    config: PaseoToolConfig,
+    handler: (
+      input: { text: string },
+      context: PaseoToolExecutionContext,
+    ) => Promise<PaseoToolResult>,
+  ) => void;
+  options: PaseoToolHostDependencies;
+  callerAgentId: string | undefined;
+  callerContext: ReturnType<NonNullable<PaseoToolHostDependencies["resolveCallerContext"]>> | null;
+  resolveSpeakHandler: PaseoToolHostDependencies["resolveSpeakHandler"];
+}): void {
+  const { registerTool, options, callerAgentId, callerContext, resolveSpeakHandler } = params;
+  if (!(options.voiceOnly || options.enableVoiceTools || callerContext?.enableVoiceTools)) {
+    return;
+  }
+  registerTool(
+    "speak",
+    {
+      title: "Speak",
+      description:
+        "Speak text to the user via daemon-managed voice output. Blocks until playback completes.",
+      inputSchema: {
+        text: z
+          .string()
+          .trim()
+          .min(1, "text is required")
+          .max(4000, "text must be 4000 characters or fewer"),
+      },
+      outputSchema: {
+        ok: z.boolean(),
+      },
+    },
+    async (args, context) => {
+      if (!callerAgentId) {
+        throw new PaseoToolInputError("speak is only available to agent-scoped tool sessions");
+      }
+      const handler = resolveSpeakHandler?.(callerAgentId) ?? null;
+      if (!handler) {
+        throw new PaseoToolInputError(
+          `No speak handler registered for your session '${callerAgentId}'`,
+        );
+      }
+      await handler({
+        text: args.text,
+        callerAgentId,
+        signal: context?.signal,
+      });
+      return {
+        content: [],
+        structuredContent: ensureValidJson({ ok: true }),
+      };
+    },
+  );
+}
+
 function createToolCatalog(
   options: PaseoToolHostDependencies,
   scope: "agent" | "top-level",
@@ -688,24 +767,6 @@ function createToolCatalog(
   } = options;
   const childLogger = logger.child({ module: "agent", component: "paseo-tool-catalog" });
   const callerContext = callerAgentId ? (resolveCallerContext?.(callerAgentId) ?? null) : null;
-
-  const parseToolInput = async (tool: PaseoToolDefinition, input: unknown): Promise<unknown> => {
-    const inputSchema = tool.inputSchema;
-    if (!inputSchema) {
-      return input;
-    }
-    const schema =
-      typeof inputSchema === "object" &&
-      inputSchema !== null &&
-      typeof (inputSchema as { safeParseAsync?: unknown }).safeParseAsync === "function"
-        ? (inputSchema as z.ZodType)
-        : z.object(inputSchema as z.ZodRawShape).passthrough();
-    const result = await schema.safeParseAsync(input);
-    if (!result.success) {
-      throw new PaseoToolInputError(result.error.message, result.error.issues);
-    }
-    return result.data;
-  };
 
   function agentMessages(): AgentMessageDelivery {
     if (!options.agentMessages) throw new Error("Agent message delivery is not configured");
@@ -1445,46 +1506,13 @@ function createToolCatalog(
   type TopLevelCreateAgentArgs = z.infer<typeof canonicalTopLevelCreateAgentArgsSchema>;
   type LegacyTopLevelCreateAgentArgs = z.infer<typeof legacyTopLevelCreateAgentArgsSchema>;
 
-  if (options.voiceOnly || options.enableVoiceTools || callerContext?.enableVoiceTools) {
-    registerTool(
-      "speak",
-      {
-        title: "Speak",
-        description:
-          "Speak text to the user via daemon-managed voice output. Blocks until playback completes.",
-        inputSchema: {
-          text: z
-            .string()
-            .trim()
-            .min(1, "text is required")
-            .max(4000, "text must be 4000 characters or fewer"),
-        },
-        outputSchema: {
-          ok: z.boolean(),
-        },
-      },
-      async (args, context) => {
-        if (!callerAgentId) {
-          throw new PaseoToolInputError("speak is only available to agent-scoped tool sessions");
-        }
-        const handler = resolveSpeakHandler?.(callerAgentId) ?? null;
-        if (!handler) {
-          throw new PaseoToolInputError(
-            `No speak handler registered for your session '${callerAgentId}'`,
-          );
-        }
-        await handler({
-          text: args.text,
-          callerAgentId,
-          signal: context?.signal,
-        });
-        return {
-          content: [],
-          structuredContent: ensureValidJson({ ok: true }),
-        };
-      },
-    );
-  }
+  registerSpeakTool({
+    registerTool,
+    options,
+    callerAgentId,
+    callerContext,
+    resolveSpeakHandler,
+  });
 
   if (options.voiceOnly) {
     return toCatalog();
@@ -2969,6 +2997,61 @@ function createToolCatalog(
       };
     },
   );
+
+  if (options.changeRequestWatches) {
+    const watches = options.changeRequestWatches;
+    const inputSchema = { url: z.string().trim().min(1).describe("URL of a GitHub pull request.") };
+    registerTool(
+      "subscribe_change_request",
+      {
+        title: "Watch change request",
+        description:
+          "Watch a pull request for check failures, passing checks, new comments, reviews, and closure. Returns the current state and sends future updates after your current turn.",
+        inputSchema,
+        outputSchema: {
+          url: z.string(),
+          ...changeRequestStatusSchema.shape,
+          subscribed: z.boolean(),
+          stale: z
+            .boolean()
+            .describe("The last stored status is shown because a fresh read is pending or failed."),
+        },
+      },
+      async ({ url }) => {
+        if (!callerAgentId) {
+          throw new PaseoToolInputError(
+            "subscribe_change_request requires an agent-scoped session",
+          );
+        }
+        resolveCallerAgent();
+        return {
+          content: [],
+          structuredContent: ensureValidJson(await watches.subscribe(callerAgentId, url)),
+        };
+      },
+    );
+    registerTool(
+      "unsubscribe_change_request",
+      {
+        title: "Stop watching change request",
+        description: "Stop your watch and discard its unsent updates.",
+        inputSchema,
+        outputSchema: { url: z.string(), removed: z.boolean() },
+      },
+      async ({ url }) => {
+        if (!callerAgentId) {
+          throw new PaseoToolInputError(
+            "unsubscribe_change_request requires an agent-scoped session",
+          );
+        }
+        resolveCallerAgent();
+        return {
+          content: [],
+          structuredContent: ensureValidJson(await watches.unsubscribe(callerAgentId, url)),
+        };
+      },
+    );
+  }
 
   registerTool(
     "create_heartbeat",

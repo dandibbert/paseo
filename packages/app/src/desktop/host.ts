@@ -180,6 +180,8 @@ export interface DesktopHostBridge {
   platform?: string;
   notchPanel?: DesktopNotchPanelBridge;
   windowChromeMode?: string;
+  browserHostLabel?: string;
+  browserHostInstanceId?: string;
   invoke?: DesktopInvokeBridge["invoke"];
   getPendingOpenProject?: () => Promise<string | null>;
   getInitialOpenDirectoryMode?: () => Promise<"workspace" | "terminal">;

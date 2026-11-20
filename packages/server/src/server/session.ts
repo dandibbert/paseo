@@ -25,7 +25,7 @@ import { CreationService, type CreatedAgent } from "./creation/index.js";
 import type { CreationSnapshot, AgentCreateRequest } from "@getpaseo/protocol/messages";
 import type { MessageReceipts } from "./message-receipts/index.js";
 import {
-  isHeartbeatBackgroundWorkItem,
+  isDaemonBackgroundWorkItem,
   type AgentBackgroundWorkItem,
 } from "./agent/background-work/index.js";
 import equal from "fast-deep-equal";
@@ -1467,6 +1467,8 @@ export class Session {
             type: "browser.host.register.request" as const,
             requestId: uuidv4(),
             hostKind: host.data.hostKind,
+            label: host.data.label,
+            instanceId: host.data.instanceId,
             supportedCommands: host.data.supportedCommands,
           };
           void this.delivery
@@ -2358,7 +2360,7 @@ export class Session {
       return items;
     }
     return items.map((item) => {
-      if (!isHeartbeatBackgroundWorkItem(item)) return item;
+      if (!isDaemonBackgroundWorkItem(item)) return item;
       const { canStop: _canStop, stopToken: _stopToken, ...visible } = item;
       return visible;
     });
@@ -2628,28 +2630,16 @@ export class Session {
     respond = true,
   ): Promise<void> {
     if (!this.browserToolsBroker) throw new Error("Browser hosting is unavailable");
-    const source = this.delivery.currentSource;
     let unregister: (() => void) | undefined;
     const owner = this.delivery.begin("browser-host", undefined, () => unregister?.());
     try {
       unregister = this.browserToolsBroker.registerClient({
         id: owner.id,
         hostKind: request.hostKind,
+        label: request.label,
+        instanceId: request.instanceId,
         supportedCommands: request.supportedCommands,
         sendBrowserAutomationRequest: (message) => owner.emit(message),
-        getActivity: () => {
-          const activity = source ? this.getClientActivity(source) : null;
-          if (!activity) return null;
-          const focusedAgent = activity.focusedAgentId
-            ? this.agentManager.getAgent(activity.focusedAgentId)
-            : null;
-          return {
-            appVisible: activity.appVisible,
-            focusedAgentId: activity.focusedAgentId,
-            focusedWorkspaceId: focusedAgent?.workspaceId ?? null,
-            lastActivityAtMs: activity.lastActivityAt.getTime(),
-          };
-        },
       });
       if (respond)
         this.emit({
@@ -2701,12 +2691,39 @@ export class Session {
     });
   }
 
+  private async subscribeProviderUpdates(
+    request: Extract<
+      SessionInboundMessage,
+      { type: "provider.installation.update.subscribe.request" }
+    >,
+  ): Promise<void> {
+    if (!this.delivery.isModern(this.delivery.currentSource))
+      throw new Error("Provider update observation requires owned subscriptions");
+    const installations = this.providerSnapshotManager.installations;
+    let stop: (() => void) | undefined;
+    const owner = this.delivery.begin("provider-update", undefined, () => stop?.());
+    // Register and read in one synchronous turn so no progress falls between them.
+    stop = installations.observeUpdates(request.provider, (event) => owner.emit(event));
+    this.emit({
+      type: "provider.installation.update.subscribe.response",
+      payload: {
+        requestId: request.requestId,
+        subscriptionId: owner.responseId,
+        provider: request.provider,
+        update: installations.getUpdate(request.provider),
+        error: null,
+      },
+    });
+  }
+
   private dispatchSubscriptionMessage(
     msg: SessionInboundMessage,
     source?: object,
   ): Promise<void> | undefined {
     if (msg.type === "workspace.setup.subscribe.request") return this.subscribeWorkspaceSetup(msg);
     if (msg.type === "browser.host.register.request") return this.registerBrowserHost(msg);
+    if (msg.type === "provider.installation.update.subscribe.request")
+      return this.subscribeProviderUpdates(msg);
     if (msg.type === "browser.automation.execute.response") {
       if (source)
         this.browserToolsBroker?.receiveResponse(
@@ -3405,6 +3422,8 @@ export class Session {
         return this.checkoutSession.handleStatusRequest(msg);
       case "checkout.commits.list.request":
         return this.checkoutSession.handleCommitsListRequest(msg);
+      case "checkout.worktrees.list.request":
+        return this.checkoutSession.handleWorktreesListRequest(msg);
       case "checkout.commits.file_diff.request":
         return this.checkoutSession.handleCommitFileDiffRequest(msg, this.delivery.requestSignal);
       case "validate_branch_request":
@@ -3623,6 +3642,12 @@ export class Session {
         return this.handleProviderPluginsListRequest(msg);
       case "agent.provider.plugins.action.request":
         return this.handleProviderPluginActionRequest(msg);
+      case "provider.installation.inspect.request":
+        return this.providerCatalogSession.handleInspectProviderInstallationRequest(msg);
+      case "provider.installation.check_updates.request":
+        return this.providerCatalogSession.handleCheckProviderUpdatesRequest(msg);
+      case "provider.installation.update.request":
+        return this.providerCatalogSession.handleUpdateProviderRequest(msg);
       case "provider.usage.list.request":
         return this.usageSession.handleLegacyList(msg);
       case "usage.list_reports.request":

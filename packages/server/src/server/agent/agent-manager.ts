@@ -79,6 +79,7 @@ import {
   applyProviderOptionsPatch,
   exposeFeatureValuesToHook,
   convertLegacyOptions,
+  convertLegacyClaudeUltracode,
   MalformedLegacyOptionError,
   resolveAdapter,
   foldHookFeatureValues,
@@ -126,9 +127,10 @@ import {
 } from "./provider-subagents/store.js";
 import {
   AgentBackgroundWorkStore,
-  isHeartbeatBackgroundWorkItem,
+  isDaemonBackgroundWorkItem,
   type AgentBackgroundWorkItem,
-  type HeartbeatBackgroundWorkInput,
+  type DaemonBackgroundWorkInput,
+  type DaemonBackgroundWorkKey,
 } from "./background-work/index.js";
 import { withTimeout } from "../../utils/promise-timeout.js";
 import { buildSessionConfig, extractAttention } from "../persistence-hooks.js";
@@ -344,6 +346,8 @@ export type AgentAttentionCallback = (params: {
   agentId: string;
   provider: AgentProvider;
   reason: "finished" | "error" | "permission";
+  /** When the agent's current unread attention started; null when the agent is read. */
+  attentionTimestamp: Date | null;
 }) => void;
 
 export type AgentArchivedCallback = (agentId: string) => Promise<void> | void;
@@ -625,9 +629,11 @@ function attachManagedTurnIdentity(
       return turnId ? { event: { ...event, turnId }, turnId } : { event, turnId };
     }
     case "timeline": {
-      // Live provider items belong to the foreground turn that owns their dispatch.
-      // Provider history deliberately keeps absent IDs because it has no daemon turn identity.
-      const turnId = agent.activeForegroundTurnId ?? agent.activeTurnId ?? undefined;
+      // A notice with no open run is a display turn of its own.
+      const turnId =
+        agent.activeForegroundTurnId ??
+        agent.activeTurnId ??
+        (event.item.type === "notification" ? randomUUID() : undefined);
       return turnId ? { event: { ...event, turnId }, turnId } : { event, turnId };
     }
     default:
@@ -1673,12 +1679,12 @@ export class AgentManager {
     return this.backgroundWork.list(agentId);
   }
 
-  setHeartbeatBackgroundWork(input: HeartbeatBackgroundWorkInput): void {
-    this.publishBackgroundWork(input.agentId, this.backgroundWork.setHeartbeat(input));
+  setDaemonBackgroundWork(input: DaemonBackgroundWorkInput): void {
+    this.publishBackgroundWork(input.agentId, this.backgroundWork.setDaemonBackgroundWork(input));
   }
 
-  removeHeartbeatBackgroundWork(agentId: string, scheduleId: string): void {
-    this.publishBackgroundWork(agentId, this.backgroundWork.removeHeartbeat(agentId, scheduleId));
+  removeDaemonBackgroundWork(key: DaemonBackgroundWorkKey): void {
+    this.publishBackgroundWork(key.agentId, this.backgroundWork.removeDaemonBackgroundWork(key));
   }
 
   async stopAgentBackgroundWork({
@@ -1687,11 +1693,11 @@ export class AgentManager {
     stopToken,
     canManageAutomation,
   }: StopAgentBackgroundWorkOptions): Promise<void> {
-    if (isHeartbeatBackgroundWorkItem({ id: itemId })) {
+    if (isDaemonBackgroundWorkItem({ id: itemId })) {
       if (this.agents.get(agentId)?.internal) throw new Error(`Unknown agent '${agentId}'`);
       if (!canManageAutomation)
-        throw new Error("Managing automation is required to stop a heartbeat");
-      await this.backgroundWork.stopHeartbeat(agentId, itemId, stopToken);
+        throw new Error("Managing automation is required to stop daemon background work");
+      await this.backgroundWork.stopDaemon(agentId, itemId, stopToken);
       return;
     }
     this.requirePublicAgent(agentId);
@@ -1704,7 +1710,7 @@ export class AgentManager {
     await session.stopBackgroundWork(providerItemId);
   }
 
-  getAgentBackgroundWorkSummary(agentId: string): { count: number } | undefined {
+  getAgentBackgroundWorkSummary(agentId: string) {
     return this.backgroundWork.summary(agentId);
   }
 
@@ -3502,8 +3508,13 @@ export class AgentManager {
     pendingRun: PendingForegroundRun;
     prompt: AgentPromptInput;
     options?: AgentRunOptions;
+    promptStart?: ForegroundPromptStart;
   }): Promise<string | null> {
-    const { agent, agentId, pendingRun, prompt, options } = params;
+    const { agent, agentId, pendingRun, prompt, options, promptStart } = params;
+    if (promptStart?.admit?.() === false) {
+      this.runs.settleForegroundRun(agentId, pendingRun.token);
+      return null;
+    }
     try {
       const result = await agent.session.startTurn(prompt, options);
       if (pendingRun.settled) {
@@ -3676,6 +3687,7 @@ export class AgentManager {
         pendingRun,
         prompt,
         options,
+        promptStart,
       });
       if (turnId === null) {
         const canceledEvent: AgentStreamEvent = {
@@ -5192,6 +5204,10 @@ export class AgentManager {
       this.publishBackgroundWork(agent.id, items);
       return;
     }
+    // Resolve notice membership before selecting the foreground run's waiters.
+    if (event.type === "timeline" && event.item.type === "notification") {
+      event = attachManagedTurnIdentity(agent, event, false).event;
+    }
     const turnId = getAgentStreamEventTurnId(event);
     const matchingWaiters = this.runs.getMatchingWaiters(agent, turnId);
     this.logger.trace(
@@ -6035,7 +6051,11 @@ export class AgentManager {
       this.openActiveTurn(agent, eventTurnId, new Date());
     }
     agent.lastError = undefined;
-    agent.attention = { requiresAttention: false };
+    // Nobody read the agent, so an unread finish stays unread. Clearing it would make every
+    // turn the agent starts on its own, such as a reaction to background output, notify again.
+    if (agent.attention.requiresAttention && agent.attention.attentionReason === "error") {
+      agent.attention = { requiresAttention: false };
+    }
     agent.lifecycle = "running";
     this.emitState(agent);
   }
@@ -6318,11 +6338,16 @@ export class AgentManager {
       return;
     }
 
+    const finished = previousStatus === "running" && currentStatus === "idle";
     if (agent.attention.requiresAttention) {
+      // The unread finish stays the same; the notifier knows whether the user was told about it.
+      if (finished && agent.attention.attentionReason === "finished") {
+        this.broadcastAgentAttention(agent, "finished");
+      }
       return;
     }
 
-    if (previousStatus === "running" && currentStatus === "idle") {
+    if (finished) {
       agent.attention = {
         requiresAttention: true,
         attentionReason: "finished",
@@ -6459,6 +6484,9 @@ export class AgentManager {
       agentId: agent.id,
       provider: agent.provider,
       reason,
+      attentionTimestamp: agent.attention.requiresAttention
+        ? agent.attention.attentionTimestamp
+        : null,
     });
   }
 
@@ -6657,7 +6685,15 @@ export class AgentManager {
 
   private withConvertedOptions(config: AgentSessionConfig): AgentSessionConfig {
     const providerOptions = this.convertLegacyOptions(config.provider, config.providerOptions);
-    return providerOptions === config.providerOptions ? config : { ...config, providerOptions };
+    return this.convertLegacySessionConfig(
+      providerOptions === config.providerOptions ? config : { ...config, providerOptions },
+    );
+  }
+
+  convertLegacySessionConfig<T extends Parameters<typeof convertLegacyClaudeUltracode>[0]>(
+    config: T,
+  ): T {
+    return convertLegacyClaudeUltracode(config, this.adapterOf(config.provider));
   }
 
   private async prepareSessionConfig(

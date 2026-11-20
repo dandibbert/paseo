@@ -1,3 +1,4 @@
+import { isAgentRunning } from "@getpaseo/protocol/agent-state-bucket";
 import type { Agent } from "@/stores/session-store";
 import { isAgentWorking } from "@/utils/agent-activity";
 import type { ConfirmDialogInput } from "@/utils/confirm-dialog";
@@ -5,7 +6,7 @@ import type { ConfirmDialogInput } from "@/utils/confirm-dialog";
 export interface ResolveArchiveSubagentDialogInput {
   title: Agent["title"] | null | undefined;
   status: Agent["status"] | null | undefined;
-  turn: Agent["turn"] | null | undefined;
+  turn?: Agent["turn"] | null | undefined;
   backgroundWork?: Agent["backgroundWork"];
 }
 
@@ -32,15 +33,23 @@ export function resolveArchiveSubagentDialog(
       ? isAgentWorking({
           status: input.status,
           turn: input.turn,
-          backgroundWork: input.backgroundWork,
+          backgroundWork:
+            input.backgroundWork?.runningCount !== undefined
+              ? { count: input.backgroundWork.runningCount }
+              : input.backgroundWork,
         })
-      : false;
+      : isAgentRunning(input);
+
+  let message = `Remove ${subagentLabel} from the track. The subagent will be archived.`;
+  if (isRunning) {
+    message = `${subagentLabel} is still running. Archiving it will stop the subagent and remove it from the track.`;
+  } else if (input.backgroundWork?.count) {
+    message = `Archiving ${subagentLabel} will stop its background work and remove it from the track.`;
+  }
 
   return {
     title: isRunning ? "Archive running subagent?" : "Archive subagent?",
-    message: isRunning
-      ? `${subagentLabel} is still running. Archiving it will stop the subagent and remove it from the track.`
-      : `Remove ${subagentLabel} from the track. The subagent will be archived.`,
+    message,
     confirmLabel: "Archive",
     cancelLabel: "Cancel",
     destructive: true,

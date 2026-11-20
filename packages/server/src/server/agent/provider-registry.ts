@@ -669,6 +669,7 @@ function wrapClientProvider(
     shouldDiscoverModels: inner.shouldDiscoverModels?.bind(inner),
     isAvailable: (signal, options) => inner.isAvailable(signal, options),
     getDiagnostic: inner.getDiagnostic?.bind(inner),
+    installation: inner.installation,
   };
 }
 
