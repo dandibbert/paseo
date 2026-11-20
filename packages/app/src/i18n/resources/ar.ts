@@ -307,6 +307,7 @@ export const ar: TranslationResources = {
   sessions: {
     title: "السجل",
     empty: "لا توجد جلسات بعد",
+    emptyForHost: "لا توجد جلسات لهذا المضيف",
     noMatches: "لا توجد جلسات مطابقة",
     tooManyMatches: "نتائج كثيرة جدًا — ضيّق نطاق البحث",
     hostLoadFailed: "{{host}}: تعذر تحميل السجل",
@@ -1363,6 +1364,8 @@ export const ar: TranslationResources = {
       settings: "إعدادات",
       closeSidebar: "إغلاق الشريط الجانبي",
       moreActions: "المزيد من الإجراءات",
+      markReadFailed: "تعذر وضع علامة مقروء على مساحة العمل",
+      markUnreadFailed: "تعذر وضع علامة غير مقروء على مساحة العمل",
     },
     footer: {
       usage: "الاستخدام",
@@ -2158,6 +2161,22 @@ export const ar: TranslationResources = {
     archiveTooltip: "أرشفة الوكيل الفرعي",
     archiveFinishedAction: "أرشفة الوكلاء الفرعيين المكتملين",
     archiveFinishedRetry: "إعادة المحاولة ({{failed}}/{{total}})",
+    dialogs: {
+      thisSubagentLower: "هذا الوكيل الفرعي",
+      thisSubagentCapitalized: "هذا الوكيل الفرعي",
+      detachTitle: "فصل الوكيل الفرعي؟",
+      detachMessage: "سيغادر {{label}} هذا المسار ويستمر كوكيل مستقل.",
+      detachConfirm: "فصل",
+      archiveTitle: "أرشفة الوكيل الفرعي؟",
+      archiveRunningTitle: "أرشفة الوكيل الفرعي قيد التشغيل؟",
+      archiveMessage: "إزالة {{label}} من المسار. ستتم أرشفة الوكيل الفرعي.",
+      archiveRunningMessage:
+        "لا يزال {{label}} قيد التشغيل. ستؤدي أرشفته إلى إيقاف الوكيل الفرعي وإزالته من المسار.",
+      archiveBackgroundMessage:
+        "ستؤدي أرشفة {{label}} إلى إيقاف عمله في الخلفية وإزالته من المسار.",
+      archiveConfirm: "أرشفة",
+      cancel: "إلغاء",
+    },
   },
   panels: {
     draft: {
@@ -3089,6 +3108,26 @@ export const ar: TranslationResources = {
       },
       workspaces: {
         unavailable: "Connect to this host to manage workspaces",
+        autoArchiveMerged: {
+          title: "أرشفة مساحات عمل PR المدمجة",
+          hint: "أرشفة مساحات عمل Paseo النظيفة تلقائيًا بعد دمج طلب السحب",
+          errorTitle: "تعذر تحديث مساحات العمل",
+        },
+      },
+      browserTools: {
+        title: "أدوات المتصفح",
+        warning:
+          "السماح للوكلاء بالوصول إلى علامات تبويب متصفح Paseo والتحكم فيها، بما في ذلك حالة تسجيل الدخول. لا تفعّل هذا إلا للوكلاء الذين تثق بهم.",
+        updating: "جارٍ تحديث أدوات المتصفح…",
+        enableAccessibility: "تمكين أدوات المتصفح",
+      },
+      terminalAgents: {
+        title: "وكلاء الطرفية",
+        hooks: {
+          title: "تمكين خطافات وكلاء الطرفية",
+          hint: "الحصول على إشعارات وحالة من وكلاء الطرفية. يقوم هذا بتثبيت خطافات في ملفات إعداد الوكيل.",
+          errorTitle: "تعذر تحديث خطافات وكلاء الطرفية",
+        },
       },
       terminalProfiles: {
         unavailable: "Connect to this host to manage terminal profiles",

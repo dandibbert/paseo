@@ -62,7 +62,7 @@ function resolveEmptyText(input: {
 }): string {
   if (input.isSearching) return input.t("sessions.noMatches");
   if (input.isAllHosts) return input.t("sessions.empty");
-  return "No sessions for this host";
+  return input.t("sessions.emptyForHost");
 }
 
 type SessionsBody = "messages" | "loading" | "error" | "empty" | "list";

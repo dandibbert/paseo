@@ -312,6 +312,7 @@ export const ja: TranslationResources = {
   sessions: {
     title: "履歴",
     empty: "セッションがまだありません",
+    emptyForHost: "このホストのセッションはありません",
     noMatches: "一致するセッションはありません",
     tooManyMatches: "一致が多すぎます — 検索条件を絞ってください",
     hostLoadFailed: "{{host}}: 履歴を読み込めませんでした",
@@ -1378,6 +1379,8 @@ export const ja: TranslationResources = {
       settings: "設定",
       closeSidebar: "サイドバーを閉じる",
       moreActions: "その他のアクション",
+      markReadFailed: "ワークスペースを既読にできませんでした",
+      markUnreadFailed: "ワークスペースを未読にできませんでした",
     },
     footer: {
       usage: "使用状況",
@@ -2180,6 +2183,22 @@ export const ja: TranslationResources = {
     archiveTooltip: "サブエージェントをアーカイブ",
     archiveFinishedAction: "完了したサブエージェントをアーカイブ",
     archiveFinishedRetry: "再試行 ({{failed}}/{{total}})",
+    dialogs: {
+      thisSubagentLower: "このサブエージェント",
+      thisSubagentCapitalized: "このサブエージェント",
+      detachTitle: "サブエージェントを切り離しますか？",
+      detachMessage: "{{label}} はこのトラックから離れ、独立したエージェントとして続行します。",
+      detachConfirm: "切り離す",
+      archiveTitle: "サブエージェントをアーカイブしますか？",
+      archiveRunningTitle: "実行中のサブエージェントをアーカイブしますか？",
+      archiveMessage: "{{label}} をトラックから削除します。サブエージェントはアーカイブされます。",
+      archiveRunningMessage:
+        "{{label}} はまだ実行中です。アーカイブするとサブエージェントが停止し、トラックから削除されます。",
+      archiveBackgroundMessage:
+        "{{label}} をアーカイブするとバックグラウンド処理が停止し、トラックから削除されます。",
+      archiveConfirm: "アーカイブ",
+      cancel: "キャンセル",
+    },
   },
   panels: {
     draft: {
@@ -3084,6 +3103,26 @@ export const ja: TranslationResources = {
       },
       workspaces: {
         unavailable: "ワークスペースを管理するにはこのホストに接続してください",
+        autoArchiveMerged: {
+          title: "マージ済み PR のワークスペースをアーカイブ",
+          hint: "プルリクエストがマージされた後、変更のない Paseo ワークスペースを自動でアーカイブします",
+          errorTitle: "ワークスペースを更新できません",
+        },
+      },
+      browserTools: {
+        title: "ブラウザーツール",
+        warning:
+          "ログイン済みの状態を含め、エージェントが Paseo のブラウザーブラウズタブにアクセス・操作できるようにします。信頼できるエージェントにのみ有効にしてください。",
+        updating: "ブラウザーツールを更新中…",
+        enableAccessibility: "ブラウザーツールを有効にする",
+      },
+      terminalAgents: {
+        title: "ターミナルエージェント",
+        hooks: {
+          title: "ターミナルエージェントのフックを有効にする",
+          hint: "ターミナルエージェントから通知とステータスを受け取ります。エージェント設定ファイルにフックをインストールします。",
+          errorTitle: "ターミナルエージェントのフックを更新できません",
+        },
       },
       terminalProfiles: {
         unavailable: "ターミナルプロファイルを管理するにはこのホストに接続してください",

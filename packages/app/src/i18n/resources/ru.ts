@@ -311,6 +311,7 @@ export const ru: TranslationResources = {
   sessions: {
     title: "История",
     empty: "Сессий пока нет",
+    emptyForHost: "Нет сессий для этого хоста",
     noMatches: "Подходящих сессий не найдено",
     tooManyMatches: "Слишком много совпадений — уточните запрос",
     hostLoadFailed: "{{host}}: не удалось загрузить историю",
@@ -1384,6 +1385,8 @@ export const ru: TranslationResources = {
       settings: "Настройки",
       closeSidebar: "Закрыть боковую панель",
       moreActions: "Дополнительные действия",
+      markReadFailed: "Не удалось отметить рабочее пространство как прочитанное",
+      markUnreadFailed: "Не удалось отметить рабочее пространство как непрочитанное",
     },
     footer: {
       usage: "Использование",
@@ -2195,6 +2198,22 @@ export const ru: TranslationResources = {
     archiveTooltip: "Архивировать субагента",
     archiveFinishedAction: "Архивировать завершенные субагенты",
     archiveFinishedRetry: "Повторить ({{failed}}/{{total}})",
+    dialogs: {
+      thisSubagentLower: "этот субагент",
+      thisSubagentCapitalized: "Этот субагент",
+      detachTitle: "Отделить субагента?",
+      detachMessage: "{{label}} выйдет из этой дорожки и продолжит работу как отдельный агент.",
+      detachConfirm: "Отделить",
+      archiveTitle: "Архивировать субагента?",
+      archiveRunningTitle: "Архивировать запущенного субагента?",
+      archiveMessage: "Удалить {{label}} с дорожки. Субагент будет архивирован.",
+      archiveRunningMessage:
+        "{{label}} еще работает. Архивация остановит субагента и удалит его с дорожки.",
+      archiveBackgroundMessage:
+        "Архивация {{label}} остановит фоновую работу и удалит его с дорожки.",
+      archiveConfirm: "Архивировать",
+      cancel: "Отмена",
+    },
   },
   panels: {
     draft: {
@@ -3109,6 +3128,26 @@ export const ru: TranslationResources = {
       },
       workspaces: {
         unavailable: "Подключитесь к этому хосту, чтобы управлять рабочими пространствами",
+        autoArchiveMerged: {
+          title: "Архивировать пространства после слияния PR",
+          hint: "Автоматически архивировать чистые рабочие пространства Paseo после слияния pull request",
+          errorTitle: "Не удалось обновить рабочие пространства",
+        },
+      },
+      browserTools: {
+        title: "Инструменты браузера",
+        warning:
+          "Разрешить агентам открывать и управлять вкладками браузера Paseo, включая авторизованные сеансы. Включайте только для доверенных агентов.",
+        updating: "Обновление инструментов браузера…",
+        enableAccessibility: "Включить инструменты браузера",
+      },
+      terminalAgents: {
+        title: "Терминальные агенты",
+        hooks: {
+          title: "Включить хуки терминальных агентов",
+          hint: "Получать уведомления и статус от терминальных агентов. Устанавливает хуки в файлы конфигурации агента.",
+          errorTitle: "Не удалось обновить хуки терминальных агентов",
+        },
       },
       terminalProfiles: {
         unavailable: "Подключитесь к этому хосту, чтобы управлять профилями терминала",

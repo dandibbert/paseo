@@ -312,6 +312,7 @@ export const ptBR: TranslationResources = {
   sessions: {
     title: "Histórico de agentes",
     empty: "Nenhuma sessão ainda",
+    emptyForHost: "Nenhuma sessão para este host",
     noMatches: "Nenhuma sessão corresponde",
     tooManyMatches: "Muitos resultados — refine a busca",
     hostLoadFailed: "{{host}}: Não foi possível carregar o histórico",
@@ -1391,6 +1392,8 @@ export const ptBR: TranslationResources = {
       settings: "Configurações",
       closeSidebar: "Fechar barra lateral",
       moreActions: "Mais ações",
+      markReadFailed: "Não foi possível marcar o workspace como lido",
+      markUnreadFailed: "Não foi possível marcar o workspace como não lido",
     },
     footer: {
       usage: "Uso",
@@ -2194,6 +2197,22 @@ export const ptBR: TranslationResources = {
     archiveTooltip: "Arquivar subagente",
     archiveFinishedAction: "Arquivar subagentes concluídos",
     archiveFinishedRetry: "Tentar novamente ({{failed}}/{{total}})",
+    dialogs: {
+      thisSubagentLower: "este subagente",
+      thisSubagentCapitalized: "Este subagente",
+      detachTitle: "Desvincular subagente?",
+      detachMessage: "{{label}} sairá desta faixa e continuará como um agente independente.",
+      detachConfirm: "Desvincular",
+      archiveTitle: "Arquivar subagente?",
+      archiveRunningTitle: "Arquivar subagente em execução?",
+      archiveMessage: "Remover {{label}} da faixa. O subagente será arquivado.",
+      archiveRunningMessage:
+        "{{label}} ainda está em execução. Arquivá-lo interromperá o subagente e o removerá da faixa.",
+      archiveBackgroundMessage:
+        "Arquivar {{label}} interromperá o trabalho em segundo plano e o removerá da faixa.",
+      archiveConfirm: "Arquivar",
+      cancel: "Cancelar",
+    },
   },
   panels: {
     draft: {
@@ -3098,6 +3117,26 @@ export const ptBR: TranslationResources = {
       },
       workspaces: {
         unavailable: "Conecte-se a este host para gerenciar workspaces",
+        autoArchiveMerged: {
+          title: "Arquivar workspaces de PR mesclado",
+          hint: "Arquivar automaticamente workspaces limpos do Paseo após a mesclagem do pull request",
+          errorTitle: "Não foi possível atualizar os workspaces",
+        },
+      },
+      browserTools: {
+        title: "Ferramentas do navegador",
+        warning:
+          "Permitir que os agentes acessem e controlem as guias do navegador do Paseo, incluindo sessões autenticadas. Ative apenas para agentes em que você confia.",
+        updating: "Atualizando ferramentas do navegador…",
+        enableAccessibility: "Ativar ferramentas do navegador",
+      },
+      terminalAgents: {
+        title: "Agentes de terminal",
+        hooks: {
+          title: "Ativar hooks de agentes de terminal",
+          hint: "Receba notificações e status dos agentes de terminal. Isso instala hooks nos arquivos de configuração do agente.",
+          errorTitle: "Não foi possível atualizar os hooks de agentes de terminal",
+        },
       },
       terminalProfiles: {
         unavailable: "Conecte-se a este host para gerenciar perfis de terminal",

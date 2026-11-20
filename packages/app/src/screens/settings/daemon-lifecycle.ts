@@ -1,3 +1,5 @@
+import { i18n } from "@/i18n/i18next";
+
 interface UnconfirmedTerminalProcess {
   pid: number;
   role: string;
@@ -48,11 +50,11 @@ export async function restartDaemonFromSettings(
   if (options.killTerminals && unconfirmed.length > 0) {
     throw new Error(
       [
-        "The daemon restarted, but closing its terminals was not confirmed; these processes may still be running:",
+        i18n.t("settings.host.daemon.lifecycle.terminalCleanupHeader"),
         ...unconfirmed.map(
           (entry) => `pid ${entry.pid} (${entry.role}): ${entry.reason} (${entry.detail})`,
         ),
-        "Stopping the daemon retries the cleanup.",
+        i18n.t("settings.host.daemon.lifecycle.terminalCleanupHint"),
       ].join("\n"),
     );
   }
