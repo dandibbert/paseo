@@ -6900,9 +6900,10 @@ export class CodexAppServerAgentSession implements AgentSession {
       if (!callId) continue;
       const state = this.subAgentCallsByCallId.get(callId);
       if (!state) continue;
-      const status = resolveCodexCollabAgentUpdate(state.toolCall.status, update);
-      if (status !== state.toolCall.status) {
-        this.emitSubAgentActivityUpdate(callId, status);
+      const currentChildStatus = state.childStatuses.get(update.threadId) ?? state.toolCall.status;
+      const status = resolveCodexCollabAgentUpdate(currentChildStatus, update);
+      if (status !== currentChildStatus) {
+        this.emitSubAgentActivityUpdate(callId, status, { childThreadId: update.threadId });
       }
     }
     // A control rendered at start must also render its completion, even if

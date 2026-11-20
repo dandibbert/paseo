@@ -5424,7 +5424,6 @@ describe("Codex app-server provider", () => {
     expect(grandchildUpserts.map((event) => event.parentSubagentId)).toEqual([
       "child-thread-root",
       "child-thread-root",
-      "child-thread-root",
     ]);
     expect(events).toContainEqual(
       expect.objectContaining({
