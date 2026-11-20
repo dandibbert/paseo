@@ -40,7 +40,6 @@ interface ConnectBrowserHostClientOptions {
 
 interface BrowserHostClientHandle {
   clientId: string;
-  sendHeartbeat(focusedAgentId: string | null, appVisible: boolean): Promise<void>;
   nextBrowserRequest(): Promise<BrowserAutomationExecuteRequest>;
   respondToBrowserRequest(response: BrowserAutomationExecuteResponse): void;
   disconnect(): Promise<void>;
@@ -78,39 +77,6 @@ function createWorkspaceAutoNameStub(): WorkspaceAutoName {
 }
 
 describe("WebSocketServer browser tools wiring", () => {
-  it("routes new tabs to the desktop connection whose heartbeat shows the calling agent", async () => {
-    const harness = await startBrowserToolsDaemonHarness();
-    const showingAgent = await harness.connectBrowserHostClient();
-    const otherWindow = await harness.connectBrowserHostClient();
-    await showingAgent.sendHeartbeat("agent-visible", true);
-    await otherWindow.sendHeartbeat("agent-other", true);
-
-    const pending = harness.broker.execute({
-      agentId: "agent-visible",
-      workspaceId: "workspace-1",
-      command: { command: "new_tab", args: { url: "https://example.com" } },
-    });
-    const request = await showingAgent.nextBrowserRequest();
-    expect(request).toMatchObject({
-      agentId: "agent-visible",
-      command: { command: "new_tab", args: { url: "https://example.com" } },
-    });
-    showingAgent.respondToBrowserRequest({
-      type: "browser.automation.execute.response",
-      payload: {
-        requestId: request.requestId,
-        ok: true,
-        result: {
-          command: "new_tab",
-          browserId: BROWSER_ID,
-          workspaceId: "workspace-1",
-          url: "https://example.com",
-        },
-      },
-    });
-    await expect(pending).resolves.toMatchObject({ ok: true });
-  });
-
   it("registers capable clients and dispatches broker requests over the real WebSocket path", async () => {
     const harness = await startBrowserToolsDaemonHarness();
     const browserHost = await harness.connectBrowserHostClient();
@@ -270,16 +236,6 @@ async function startBrowserToolsDaemonHarness(): Promise<BrowserToolsDaemonHarne
 
       return {
         clientId: clientId ?? "",
-        async sendHeartbeat(focusedAgentId, appVisible) {
-          client.sendHeartbeat({
-            deviceType: "web",
-            focusedAgentId,
-            lastActivityAt: new Date().toISOString(),
-            appVisible,
-          });
-          // The ping shares the same WebSocket; its response confirms the heartbeat was handled.
-          await client.ping();
-        },
         nextBrowserRequest: () => requests.next(),
         respondToBrowserRequest: (response) =>
           client.sendBrowserAutomationExecuteResponse(response),
@@ -327,9 +283,6 @@ function createVoiceAssistantWebSocketServer(params: {
   const agentManager = {
     setAgentAttentionCallback() {},
     subscribe: () => () => {},
-    // Heartbeat routing consults the focused agent's workspace. These test
-    // clients use synthetic IDs, so no agent record is expected to exist.
-    getAgent: () => null,
     getMetricsSnapshot: () => ({
       total: 0,
       byLifecycle: {},
