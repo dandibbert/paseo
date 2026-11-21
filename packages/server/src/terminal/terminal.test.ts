@@ -597,6 +597,40 @@ describe("createTerminal", () => {
     expect(getRowText(state, 1)).toBe("REPLY u001b[1;4R");
   });
 
+  it("answers DECRQM queries for DEC Mode 2026 synchronized output", async () => {
+    const program = `
+      process.stdin.setRawMode(true);
+      let buf = "";
+      process.stdin.on("data", (chunk) => {
+        buf += chunk.toString("utf8");
+        if (buf.includes("?2026;2$y") && !buf.includes("?2026;1$y")) {
+          process.stdout.write("\\x1b[?2026h\\x1b[?2026$p");
+        } else if (buf.includes("?2026;1$y")) {
+          process.stdout.write("\\x1b[?2026l\\r\\nDECRQM " + JSON.stringify(buf).slice(2, -1));
+        }
+      });
+      process.stdout.write("\\x1b[?2026$p");
+      setInterval(() => {}, 100000);
+    `;
+    const session = trackSession(
+      await createTerminal({
+        workspaceId: "ws-test",
+        cwd: realpathSync(tmpdir()),
+        cols: 80,
+        rows: 5,
+        command: process.execPath,
+        args: ["-e", program],
+      }),
+    );
+
+    const state = await waitForState(session, (current) =>
+      getRowText(current, 1).startsWith("DECRQM"),
+    );
+
+    expect(getRowText(state, 1)).toContain("u001b[?2026;2$y");
+    expect(getRowText(state, 1)).toContain("u001b[?2026;1$y");
+  });
+
   it("replays emoji clusters at their columns with the cursor after them", async () => {
     const text = "A😀B❤️C👋🏽D👨‍👩‍👧E";
     const session = trackSession(

@@ -913,6 +913,56 @@ export async function createTerminal(
     ptyProcess.write(`\x1b[?${buffer.cursorY + 1};${buffer.cursorX + 1}R`);
     return true;
   });
+  terminal.parser.registerCsiHandler({ intermediates: "$", final: "p" }, (params) => {
+    if (params.length !== 1 || typeof params[0] !== "number") {
+      return false;
+    }
+    const mode = params[0];
+    let status = 0;
+    if (mode === 2) status = 4;
+    else if (mode === 4) status = terminal.modes.insertMode ? 1 : 2;
+    else if (mode === 12) status = 3;
+    else if (mode === 20) status = 2;
+    ptyProcess.write(`\x1b[${mode};${status}$y`);
+    return true;
+  });
+  terminal.parser.registerCsiHandler({ prefix: "?", intermediates: "$", final: "p" }, (params) => {
+    if (params.length !== 1 || typeof params[0] !== "number") {
+      return false;
+    }
+    const mode = params[0];
+    const modes = terminal.modes;
+    const b2v = (active: boolean): number => (active ? 1 : 2);
+    const statusByMode: Record<number, number> = {
+      1: b2v(modes.applicationCursorKeysMode),
+      6: b2v(modes.originMode),
+      7: b2v(modes.wraparoundMode),
+      8: 3,
+      12: 1,
+      25: b2v(modes.showCursor),
+      45: b2v(modes.reverseWraparoundMode),
+      47: b2v(terminal.buffer.active === terminal.buffer.alternate),
+      66: b2v(modes.applicationKeypadMode),
+      67: 4,
+      1000: b2v(modes.mouseTrackingMode === "vt200"),
+      1002: b2v(modes.mouseTrackingMode === "drag"),
+      1003: b2v(modes.mouseTrackingMode === "any"),
+      1004: b2v(modes.sendFocusMode),
+      1005: 4,
+      1006: 2,
+      1015: 4,
+      1016: 2,
+      1047: b2v(terminal.buffer.active === terminal.buffer.alternate),
+      1048: 1,
+      1049: b2v(terminal.buffer.active === terminal.buffer.alternate),
+      2004: b2v(modes.bracketedPasteMode),
+      2026: b2v(modes.synchronizedOutputMode),
+      9001: b2v(modes.win32InputMode),
+    };
+    const status = statusByMode[mode] ?? 0;
+    ptyProcess.write(`\x1b[?${mode};${status}$y`);
+    return true;
+  });
   for (const [code, response] of TERMINAL_OSC_COLOR_QUERY_RESPONSES) {
     terminal.parser.registerOscHandler(code, (data) => {
       if (data.trim() !== "?") {
