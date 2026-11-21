@@ -665,6 +665,7 @@ function wrapClientProvider(
     unarchiveNativeSession: unarchiveNativeSession
       ? async (handle) => await unarchiveNativeSession({ ...handle, provider: inner.provider })
       : undefined,
+    resolveUsageLaunch: inner.resolveUsageLaunch?.bind(inner),
     getCatalogCacheKey: inner.getCatalogCacheKey?.bind(inner),
     shouldDiscoverModels: inner.shouldDiscoverModels?.bind(inner),
     isAvailable: (signal, options) => inner.isAvailable(signal, options),

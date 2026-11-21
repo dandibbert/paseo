@@ -2454,6 +2454,9 @@ export const ar: TranslationResources = {
       resetsIn: "تتم إعادة التعيين خلال {{duration}}",
       resetsAtWeekday: "{{weekday}} {{time}}",
       resetsAtDate: "{{date}}، {{time}}",
+      projectedLeftAtReset: "نحو {{percentage}} متبقية عند إعادة التعيين",
+      limitReached: "تم بلوغ الحد",
+      mayHaveRunOut: "ربما نفدت الحصة",
       runsOutNow: "ينفد الآن",
       runsOutIn: "ينفد خلال {{duration}}",
       justNow: "الآن",
@@ -3030,7 +3033,8 @@ export const ar: TranslationResources = {
         updateAvailable: "التحديث متاح",
         updateTitle: "تحديث مهارات Paseo ؟",
         uninstallTitle: "إلغاء تثبيت مهارات Paseo ؟",
-        uninstallMessage: "يزيل جميع مهارات تنسيق Paseo من ~/.agents ، ~/.claude ، ~/.codex.",
+        uninstallMessage:
+          "يزيل جميع مهارات تنسيق Paseo من ~/.agents و~/.claude و~/.codex و~/.gemini/config.",
         choose: "اختيار المهارات",
         chooseAll: "كل المهارات",
         chooseAllHint: "أبقِ جميع المهارات المرفقة مثبتة، بما فيها ما يُضاف لاحقًا.",
@@ -3038,7 +3042,7 @@ export const ar: TranslationResources = {
         chooseEmpty: "لا تتضمن هذه النسخة أي مهارات.",
         removeTitle: "إزالة المهارات غير المحددة؟",
         removeMessage:
-          "سيتم حذف {{skills}} من ~/.agents و~/.claude و~/.codex. كما يُحذف كل ما أضفته داخل مجلدات المهارات تلك.",
+          "سيتم حذف {{skills}} من ~/.agents و~/.claude و~/.codex و~/.gemini/config. كما يُحذف كل ما أضفته داخل مجلدات المهارات تلك.",
         saveFailed: "تعذر حفظ اختيار المهارات.",
         statusFailed: "غير قادر على التحقق من حالة مهارات التنسيق.",
         updateFailed: "غير قادر على تحديث مهارات التنسيق.",

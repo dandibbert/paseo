@@ -137,6 +137,7 @@ function isProviderRequestReply(
 
 class ProviderRuntime {
   private connection: ProviderConnection | null = null;
+  connectedLaunch: ProviderLaunch | undefined;
   private connecting: Promise<ProviderConnection> | null = null;
   private closed = false;
   private generation = 0;
@@ -189,6 +190,12 @@ class ProviderRuntime {
     const launch = await this.resolveEffectiveLaunch();
     if (!launch) return undefined;
     if (!launch.resolved) throw new Error(`${launch.command} not found on PATH`);
+    return { command: launch.command, args: launch.args, env: launch.env };
+  }
+
+  async resolveUsageLaunch(): Promise<ProviderLaunch | undefined> {
+    const launch = await this.resolveEffectiveLaunch();
+    if (!launch?.resolved) return undefined;
     return { command: launch.command, args: launch.args, env: launch.env };
   }
 
@@ -425,8 +432,9 @@ class ProviderRuntime {
   }
 
   private async establishConnection(generation: number): Promise<ProviderConnection> {
+    const launch = await this.resolveLaunch();
     const rawConnection = await this.registration.connect({
-      launch: await this.resolveLaunch(),
+      launch,
       versions: [PROVIDER_PROTOCOL_VERSION],
       capabilities: PROVIDER_CAPABILITIES,
     });
@@ -440,6 +448,7 @@ class ProviderRuntime {
       await rawConnection.close().catch(() => undefined);
       throw error;
     }
+    this.connectedLaunch = launch;
     const connection = normalizeConnection(rawConnection);
     const unsubscribe = connection.onEvent((event) => this.accept(event));
     if (this.closed || generation !== this.generation) {
@@ -1038,6 +1047,10 @@ class PluginAgentClient implements AgentClient {
     this.runtime.onSessionOpened((session, opened) => this.acceptChild(session, opened));
   }
 
+  resolveUsageLaunch() {
+    return this.runtime.resolveUsageLaunch();
+  }
+
   get capabilities(): AgentCapabilityFlags {
     return agentCapabilities(this.runtime.negotiatedCapabilities);
   }
@@ -1203,6 +1216,12 @@ class PluginAgentClient implements AgentClient {
       },
       bind,
       config.settings,
+      this.runtime.connectedLaunch
+        ? {
+            ...this.runtime.connectedLaunch,
+            env: { ...this.runtime.connectedLaunch.env, ...config.env },
+          }
+        : undefined,
     );
     bind(bridge);
     return session;
@@ -1303,6 +1322,7 @@ class PluginAgentSession implements AgentSession {
     ) => Promise<ProviderRuntimeSession>,
     private readonly onBind: (bridge: ProviderRuntimeSession) => void,
     givenOptions: Readonly<Record<string, JsonValue>>,
+    private readonly usageLaunch: ProviderLaunch | undefined,
   ) {
     this.subagentIdsBySession.set(bridge.id, null);
     // Every setting the session opened with that was not given, including ones nobody set.
@@ -1316,6 +1336,17 @@ class PluginAgentSession implements AgentSession {
       (entry) => entry.item.type === "notification",
     );
     this.unsubscribe = bridge.onEvent((event) => this.accept(event, true));
+  }
+
+  usageSession() {
+    if (this.closed || !this.usageLaunch) return null;
+    return {
+      provider: this.provider,
+      model: this.bridge.config.model,
+      env: this.usageLaunch.env,
+      launch: this.usageLaunch,
+      sessionKey: this.bridge.id,
+    };
   }
 
   get id(): string {
@@ -2157,6 +2188,10 @@ function decodePersistence(handle: AgentPersistenceHandle): ProviderPersistence 
   const fromMetadata = handle.metadata?.pluginProviderPersistence;
   if (fromMetadata !== undefined) {
     return ProviderPersistenceSchema.parse(fromMetadata);
+  }
+  // COMPAT(gooseProvider): added in v0.17.0, remove after 2027-05-20 once legacy handles have migrated.
+  if (handle.provider === "goose" && !handle.sessionId.startsWith("plugin:")) {
+    return { version: 1, data: { sessionId: handle.sessionId } };
   }
   return decodePersistenceId(handle.sessionId);
 }
