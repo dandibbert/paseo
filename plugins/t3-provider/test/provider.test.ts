@@ -1,7 +1,7 @@
 import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, expect, test } from "vitest";
+import { afterEach, expect, test, vi } from "vitest";
 import {
   PROVIDER_CAPABILITIES,
   type ProviderConnection,
@@ -12,6 +12,9 @@ import { parsePairOutput } from "../server/auth.js";
 import { createT3Provider } from "../server/provider.js";
 import { reportFromT3 } from "../server/usage.js";
 import { FakeT3, projection, run, turnItem } from "./fake-t3.js";
+
+// Each test runs a real HTTP and WebSocket server; CI runs every plugin suite at once.
+vi.setConfig({ testTimeout: 30_000 });
 
 const cleanups: Array<() => Promise<void>> = [];
 afterEach(async () => {
@@ -52,7 +55,7 @@ async function harness(options: ConstructorParameters<typeof FakeT3>[0] = {}) {
     after?: number,
   ): Promise<ProviderEvent>;
   async function waitFor(predicate: (event: ProviderEvent) => boolean, after = 0) {
-    const deadline = Date.now() + 5000;
+    const deadline = Date.now() + 20_000;
     for (;;) {
       const found = events.slice(after).find(predicate);
       if (found) return found;

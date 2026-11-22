@@ -19,6 +19,8 @@ interface ProviderModelMutationInput {
   refresh: (providers: AgentProvider[]) => Promise<void>;
   fallbackError: string;
   disconnectedError: string;
+  /** Runs once the config holds the change, before the provider refresh that follows. */
+  onConfigSaved?: () => void;
 }
 
 export function updateAdditionalModels(
@@ -65,6 +67,7 @@ export function createProviderModelMutation() {
           },
         });
         if (!config) throw new Error(input.disconnectedError);
+        input.onConfigSaved?.();
         await input.refresh([provider]);
         publish({ status: "idle" });
         return true;

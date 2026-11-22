@@ -83,7 +83,7 @@ test("adds and removes a custom model while the provider fails", async ({ page }
 
     await test.step("the page leads with the failure and lists no reported models", async () => {
       await expect(page.getByTestId("provider-error")).toBeVisible({ timeout: 30_000 });
-      await expect(page.getByText("Custom models", { exact: true })).toBeVisible();
+      await expect(page.getByText("Manual models and overrides", { exact: true })).toBeVisible();
       await expect(page.getByRole("textbox", { name: "Search models" })).toHaveCount(0);
     });
 

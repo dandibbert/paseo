@@ -17,7 +17,7 @@ export async function addCustomModel(page: Page, id: string): Promise<void> {
   await editor.getByPlaceholder("e.g. openai/gpt-5").fill(id);
   await editor.getByRole("button", { name: "Save", exact: true }).click();
   await expect(page.getByRole("button", { name: `Remove ${id}`, exact: true })).toHaveCount(1);
-  await expect(page.getByTestId("add-custom-model-sheet")).toBeHidden();
+  await expect(page.getByTestId("provider-model-editor-sheet")).toBeHidden();
 }
 
 export async function removeCustomModel(page: Page, id: string): Promise<void> {
@@ -48,6 +48,6 @@ export async function expectCustomModelRetained(page: Page, id: string): Promise
 async function searchModels(page: Page, id: string): Promise<void> {
   await page.getByRole("textbox", { name: "Search models" }).fill(id);
   await page
-    .getByText("Custom models", { exact: true })
+    .getByText("Manual models and overrides", { exact: true })
     .evaluate((heading) => heading.scrollIntoView({ block: "start" }));
 }

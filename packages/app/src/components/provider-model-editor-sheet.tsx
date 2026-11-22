@@ -353,6 +353,10 @@ function OpenProviderModelEditorSheet({
         refresh,
         fallbackError: t("settings.providers.models.failedToSave"),
         disconnectedError: t("workspace.terminal.hostDisconnected"),
+        // Close once the model is saved; a slow or failing refresh reports on the page.
+        onConfigSaved: () => {
+          if (mounted.current) onClose();
+        },
       })
       .then((saved) => {
         if (saved && mounted.current) onClose();
@@ -497,7 +501,13 @@ function OpenProviderModelEditorSheet({
           <Button variant="secondary" size="sm" onPress={onClose} disabled={saving}>
             {t("common.actions.cancel")}
           </Button>
-          <Button variant="default" size="sm" onPress={handleSave} disabled={saving || !config}>
+          <Button
+            variant="default"
+            size="sm"
+            onPress={handleSave}
+            disabled={!config}
+            loading={saving}
+          >
             {saving ? "Saving..." : "Save"}
           </Button>
         </View>

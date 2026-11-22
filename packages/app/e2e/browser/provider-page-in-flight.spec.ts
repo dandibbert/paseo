@@ -9,18 +9,19 @@ import { installDaemonWebSocketGate } from "../support/helpers/daemon-websocket-
 const MODEL_ID = "in-flight-model";
 
 test.describe("provider page work in flight", () => {
-  test("says Adding... on the Add button while a custom model is saved", async ({ page }) => {
+  test("says Saving... on the Save button while a custom model is saved", async ({ page }) => {
     const gate = await installDaemonWebSocketGate(page);
     await openCustomModels(page);
 
     await page.getByRole("button", { name: "Add model", exact: true }).click();
-    const sheet = page.getByTestId("add-custom-model-sheet");
+    // The fork adds models through its full model editor.
+    const sheet = page.getByTestId("provider-model-editor-sheet");
     await page.getByPlaceholder("e.g. openai/gpt-5").fill(MODEL_ID);
     gate.holdNextServerMessage("set_daemon_config_response");
-    await sheet.getByRole("button", { name: "Add", exact: true }).click();
+    await sheet.getByRole("button", { name: "Save", exact: true }).click();
     await gate.waitForHeldServerMessage("set_daemon_config_response");
 
-    const adding = sheet.getByRole("button", { name: "Adding...", exact: true });
+    const adding = sheet.getByRole("button", { name: "Saving...", exact: true });
     await expect(adding.getByRole("progressbar")).toBeVisible();
     await expect(adding).toBeDisabled();
 
