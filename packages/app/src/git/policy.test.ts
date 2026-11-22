@@ -890,9 +890,9 @@ describe("git-actions-policy", () => {
 
     expect(actions.primary).toMatchObject({
       id: "pull",
-      label: "Pull",
-      pendingLabel: "正在 pull...",
-      successLabel: "已 pull",
+      label: "拉取",
+      pendingLabel: "正在拉取...",
+      successLabel: "已拉取",
     });
     expect(actions.secondary.find((entry) => entry.id === "pr")).toMatchObject({
       label: "创建 PR",
