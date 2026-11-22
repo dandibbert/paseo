@@ -330,6 +330,7 @@ function createVoiceAssistantWebSocketServer(params: {
     // Heartbeat routing consults the focused agent's workspace. These test
     // clients use synthetic IDs, so no agent record is expected to exist.
     getAgent: () => null,
+    onStop: () => () => {},
     getMetricsSnapshot: () => ({
       total: 0,
       byLifecycle: {},

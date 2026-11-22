@@ -38,6 +38,8 @@ export interface AgentListItem {
   cwd: string;
   created: string;
   background: boolean;
+  labels: Record<string, string>;
+  workspaceId: string | null;
 }
 
 /** Helper to get relative time string */
@@ -114,6 +116,8 @@ function toListItem(agent: AgentSnapshotPayload): AgentListItem {
     cwd: shortenPath(agent.cwd),
     created: relativeTime(agent.createdAt),
     background: agent.background === true,
+    labels: agent.labels,
+    workspaceId: agent.workspaceId ?? null,
   };
 }
 
