@@ -296,11 +296,15 @@ describe("Codex app-server provider controls", () => {
   });
 
   test.each(["magpie/team/gpt-5.5", "my source/gpt-5.5", "magpie/gpt-5.5-pro", "claude-sonnet-5"])(
-    "%s gets no speed tiers because Codex would not resolve it",
+    "%s gets no model speed tiers because Codex would not resolve it",
     async (model) => {
       const { session } = await createConnectedSession({ model });
       try {
-        expect(session.controls.some((control) => control.key === "service_tier")).toBe(false);
+        // Flex stays: Codex accepts it whatever the model advertises.
+        const speed = session.controls.find((control) => control.key === "service_tier");
+        expect(speed?.type === "select" ? speed.choices.map((choice) => choice.value) : []).toEqual(
+          ["default", "flex"],
+        );
       } finally {
         await session.close();
       }
