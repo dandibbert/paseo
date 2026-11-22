@@ -38,10 +38,11 @@ executable resolution and applies `agents.providers.<provider-id>.command` and `
 connecting. Register the provider's icon with the plugin rather than adding it to the app's
 provider icon map. You do not need a core manifest entry or provider factory.
 
-| Provider    | Transport                                  | Setup and limitations                                            |
-| ----------- | ------------------------------------------ | ---------------------------------------------------------------- |
-| Antigravity | ACP over the installed `agy acp` CLI       | [Antigravity](../public-docs/supported-providers/antigravity.md) |
-| Muse Code   | MSP over one `muse serve` host per session | [Muse Code](../public-docs/supported-providers/muse-code.md)     |
+| Provider                  | Transport                                      | Setup and limitations                                                      |
+| ------------------------- | ---------------------------------------------- | -------------------------------------------------------------------------- |
+| Antigravity               | ACP over the installed `agy acp` CLI           | [Antigravity](../public-docs/supported-providers/antigravity.md)           |
+| Muse Code                 | MSP over one `muse serve` host per session     | [Muse Code](../public-docs/supported-providers/muse-code.md)               |
+| Antigravity via T3 (fork) | T3 Code's WebSocket RPC, as one more T3 client | [Antigravity via T3](../public-docs/supported-providers/antigravity-t3.md) |
 
 ## Provider-native session options
 

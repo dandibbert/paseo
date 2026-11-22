@@ -33,6 +33,7 @@ describe("provider documentation", () => {
             href: "/docs/supported-providers",
             children: [
               { href: "/docs/supported-providers/antigravity" },
+              { href: "/docs/supported-providers/antigravity-t3" },
               { href: "/docs/supported-providers/claude-code" },
               { href: "/docs/supported-providers/codex" },
               { href: "/docs/supported-providers/fx" },
