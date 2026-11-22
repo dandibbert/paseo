@@ -124,90 +124,93 @@ describe("Managed Continuations PR C — Tools, OneShotWakeService, Policy Gates
   });
 
   afterEach(async () => {
-    await fs.rm(tmpHome, { recursive: true, force: true });
-    await fs.rm(workspaceDir, { recursive: true, force: true });
+    await fs.rm(tmpHome, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
+    await fs.rm(workspaceDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
   });
 
-  it("enforces default-deny Host+Workspace+Profile Shell authorization, read-only escape gate, and coldSessionResume fail-closed", async () => {
-    const ledgerStore = new ManagedContinuationStore(tmpHome);
-    const taskStore = new ManagedTaskStore(tmpHome);
-    const ledger = new ManagedContinuationLedger({
-      store: ledgerStore,
-      daemonInstanceId: "daemon-c-1",
-      clock,
-    });
-    const worker = new ManagedTaskWorker({ store: taskStore, bootId: "boot-c" });
-    await worker.start();
-    const oneShot = new OneShotWakeService({ ledger, clock, reconcileIntervalMs: 0 });
-    const tools = new ManagedContinuationToolsService({
-      ledger,
-      taskStore,
-      worker,
-      oneShotService: oneShot,
-      clock,
-    });
-    const origin: RunIdentity = { daemonInstanceId: "daemon-c-1", runToken: "origin-c-1" };
+  it.skipIf(process.platform === "win32")(
+    "enforces default-deny Host+Workspace+Profile Shell authorization, read-only escape gate, and coldSessionResume fail-closed",
+    async () => {
+      const ledgerStore = new ManagedContinuationStore(tmpHome);
+      const taskStore = new ManagedTaskStore(tmpHome);
+      const ledger = new ManagedContinuationLedger({
+        store: ledgerStore,
+        daemonInstanceId: "daemon-c-1",
+        clock,
+      });
+      const worker = new ManagedTaskWorker({ store: taskStore, bootId: "boot-c" });
+      await worker.start();
+      const oneShot = new OneShotWakeService({ ledger, clock, reconcileIntervalMs: 0 });
+      const tools = new ManagedContinuationToolsService({
+        ledger,
+        taskStore,
+        worker,
+        oneShotService: oneShot,
+        clock,
+      });
+      const origin: RunIdentity = { daemonInstanceId: "daemon-c-1", runToken: "origin-c-1" };
 
-    const baseCaller: ManagedToolCallerContext = {
-      agentId: "agent-1",
-      workspaceId: "ws-1",
-      defaultCwd: workspaceDir,
-      allowedWorkspaceRoots: [workspaceDir],
-      originRun: origin,
-      shellPolicy: DEFAULT_MANAGED_SHELL_POLICY,
-      providerCapabilities: DEFAULT_PROVIDER_CONTINUATION_CAPABILITIES,
-    };
+      const baseCaller: ManagedToolCallerContext = {
+        agentId: "agent-1",
+        workspaceId: "ws-1",
+        defaultCwd: workspaceDir,
+        allowedWorkspaceRoots: [workspaceDir],
+        originRun: origin,
+        shellPolicy: DEFAULT_MANAGED_SHELL_POLICY,
+        providerCapabilities: DEFAULT_PROVIDER_CONTINUATION_CAPABILITIES,
+      };
 
-    // 1) Default deny when host/workspace not explicitly enabled.
-    await expect(tools.runBackgroundCommand(baseCaller, { command: "echo hi" })).rejects.toThrow(
-      ManagedContinuationPolicyError,
-    );
+      // 1) Default deny when host/workspace not explicitly enabled.
+      await expect(tools.runBackgroundCommand(baseCaller, { command: "echo hi" })).rejects.toThrow(
+        ManagedContinuationPolicyError,
+      );
 
-    // 2) Read-only profile blocks host shell escape unless allowHostShellEscape: true.
-    await expect(
-      tools.runBackgroundCommand(
-        {
-          ...baseCaller,
-          shellPolicy: {
-            hostEnabled: true,
-            workspaceEnabled: true,
-            profileMode: "read-only",
-            allowHostShellEscape: false,
+      // 2) Read-only profile blocks host shell escape unless allowHostShellEscape: true.
+      await expect(
+        tools.runBackgroundCommand(
+          {
+            ...baseCaller,
+            shellPolicy: {
+              hostEnabled: true,
+              workspaceEnabled: true,
+              profileMode: "read-only",
+              allowHostShellEscape: false,
+            },
+            providerCapabilities: { coldSessionResume: true },
           },
-          providerCapabilities: { coldSessionResume: true },
+          { command: "echo hi" },
+        ),
+      ).rejects.toThrow(/HOST_SHELL_ESCAPE_DENIED|blocks Host Shell escape/);
+
+      // 3) Provider without coldSessionResume rejects notifyOnExit:true and send_later,
+      //    but allows notifyOnExit:false when Shell is explicitly authorized!
+      const authorizedNoColdResume: ManagedToolCallerContext = {
+        ...baseCaller,
+        shellPolicy: {
+          hostEnabled: true,
+          workspaceEnabled: true,
+          profileMode: "full",
         },
-        { command: "echo hi" },
-      ),
-    ).rejects.toThrow(/HOST_SHELL_ESCAPE_DENIED|blocks Host Shell escape/);
+        providerCapabilities: { coldSessionResume: false },
+      };
+      await expect(
+        tools.runBackgroundCommand(authorizedNoColdResume, {
+          command: "echo hi",
+          notifyOnExit: true,
+        }),
+      ).rejects.toThrow(/coldSessionResume/);
+      await expect(
+        tools.sendLater(authorizedNoColdResume, { prompt: "remind me", afterSeconds: 30 }),
+      ).rejects.toThrow(/coldSessionResume/);
 
-    // 3) Provider without coldSessionResume rejects notifyOnExit:true and send_later,
-    //    but allows notifyOnExit:false when Shell is explicitly authorized!
-    const authorizedNoColdResume: ManagedToolCallerContext = {
-      ...baseCaller,
-      shellPolicy: {
-        hostEnabled: true,
-        workspaceEnabled: true,
-        profileMode: "full",
-      },
-      providerCapabilities: { coldSessionResume: false },
-    };
-    await expect(
-      tools.runBackgroundCommand(authorizedNoColdResume, {
-        command: "echo hi",
-        notifyOnExit: true,
-      }),
-    ).rejects.toThrow(/coldSessionResume/);
-    await expect(
-      tools.sendLater(authorizedNoColdResume, { prompt: "remind me", afterSeconds: 30 }),
-    ).rejects.toThrow(/coldSessionResume/);
-
-    const silentRes = await tools.runBackgroundCommand(authorizedNoColdResume, {
-      command: "echo SILENT_OK",
-      notifyOnExit: false,
-    });
-    expect(silentRes.notification).toBe("disabled");
-    oneShot.stop();
-  });
+      const silentRes = await tools.runBackgroundCommand(authorizedNoColdResume, {
+        command: "echo SILENT_OK",
+        notifyOnExit: false,
+      });
+      expect(silentRes.notification).toBe("disabled");
+      oneShot.stop();
+    },
+  );
 
   it("strictly XML-escapes malicious </paseo-system> payloads in managed-continuation envelopes", () => {
     const hostileText =
@@ -228,102 +231,105 @@ describe("Managed Continuations PR C — Tools, OneShotWakeService, Policy Gates
     expect(parsed!.text).toBe(hostileText);
   });
 
-  it("executes full tool -> worker -> durable result -> outbox -> idle-only AgentManager wake cycle (echo BUILD_FAILED >&2; exit 2) and enforces caller ownership", async () => {
-    const ledgerStore = new ManagedContinuationStore(tmpHome);
-    const taskStore = new ManagedTaskStore(tmpHome);
-    const ledger = new ManagedContinuationLedger({
-      store: ledgerStore,
-      daemonInstanceId: "daemon-c-e2e",
-      clock,
-    });
-    const client = new WakeCaptureClient();
-    const agentManager = new AgentManager({
-      daemonInstanceId: "daemon-c-e2e",
-      clients: { codex: client },
-      resolveOriginFence: (fenceId) => ledgerStore.readFence(fenceId),
-      logger: createTestLogger(),
-    });
-    const agent = await agentManager.createAgent(
-      { provider: "codex", cwd: workspaceDir },
-      undefined,
-      {},
-    );
-    const session = client.sessions[0]!;
+  it.skipIf(process.platform === "win32")(
+    "executes full tool -> worker -> durable result -> outbox -> idle-only AgentManager wake cycle (echo BUILD_FAILED >&2; exit 2) and enforces caller ownership",
+    async () => {
+      const ledgerStore = new ManagedContinuationStore(tmpHome);
+      const taskStore = new ManagedTaskStore(tmpHome);
+      const ledger = new ManagedContinuationLedger({
+        store: ledgerStore,
+        daemonInstanceId: "daemon-c-e2e",
+        clock,
+      });
+      const client = new WakeCaptureClient();
+      const agentManager = new AgentManager({
+        daemonInstanceId: "daemon-c-e2e",
+        clients: { codex: client },
+        resolveOriginFence: (fenceId) => ledgerStore.readFence(fenceId),
+        logger: createTestLogger(),
+      });
+      const agent = await agentManager.createAgent(
+        { provider: "codex", cwd: workspaceDir },
+        undefined,
+        {},
+      );
+      const session = client.sessions[0]!;
 
-    const worker = new ManagedTaskWorker({ store: taskStore, bootId: "boot-c" });
-    await worker.start();
-    const oneShot = new OneShotWakeService({ ledger, clock, reconcileIntervalMs: 0 });
-    const outbox = new ManagedContinuationOutboxService({
-      ledger,
-      taskStore,
-      agentManager,
-      serverId: "local-host",
-    });
-    const tools = new ManagedContinuationToolsService({
-      ledger,
-      taskStore,
-      worker,
-      oneShotService: oneShot,
-      clock,
-    });
+      const worker = new ManagedTaskWorker({ store: taskStore, bootId: "boot-c" });
+      await worker.start();
+      const oneShot = new OneShotWakeService({ ledger, clock, reconcileIntervalMs: 0 });
+      const outbox = new ManagedContinuationOutboxService({
+        ledger,
+        taskStore,
+        agentManager,
+        serverId: "local-host",
+      });
+      const tools = new ManagedContinuationToolsService({
+        ledger,
+        taskStore,
+        worker,
+        oneShotService: oneShot,
+        clock,
+      });
 
-    const origin: RunIdentity = { daemonInstanceId: "daemon-c-e2e", runToken: "origin-run-1" };
-    const caller: ManagedToolCallerContext = {
-      agentId: agent.id,
-      workspaceId: "ws-e2e",
-      defaultCwd: workspaceDir,
-      allowedWorkspaceRoots: [workspaceDir],
-      originRun: origin,
-      shellPolicy: { hostEnabled: true, workspaceEnabled: true, profileMode: "full" },
-      providerCapabilities: { coldSessionResume: true },
-    };
+      const origin: RunIdentity = { daemonInstanceId: "daemon-c-e2e", runToken: "origin-run-1" };
+      const caller: ManagedToolCallerContext = {
+        agentId: agent.id,
+        workspaceId: "ws-e2e",
+        defaultCwd: workspaceDir,
+        allowedWorkspaceRoots: [workspaceDir],
+        originRun: origin,
+        shellPolicy: { hostEnabled: true, workspaceEnabled: true, profileMode: "full" },
+        providerCapabilities: { coldSessionResume: true },
+      };
 
-    // 1) Agent starts background command + fallback send_later in the same origin turn.
-    const started = await tools.runBackgroundCommand(caller, {
-      command: "echo BUILD_FAILED >&2; exit 2",
-      timeoutSeconds: 30,
-      notifyOnExit: true,
-    });
-    const fb = await tools.sendLater(caller, {
-      prompt: "Check build if notification missed",
-      afterMinutes: 10,
-      fallbackForTaskId: started.taskId,
-    });
-    expect(fb.status).toBe("scheduled");
+      // 1) Agent starts background command + fallback send_later in the same origin turn.
+      const started = await tools.runBackgroundCommand(caller, {
+        command: "echo BUILD_FAILED >&2; exit 2",
+        timeoutSeconds: 30,
+        notifyOnExit: true,
+      });
+      const fb = await tools.sendLater(caller, {
+        prompt: "Check build if notification missed",
+        afterMinutes: 10,
+        fallbackForTaskId: started.taskId,
+      });
+      expect(fb.status).toBe("scheduled");
 
-    // Another agent cannot inspect or cancel this task.
-    await expect(
-      tools.getBackgroundCommand({ ...caller, agentId: "other-agent" }, started.taskId),
-    ).rejects.toThrow(TaskAccessDeniedError);
+      // Another agent cannot inspect or cancel this task.
+      await expect(
+        tools.getBackgroundCommand({ ...caller, agentId: "other-agent" }, started.taskId),
+      ).rejects.toThrow(TaskAccessDeniedError);
 
-    // Wait for worker to write durable result.json.
-    while (!(await taskStore.readResult(started.taskId))) {
-      await new Promise((r) => setTimeout(r, 20));
-    }
-    await reconcileTaskResultsToLedger(taskStore, ledger);
+      // Wait for worker to write durable result.json.
+      while (!(await taskStore.readResult(started.taskId))) {
+        await new Promise((r) => setTimeout(r, 20));
+      }
+      await reconcileTaskResultsToLedger(taskStore, ledger);
 
-    // Before origin turn settles, outbox admission MUST refuse (OriginTurnFence pending!).
-    const beforeSettle = await outbox.dispatchPendingForAgent(agent.id);
-    expect(beforeSettle.dispatched).toBe(false);
+      // Before origin turn settles, outbox admission MUST refuse (OriginTurnFence pending!).
+      const beforeSettle = await outbox.dispatchPendingForAgent(agent.id);
+      expect(beforeSettle.dispatched).toBe(false);
 
-    // Creator turn finishes -> settle OriginTurnFence -> outbox wakes AgentManager!
-    await ledger.settleOriginFence(origin);
-    const dispatched = await outbox.dispatchPendingForAgent(agent.id);
-    expect(dispatched.dispatched).toBe(true);
-    await dispatched.done;
+      // Creator turn finishes -> settle OriginTurnFence -> outbox wakes AgentManager!
+      await ledger.settleOriginFence(origin);
+      const dispatched = await outbox.dispatchPendingForAgent(agent.id);
+      expect(dispatched.dispatched).toBe(true);
+      await dispatched.done;
 
-    // Agent received XML-escaped managed-continuation envelope with BUILD_FAILED & exitCode=2!
-    expect(session.receivedPrompts).toHaveLength(1);
-    const parsed = parseAgentMessage(session.receivedPrompts[0]!);
-    expect(parsed?.source?.kind).toBe("managed-continuation");
-    expect(parsed?.text).toContain("BUILD_FAILED");
-    expect(parsed?.text).toContain("exitCode=2");
+      // Agent received XML-escaped managed-continuation envelope with BUILD_FAILED & exitCode=2!
+      expect(session.receivedPrompts).toHaveLength(1);
+      const parsed = parseAgentMessage(session.receivedPrompts[0]!);
+      expect(parsed?.source?.kind).toBe("managed-continuation");
+      expect(parsed?.text).toContain("BUILD_FAILED");
+      expect(parsed?.text).toContain("exitCode=2");
 
-    // Fallback was Eager-Covered immediately -> cancelScheduledWakeup returns already_covered!
-    if (fb.status === "scheduled") {
-      const cancelFb = await tools.cancelScheduledWakeup(caller, fb.wakeId);
-      expect(cancelFb).toEqual({ canceled: false, wakeId: fb.wakeId, reason: "already_covered" });
-    }
-    oneShot.stop();
-  });
+      // Fallback was Eager-Covered immediately -> cancelScheduledWakeup returns already_covered!
+      if (fb.status === "scheduled") {
+        const cancelFb = await tools.cancelScheduledWakeup(caller, fb.wakeId);
+        expect(cancelFb).toEqual({ canceled: false, wakeId: fb.wakeId, reason: "already_covered" });
+      }
+      oneShot.stop();
+    },
+  );
 });

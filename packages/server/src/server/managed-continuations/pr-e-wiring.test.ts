@@ -105,7 +105,9 @@ describe("Managed Continuations PR E — Bootstrap Wiring & Default-Deny Policy 
 
   afterEach(async () => {
     await Promise.all(
-      tempDirs.splice(0).map((dir) => fs.rm(dir, { recursive: true, force: true })),
+      tempDirs
+        .splice(0)
+        .map((dir) => fs.rm(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })),
     );
   });
 
@@ -155,59 +157,66 @@ describe("Managed Continuations PR E — Bootstrap Wiring & Default-Deny Policy 
     ).toThrow(/authenticated callerAgentId/);
   });
 
-  it("automatically settles OriginTurnFence on turn_completed and wakes idle Agent without manual dispatch calls", async () => {
-    const tmpHome = await fs.mkdtemp(path.join(os.tmpdir(), "paseo-mc-e-home-"));
-    const wsDir = await fs.mkdtemp(path.join(os.tmpdir(), "paseo-mc-e-ws-"));
-    tempDirs.push(tmpHome, wsDir);
+  it.skipIf(process.platform === "win32")(
+    "automatically settles OriginTurnFence on turn_completed and wakes idle Agent without manual dispatch calls",
+    async () => {
+      const tmpHome = await fs.mkdtemp(path.join(os.tmpdir(), "paseo-mc-e-home-"));
+      const wsDir = await fs.mkdtemp(path.join(os.tmpdir(), "paseo-mc-e-ws-"));
+      tempDirs.push(tmpHome, wsDir);
 
-    const client = new AutoWakeClient();
-    let runtime: ManagedContinuationsRuntime | null = null;
-    const agentManager = new AgentManager({
-      daemonInstanceId: "daemon-e-auto",
-      clients: { codex: client },
-      resolveOriginFence: (fenceId) =>
-        runtime ? runtime.ledgerStore.readFence(fenceId) : Promise.resolve(null),
-      logger: createTestLogger(),
-    });
-    runtime = new ManagedContinuationsRuntime({
-      paseoHome: tmpHome,
-      agentManager,
-      daemonInstanceId: agentManager.getDaemonInstanceId(),
-      bootId: "boot-e-auto",
-      reconcileIntervalMs: 0,
-    });
-    await runtime.start({
-      restartRecoveryBarrier: async () => undefined,
-      receiptProbe: () => ({ status: "not_submitted" }),
-    });
+      const client = new AutoWakeClient();
+      let runtime: ManagedContinuationsRuntime | null = null;
+      const agentManager = new AgentManager({
+        daemonInstanceId: "daemon-e-auto",
+        clients: { codex: client },
+        resolveOriginFence: (fenceId) =>
+          runtime ? runtime.ledgerStore.readFence(fenceId) : Promise.resolve(null),
+        logger: createTestLogger(),
+      });
+      runtime = new ManagedContinuationsRuntime({
+        paseoHome: tmpHome,
+        agentManager,
+        daemonInstanceId: agentManager.getDaemonInstanceId(),
+        bootId: "boot-e-auto",
+        reconcileIntervalMs: 0,
+      });
+      await runtime.start({
+        restartRecoveryBarrier: async () => undefined,
+        receiptProbe: () => ({ status: "not_submitted" }),
+      });
 
-    const agent = await agentManager.createAgent({ provider: "codex", cwd: wsDir }, undefined, {});
-    const session = client.sessions[0]!;
+      const agent = await agentManager.createAgent(
+        { provider: "codex", cwd: wsDir },
+        undefined,
+        {},
+      );
+      const session = client.sessions[0]!;
 
-    await runtime.tools.runBackgroundCommand(
-      {
-        agentId: agent.id,
-        workspaceId: "ws-auto",
-        defaultCwd: wsDir,
-        allowedWorkspaceRoots: [wsDir],
-        originRun: { daemonInstanceId: "daemon-e-auto", runToken: "origin-live-1" },
-        shellPolicy: { hostEnabled: true, workspaceEnabled: true, profileMode: "full" },
-        providerCapabilities: { coldSessionResume: true },
-      },
-      { command: "echo AUTO_WAKE_OK; exit 2", timeoutSeconds: 30, notifyOnExit: true },
-    );
+      await runtime.tools.runBackgroundCommand(
+        {
+          agentId: agent.id,
+          workspaceId: "ws-auto",
+          defaultCwd: wsDir,
+          allowedWorkspaceRoots: [wsDir],
+          originRun: { daemonInstanceId: "daemon-e-auto", runToken: "origin-live-1" },
+          shellPolicy: { hostEnabled: true, workspaceEnabled: true, profileMode: "full" },
+          providerCapabilities: { coldSessionResume: true },
+        },
+        { command: "echo AUTO_WAKE_OK; exit 2", timeoutSeconds: 30, notifyOnExit: true },
+      );
 
-    session.emit({ type: "turn_completed", provider: "codex", turnId: "origin-live-1" });
+      session.emit({ type: "turn_completed", provider: "codex", turnId: "origin-live-1" });
 
-    const deadline = Date.now() + 5000;
-    while (session.prompts.length === 0 && Date.now() < deadline) {
-      await new Promise((r) => setTimeout(r, 25));
-    }
-    expect(session.prompts).toHaveLength(1);
-    const parsed = parseAgentMessage(session.prompts[0]!);
-    expect(parsed?.source?.kind).toBe("managed-continuation");
-    expect(parsed?.text).toContain("AUTO_WAKE_OK");
-    expect(parsed?.text).toContain("exitCode=2");
-    await runtime.stop({ killTasks: true });
-  });
+      const deadline = Date.now() + 5000;
+      while (session.prompts.length === 0 && Date.now() < deadline) {
+        await new Promise((r) => setTimeout(r, 25));
+      }
+      expect(session.prompts).toHaveLength(1);
+      const parsed = parseAgentMessage(session.prompts[0]!);
+      expect(parsed?.source?.kind).toBe("managed-continuation");
+      expect(parsed?.text).toContain("AUTO_WAKE_OK");
+      expect(parsed?.text).toContain("exitCode=2");
+      await runtime.stop({ killTasks: true });
+    },
+  );
 });

@@ -597,8 +597,11 @@ describe("createTerminal", () => {
     expect(getRowText(state, 1)).toBe("REPLY u001b[1;4R");
   });
 
-  it("answers DECRQM queries for DEC Mode 2026 synchronized output", async () => {
-    const program = `
+  // ConPTY answers or drops DEC private mode queries itself, so the program never sees them.
+  it.skipIf(isPlatform("win32"))(
+    "answers DECRQM queries for DEC Mode 2026 synchronized output",
+    async () => {
+      const program = `
       process.stdin.setRawMode(true);
       let buf = "";
       process.stdin.on("data", (chunk) => {
@@ -612,24 +615,25 @@ describe("createTerminal", () => {
       process.stdout.write("\\x1b[?2026$p");
       setInterval(() => {}, 100000);
     `;
-    const session = trackSession(
-      await createTerminal({
-        workspaceId: "ws-test",
-        cwd: realpathSync(tmpdir()),
-        cols: 80,
-        rows: 5,
-        command: process.execPath,
-        args: ["-e", program],
-      }),
-    );
+      const session = trackSession(
+        await createTerminal({
+          workspaceId: "ws-test",
+          cwd: realpathSync(tmpdir()),
+          cols: 80,
+          rows: 5,
+          command: process.execPath,
+          args: ["-e", program],
+        }),
+      );
 
-    const state = await waitForState(session, (current) =>
-      getRowText(current, 1).startsWith("DECRQM"),
-    );
+      const state = await waitForState(session, (current) =>
+        getRowText(current, 1).startsWith("DECRQM"),
+      );
 
-    expect(getRowText(state, 1)).toContain("u001b[?2026;2$y");
-    expect(getRowText(state, 1)).toContain("u001b[?2026;1$y");
-  });
+      expect(getRowText(state, 1)).toContain("u001b[?2026;2$y");
+      expect(getRowText(state, 1)).toContain("u001b[?2026;1$y");
+    },
+  );
 
   it("replays emoji clusters at their columns with the cursor after them", async () => {
     const text = "A😀B❤️C👋🏽D👨‍👩‍👧E";

@@ -32,7 +32,7 @@ describe("Managed Continuations PR A1 — Pure Ledger, Immutable Batch & Epoch P
   });
 
   afterEach(async () => {
-    await fs.rm(tmpDir, { recursive: true, force: true });
+    await fs.rm(tmpDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
   });
 
   it("shares a single authoritative OriginTurnFence across 2 Tasks + 1 fallback in the same turn and blocks fast-exit preemption", async () => {
