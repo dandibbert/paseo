@@ -127,6 +127,10 @@ export function createAntigravityProvider(): ProviderRegistration {
   });
   return {
     ...provider,
+    // Fork policy: Paseo reaches Antigravity through T3 (`antigravity-t3`) unless this direct
+    // `agy` integration is added in Settings → Providers. While it is absent, Paseo never starts
+    // `agy`, including the usage probe, which only runs with this provider's launch.
+    requiresConfiguration: true,
     // agy documents no update command and no release source, so there is nothing to check or run.
     installation: {
       installUrl: "https://antigravity.google/docs/getting-started?tab=cli",
