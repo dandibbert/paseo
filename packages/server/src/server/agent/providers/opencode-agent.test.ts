@@ -1378,6 +1378,8 @@ describe("OpenCode adapter normalization", () => {
       contextWindowMaxTokens: 400_000,
       contextWindowUsedTokens: 55_000,
       cachedInputTokens: 2_000,
+      cacheCreationInputTokens: 1_000,
+      reasoningTokens: 10_000,
       inputTokens: 30_000,
       outputTokens: 12_000,
       totalCostUsd: 0.25,

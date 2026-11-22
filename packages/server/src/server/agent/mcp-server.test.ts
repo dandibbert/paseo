@@ -6442,7 +6442,7 @@ describe("provider MCP tools", () => {
 
   it("inspects draft features using a retained successful catalog after refresh failure", async () => {
     const { agentManager, agentStorage, spies } = createTestDeps();
-    spies.agentManager.listDraftFeatures.mockResolvedValue([]);
+    spies.agentManager.listDraftControls.mockResolvedValue({ controls: [], options: {} });
     const provStub = createProviderSnapshotManagerStub();
     provStub.getProvider.mockResolvedValue({
       ...buildSnapshotEntry({ provider: "codex" }),
@@ -6462,7 +6462,7 @@ describe("provider MCP tools", () => {
       cwd: "~/repo",
       settings: { model: "astra" },
     });
-    expect(spies.agentManager.listDraftFeatures).toHaveBeenCalledWith({
+    expect(spies.agentManager.listDraftControls).toHaveBeenCalledWith({
       provider: "codex",
       cwd: expect.stringContaining("repo"),
       model: "astra",

@@ -109,6 +109,9 @@
         "enableTerminalAgentHooks": {
           "type": "boolean"
         },
+        "notifyOnAgentErrors": {
+          "type": "boolean"
+        },
         "appendSystemPrompt": {
           "type": "string"
         },
