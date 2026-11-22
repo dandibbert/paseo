@@ -172,10 +172,46 @@ export async function issueWebSocketUrl(
     );
   }
   const { ticket } = ticketResultSchema.parse(await response.json());
-  const url = new URL("/ws", credentials.baseUrl);
-  url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
+  const url = rpcSocketUrl(credentials.baseUrl);
   url.searchParams.set("wsTicket", ticket);
   return url.toString();
+}
+
+/**
+ * The orchestration protocol this client speaks. T3 refuses the socket (HTTP 426) when it does
+ * not match its own, so a T3 release that moves to a new protocol fails here, before any RPC.
+ */
+export const T3_ORCHESTRATION_PROTOCOL = 2;
+
+function rpcSocketUrl(baseUrl: string): URL {
+  const url = new URL("/ws", baseUrl);
+  url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
+  url.searchParams.set("orchestrationProtocol", String(T3_ORCHESTRATION_PROTOCOL));
+  return url;
+}
+
+/**
+ * Why T3 refused the RPC socket. A WebSocket handshake failure carries no status, so this asks
+ * the same route over plain HTTP, without a ticket, and reads T3's own message.
+ */
+export async function explainSocketRefusal(
+  baseUrl: string,
+  fetchImpl: typeof fetch = fetch,
+): Promise<string | undefined> {
+  const url = rpcSocketUrl(baseUrl);
+  url.protocol = url.protocol === "wss:" ? "https:" : "http:";
+  try {
+    const response = await fetchImpl(url, { method: "GET" });
+    if (response.status === 426) {
+      const body = (await response.json().catch(() => ({}))) as { message?: unknown };
+      return typeof body.message === "string"
+        ? `T3 uses a different protocol than this Paseo: ${body.message}`
+        : "T3 uses a different protocol than this Paseo.";
+    }
+    return undefined;
+  } catch {
+    return `Could not reach T3 at ${baseUrl}.`;
+  }
 }
 
 export class CredentialStore {

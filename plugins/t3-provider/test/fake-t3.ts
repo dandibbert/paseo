@@ -15,6 +15,8 @@ export interface RecordedRequest {
 export interface FakeT3Options {
   providers?: unknown[];
   projects?: Array<{ id: string; workspaceRoot: string }>;
+  /** The orchestration protocol this server speaks; T3 refuses sockets for any other. */
+  orchestrationProtocol?: number;
   /** Called for every orchestration.dispatchCommand; returning an error string fails it. */
   onCommand?: (command: Record<string, unknown>, server: FakeT3) => string | void;
 }
@@ -150,12 +152,20 @@ export class FakeT3 {
   private threadProjection: Record<string, unknown> = projection();
   baseUrl = "";
 
+  private get protocol(): number {
+    return this.options.orchestrationProtocol ?? 2;
+  }
+
   constructor(private readonly options: FakeT3Options = {}) {
     this.http = createServer((request, response) => void this.handleHttp(request, response));
     this.wss = new WebSocketServer({ noServer: true });
     this.http.on("upgrade", (request, socket, head) => {
       const url = new URL(request.url ?? "/", "http://localhost");
-      if (url.pathname !== "/ws" || url.searchParams.get("wsTicket") !== "ticket-1") {
+      if (
+        url.pathname !== "/ws" ||
+        url.searchParams.get("orchestrationProtocol") !== String(this.protocol) ||
+        url.searchParams.get("wsTicket") !== "ticket-1"
+      ) {
         socket.destroy();
         return;
       }
@@ -231,6 +241,17 @@ export class FakeT3 {
         expires_in: 30 * 24 * 3600,
         scope: form.get("scope"),
       });
+    }
+    if (url.pathname === "/ws" && request.method === "GET") {
+      // As T3 does, the protocol check comes before authentication.
+      if (url.searchParams.get("orchestrationProtocol") !== String(this.protocol)) {
+        return json(426, {
+          code: "orchestration_protocol_incompatible",
+          message: `Update this client to one that supports orchestration protocol ${this.protocol}.`,
+          orchestrationProtocolVersion: this.protocol,
+        });
+      }
+      return json(401, { error: "unauthorized" });
     }
     if (url.pathname === "/api/auth/websocket-ticket/rpc" && request.method === "POST") {
       if (request.headers.authorization !== `Bearer ${this.accessToken}`) {

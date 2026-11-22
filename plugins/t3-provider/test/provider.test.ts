@@ -538,3 +538,13 @@ test("shows each account's quota as T3 measured it, without running agy", () => 
     status: "unavailable",
   });
 });
+
+test("says T3 needs a different protocol instead of failing to connect", async () => {
+  const h = await harness({ orchestrationProtocol: 3 });
+  await h.send({ type: "catalog", requestId: "c1" });
+  const failed = await h.waitFor(
+    (event): event is Extract<ProviderEvent, { type: "request.failed" }> =>
+      event.type === "request.failed",
+  );
+  expect(failed.error.message).toContain("orchestration protocol 3");
+});

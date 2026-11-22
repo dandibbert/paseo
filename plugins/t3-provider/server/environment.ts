@@ -6,12 +6,13 @@ import {
   T3AuthError,
   credentialsPath,
   exchangePairingToken,
+  explainSocketRefusal,
   issueWebSocketUrl,
   pairWithLocalCli,
   parsePairingUrl,
   type T3Credentials,
 } from "./auth.js";
-import { T3RpcConnection, type SocketFactory, defaultSocketFactory } from "./rpc.js";
+import { T3RpcConnection, T3RpcError, type SocketFactory, defaultSocketFactory } from "./rpc.js";
 
 /** T3's driver id for Antigravity. This provider shows only those instances. */
 export const ANTIGRAVITY_DRIVER = "antigravity";
@@ -274,7 +275,14 @@ export class T3Environment {
       credentials = await this.ensureCredentials();
       url = await issueWebSocketUrl(credentials, this.fetchImpl);
     }
-    const connection = await T3RpcConnection.open(url, this.createSocket);
+    let connection: T3RpcConnection;
+    try {
+      connection = await T3RpcConnection.open(url, this.createSocket);
+    } catch (error) {
+      const reason = await explainSocketRefusal(credentials.baseUrl, this.fetchImpl);
+      if (reason) throw new T3RpcError(reason, "closed");
+      throw error;
+    }
     connection.onClose(() => {
       if (this.connection === undefined) return;
       this.connection = undefined;
