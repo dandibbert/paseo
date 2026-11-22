@@ -247,7 +247,7 @@ jobs:
             title="Paseo $version（macOS 个人版）"
           fi
           mkdir release-assets
-          for arch in arm64 x64; do
+          for arch in arm64; do
             installer="installers/Paseo-combined-macos-$arch"
             evidence="verification/Paseo-combined-install-verification-$arch/install-evidence"
             cp installers/Paseo-combined-macos-zip-$arch/Paseo-*.zip "$installer/"
@@ -291,14 +291,14 @@ jobs:
           {
             echo "version: $version"
             echo "files:"
-            for arch in arm64 x64; do
+            for arch in arm64; do
               zip="release-assets/Paseo-$version-$arch.zip"
               echo "  - url: $download/Paseo-$version-$arch.zip"
               echo "    sha512: $(openssl dgst -sha512 -binary "$zip" | base64 -w0)"
               echo "    size: $(stat -c %s "$zip")"
             done
-            echo "path: $download/Paseo-$version-x64.zip"
-            echo "sha512: $(openssl dgst -sha512 -binary "release-assets/Paseo-$version-x64.zip" | base64 -w0)"
+            echo "path: $download/Paseo-$version-arm64.zip"
+            echo "sha512: $(openssl dgst -sha512 -binary "release-assets/Paseo-$version-arm64.zip" | base64 -w0)"
             echo "releaseDate: '$(date -u +%Y-%m-%dT%H:%M:%S.000Z)'"
           } > update-manifest.yml
           cat update-manifest.yml
@@ -342,9 +342,6 @@ jobs:
           - runner: macos-15
             arch: arm64
             node_heap_mb: 4096
-          - runner: macos-15-intel
-            arch: x64
-            node_heap_mb: 8192
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 45
     permissions:
@@ -494,8 +491,6 @@ jobs:
         include:
           - runner: macos-15
             arch: arm64
-          - runner: macos-15-intel
-            arch: x64
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 20
     permissions:
