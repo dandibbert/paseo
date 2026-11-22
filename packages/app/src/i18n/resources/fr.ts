@@ -313,6 +313,7 @@ export const fr: TranslationResources = {
   sessions: {
     title: "Historique",
     empty: "Aucune session pour l’instant",
+    emptyForHost: "Aucune session pour cet hôte",
     noMatches: "Aucune session correspondante",
     tooManyMatches: "Trop de résultats — affinez la recherche",
     hostLoadFailed: "{{host}} : impossible de charger l’historique",
@@ -1396,6 +1397,8 @@ export const fr: TranslationResources = {
       settings: "Paramètres",
       closeSidebar: "Fermer la barre latérale",
       moreActions: "Plus d’actions",
+      markReadFailed: "Impossible de marquer l’espace de travail comme lu",
+      markUnreadFailed: "Impossible de marquer l’espace de travail comme non lu",
     },
     footer: {
       usage: "Utilisation",
@@ -2209,6 +2212,22 @@ export const fr: TranslationResources = {
     archiveTooltip: "Archiver le sous-agent",
     archiveFinishedAction: "Archiver les sous-agents terminés",
     archiveFinishedRetry: "Réessayer ({{failed}}/{{total}})",
+    dialogs: {
+      thisSubagentLower: "ce sous-agent",
+      thisSubagentCapitalized: "Ce sous-agent",
+      detachTitle: "Détacher le sous-agent ?",
+      detachMessage: "{{label}} quittera cette piste et continuera comme agent autonome.",
+      detachConfirm: "Détacher",
+      archiveTitle: "Archiver le sous-agent ?",
+      archiveRunningTitle: "Archiver le sous-agent en cours ?",
+      archiveMessage: "Retirer {{label}} de la piste. Le sous-agent sera archivé.",
+      archiveRunningMessage:
+        "{{label}} est toujours en cours d’exécution. L’archiver arrêtera le sous-agent et le retirera de la piste.",
+      archiveBackgroundMessage:
+        "Archiver {{label}} arrêtera son travail en arrière-plan et le retirera de la piste.",
+      archiveConfirm: "Archiver",
+      cancel: "Annuler",
+    },
   },
   panels: {
     draft: {
@@ -3087,6 +3106,11 @@ export const fr: TranslationResources = {
           hint: "Indique aux agents quand afficher graphiques, tableaux et comparaisons en cartes de chat",
           accessibilityLabel: "Consignes des cartes de chat",
         },
+        managedContinuations: {
+          title: "Commandes en arrière-plan et réveil auto",
+          hint: "Autorise les agents à exécuter des commandes gérées en arrière-plan et programmer des réveils",
+          accessibilityLabel: "Commandes en arrière-plan et réveil automatique",
+        },
         systemPrompt: {
           title: "Prompt système",
           hint: "Ajoute un prompt système à tous les agents",
@@ -3117,6 +3141,26 @@ export const fr: TranslationResources = {
       },
       workspaces: {
         unavailable: "Connectez-vous à cet hôte pour gérer les espaces de travail",
+        autoArchiveMerged: {
+          title: "Archiver les espaces dont la PR est fusionnée",
+          hint: "Archiver automatiquement les espaces Paseo propres après la fusion de leur pull request",
+          errorTitle: "Impossible de mettre à jour les espaces de travail",
+        },
+      },
+      browserTools: {
+        title: "Outils du navigateur",
+        warning:
+          "Autoriser les agents à accéder aux onglets du navigateur Paseo et à les contrôler, y compris les sessions connectées. N’activez cette option que pour des agents de confiance.",
+        updating: "Mise à jour des outils du navigateur…",
+        enableAccessibility: "Activer les outils du navigateur",
+      },
+      terminalAgents: {
+        title: "Agents de terminal",
+        hooks: {
+          title: "Activer les hooks des agents de terminal",
+          hint: "Recevez les notifications et l’état des agents de terminal. Cela installe des hooks dans vos fichiers de configuration d’agent.",
+          errorTitle: "Impossible de mettre à jour les hooks des agents de terminal",
+        },
       },
       terminalProfiles: {
         unavailable: "Connectez-vous à cet hôte pour gérer les profils de terminal",

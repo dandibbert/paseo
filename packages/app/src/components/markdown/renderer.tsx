@@ -15,9 +15,11 @@ import { useForgeShorthand } from "@/git/forge-shorthand";
 import { pluginOverviewUrl } from "@getpaseo/protocol/plugin-overview";
 import { openExternalUrl } from "@/utils/open-external-url";
 import { MarkdownLinkMenu, useOpenLinkMenu } from "./link-menu";
+import { describeMarkdownLink } from "./link-target";
+import { useMarkdownScrollGuard } from "./scroll-guard";
 import { AttachmentLightbox, type ImageLightboxSource } from "@/components/attachment-lightbox";
 import type { Theme } from "@/styles/theme";
-import { isWeb } from "@/constants/platform";
+import { isNative, isWeb } from "@/constants/platform";
 import { density, resolveDensity } from "@/styles/density";
 import { MarkdownBlockStack } from "./block-stack";
 import { WEB_RENDERERS } from "./renderers";
@@ -136,7 +138,10 @@ const MarkdownPart = memo(function MarkdownPart({
     },
   );
   const [image, setImage] = useState<ImageLightboxSource | null>(null);
+  const openLinkMenu = useOpenLinkMenu();
+  const scrollGuard = useMarkdownScrollGuard();
   const pressLink = useStableEvent(({ url, sourceType }: LinkPressEvent) => {
+    if (scrollGuard?.isSuppressed()) return;
     if (external) {
       // The parser still autolinks bare http, www and email text; only https links open.
       const safe = pluginOverviewUrl(url);
@@ -150,19 +155,39 @@ const MarkdownPart = memo(function MarkdownPart({
     }
     const forgeUrl = sourceType === "text" ? forgeShorthand?.resolve(url) : null;
     if (forgeUrl) {
-      void openExternalUrl(forgeUrl);
+      if (isNative && openLinkMenu) {
+        openLinkMenu({ source: { href: forgeUrl, text: url }, point: null });
+      } else {
+        void openExternalUrl(forgeUrl);
+      }
       return;
     }
     const source = linkSource(url, sourceType);
-    if (onLinkPress && !actions.canResolveFile(source)) onLinkPress(url);
-    else actions.open(source, "preferred");
+    if (onLinkPress && !actions.canResolveFile(source)) {
+      onLinkPress(url);
+      return;
+    }
+    const isExternalUrlTarget =
+      isNative &&
+      openLinkMenu &&
+      describeMarkdownLink(source, {
+        workspaceRoot: environment.workspaceRoot,
+        relativePathBase: environment.relativePathBase,
+      })?.kind === "url";
+    if (isExternalUrlTarget) {
+      openLinkMenu({ source, point: null });
+      return;
+    }
+    actions.open(source, "preferred");
   });
-  const openLinkMenu = useOpenLinkMenu();
   // Web opens the menu from the link's own right click (WebLink) with the pointer position.
   const longPressLink = useStableEvent(({ url }: LinkLongPressEvent) => {
     openLinkMenu?.({ source: linkSource(url, undefined), point: null });
   });
   const pressImage = useStableEvent(({ url }: { url: string }) => {
+    if (scrollGuard?.isSuppressed()) {
+      return;
+    }
     if (url !== PENDING_MARKDOWN_IMAGE) setImage({ type: "uri", uri: url });
   });
   const closeImage = useStableEvent(() => setImage(null));

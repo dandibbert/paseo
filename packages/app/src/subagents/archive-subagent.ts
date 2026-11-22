@@ -1,11 +1,13 @@
 import { isAgentRunning } from "@getpaseo/protocol/agent-state-bucket";
+import { i18n } from "@/i18n/i18next";
 import type { Agent } from "@/stores/session-store";
+import { isAgentWorking } from "@/utils/agent-activity";
 import type { ConfirmDialogInput } from "@/utils/confirm-dialog";
 
 export interface ResolveArchiveSubagentDialogInput {
   title: Agent["title"] | null | undefined;
   status: Agent["status"] | null | undefined;
-  turn?: Agent["turn"] | null;
+  turn?: Agent["turn"] | null | undefined;
   backgroundWork?: Agent["backgroundWork"];
 }
 
@@ -26,21 +28,34 @@ function resolveSubagentLabel(title: Agent["title"] | null | undefined): string 
 export function resolveArchiveSubagentDialog(
   input: ResolveArchiveSubagentDialogInput,
 ): ConfirmDialogInput {
-  const subagentLabel = resolveSubagentLabel(input.title) ?? "this subagent";
-  const isRunning = isAgentRunning(input);
+  const subagentLabel =
+    resolveSubagentLabel(input.title) ?? i18n.t("subagents.dialogs.thisSubagentLower");
+  const isRunning =
+    input.status && input.turn
+      ? isAgentWorking({
+          status: input.status,
+          turn: input.turn,
+          backgroundWork:
+            input.backgroundWork?.runningCount !== undefined
+              ? { count: input.backgroundWork.runningCount }
+              : input.backgroundWork,
+        })
+      : isAgentRunning(input);
 
-  let message = `Remove ${subagentLabel} from the track. The subagent will be archived.`;
+  let message = i18n.t("subagents.dialogs.archiveMessage", { label: subagentLabel });
   if (isRunning) {
-    message = `${subagentLabel} is still running. Archiving it will stop the subagent and remove it from the track.`;
+    message = i18n.t("subagents.dialogs.archiveRunningMessage", { label: subagentLabel });
   } else if (input.backgroundWork?.count) {
-    message = `Archiving ${subagentLabel} will stop its background work and remove it from the track.`;
+    message = i18n.t("subagents.dialogs.archiveBackgroundMessage", { label: subagentLabel });
   }
 
   return {
-    title: isRunning ? "Archive running subagent?" : "Archive subagent?",
+    title: isRunning
+      ? i18n.t("subagents.dialogs.archiveRunningTitle")
+      : i18n.t("subagents.dialogs.archiveTitle"),
     message,
-    confirmLabel: "Archive",
-    cancelLabel: "Cancel",
+    confirmLabel: i18n.t("subagents.dialogs.archiveConfirm"),
+    cancelLabel: i18n.t("subagents.dialogs.cancel"),
     destructive: true,
   };
 }

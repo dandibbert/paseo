@@ -14,6 +14,7 @@ import {
 import type { ManagedAgent } from "../../agent/agent-manager.js";
 import { daemonInstallOriginRuntime, resolveNpmGlobalPrefix } from "./install-origin.js";
 import { daemonSelfUpdater, type DaemonSelfUpdater } from "./daemon-self-updater.js";
+import type { SessionDelivery } from "../owned-subscriptions/index.js";
 
 type InstallUpdateMessage = Extract<
   SessionInboundMessage,
@@ -44,6 +45,7 @@ export interface InstallUpdateSessionControllerOptions {
   agentBusyReason: (agentId: string) => string | null;
   emit: (msg: SessionOutboundMessage) => void;
   emitLifecycleIntent: (intent: InstallUpdateLifecycleIntent) => void;
+  delivery?: Pick<SessionDelivery, "operation" | "currentSource">;
   logger: pino.Logger;
   broker?: DesktopHostBroker;
   detect?: () => Promise<Installation>;
@@ -106,12 +108,36 @@ export class InstallUpdateSessionController {
     this.dispose();
     // Only the app that launched this daemon can install it; other windows stay ordinary clients.
     if (this.options.desktopManaged) {
-      this.unregisterDesktopHost = this.broker.register({
-        releaseChannel: msg.releaseChannel,
-        appVersion: msg.appVersion,
-        command: (payload) =>
-          this.options.emit({ type: "daemon.desktop_host.update.command", payload }),
-      });
+      if (this.options.delivery?.currentSource) {
+        let unregister: (() => void) | undefined;
+        // Retain an owned operation so unsolicited update commands carry a delivery proof to
+        // modern sockets and detach releases the broker entry as soon as the socket closes.
+        const owner = this.options.delivery.operation(
+          (outbound) => outbound.type === "daemon.desktop_host.update.command",
+          () => unregister?.(),
+        );
+        try {
+          unregister = this.broker.register({
+            releaseChannel: msg.releaseChannel,
+            appVersion: msg.appVersion,
+            command: (payload) =>
+              owner.emit({ type: "daemon.desktop_host.update.command", payload }),
+          });
+          this.unregisterDesktopHost = () => {
+            void owner.release();
+          };
+        } catch (error) {
+          void owner.release();
+          throw error;
+        }
+      } else {
+        this.unregisterDesktopHost = this.broker.register({
+          releaseChannel: msg.releaseChannel,
+          appVersion: msg.appVersion,
+          command: (payload) =>
+            this.options.emit({ type: "daemon.desktop_host.update.command", payload }),
+        });
+      }
     }
     this.options.emit({
       type: "daemon.desktop_host.register.response",

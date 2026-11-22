@@ -294,6 +294,7 @@ export const PersistedConfigSchema = z
         notifyOnAgentErrors: z.boolean().optional(),
         appendSystemPrompt: z.string().optional(),
         genuiSystemPrompt: z.boolean().optional(),
+        managedBackgroundCommands: z.boolean().optional(),
         terminalProfiles: z.array(TerminalProfileSchema).optional(),
         agentProfiles: z.array(AgentProfileSchema).optional(),
         cors: z

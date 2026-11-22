@@ -147,4 +147,92 @@ describe("TerminalOutputCoalescer", () => {
 
     expect(flushes.map((f) => f.payload)).toEqual(["1", "23", "4"]);
   });
+
+  test("defers leading-edge flush for TUI redraw sequences so split PTY chunks coalesce", () => {
+    const { coalescer, flushes, runScheduled, scheduled } = createHarness();
+
+    coalescer.handle("\x1b[2A\x1b[2Krow1\r\n\x1b[2Kpartial");
+    coalescer.handle(" rest-of-row2\r\nrow3");
+
+    expect(flushes).toEqual([]);
+    expect(scheduled.size).toBe(1);
+    expect(Array.from(scheduled.values())).toEqual([
+      { callback: expect.any(Function), delayMs: 5 },
+    ]);
+
+    runScheduled();
+    expect(flushes).toEqual([
+      {
+        payload: "\x1b[2A\x1b[2Krow1\r\n\x1b[2Kpartial rest-of-row2\r\nrow3",
+        chars: 44,
+        bytes: 44,
+      },
+    ]);
+  });
+
+  test("defers leading-edge flush for bulk output chunks >= 128 bytes", () => {
+    const { coalescer, flushes, runScheduled, scheduled } = createHarness();
+    const first = "a".repeat(128);
+
+    coalescer.handle(first);
+    coalescer.handle("b");
+
+    expect(flushes).toEqual([]);
+    expect(scheduled.size).toBe(1);
+
+    runScheduled();
+    expect(flushes.map((f) => f.payload)).toEqual([`${first}b`]);
+  });
+
+  test("keeps tiny single-line backspace erase on the 0ms leading edge", () => {
+    const { coalescer, flushes, scheduled } = createHarness();
+
+    coalescer.handle("\b\x1b[K");
+
+    expect(scheduled.size).toBe(0);
+    expect(flushes).toEqual([{ payload: "\b\x1b[K", chars: 4, bytes: 4 }]);
+  });
+
+  test("holds unclosed DEC 2026 synchronized output and flushes immediately on close", () => {
+    const { coalescer, flushes, scheduled } = createHarness();
+
+    coalescer.handle("\x1b[?2026h\x1b[2K");
+    coalescer.handle("mid-frame\x1b[?20");
+
+    expect(flushes).toEqual([]);
+    expect(Array.from(scheduled.values())).toEqual([
+      { callback: expect.any(Function), delayMs: 32 },
+    ]);
+
+    // Closing sequence split across chunk boundary completes the frame immediately.
+    coalescer.handle("26l");
+
+    expect(scheduled.size).toBe(0);
+    expect(flushes).toEqual([
+      {
+        payload: "\x1b[?2026h\x1b[2Kmid-frame\x1b[?2026l",
+        chars: 29,
+        bytes: 29,
+      },
+    ]);
+  });
+
+  test("releases held DEC 2026 frame when the safety timer expires", () => {
+    const { coalescer, flushes, runScheduled, advance, scheduled } = createHarness();
+
+    coalescer.handle("\x1b[?2026hnever-closed");
+    expect(flushes).toEqual([]);
+    expect(scheduled.size).toBe(1);
+
+    runScheduled();
+    expect(flushes).toEqual([{ payload: "\x1b[?2026hnever-closed", chars: 20, bytes: 20 }]);
+
+    // After safety release and idle window, subsequent small echo resumes leading-edge behavior.
+    advance(5);
+    coalescer.handle("x");
+    expect(flushes).toEqual([
+      { payload: "\x1b[?2026hnever-closed", chars: 20, bytes: 20 },
+      { payload: "x", chars: 1, bytes: 1 },
+    ]);
+  });
 });

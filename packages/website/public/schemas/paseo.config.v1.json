@@ -118,6 +118,9 @@
         "genuiSystemPrompt": {
           "type": "boolean"
         },
+        "managedBackgroundCommands": {
+          "type": "boolean"
+        },
         "terminalProfiles": {
           "type": "array",
           "items": {

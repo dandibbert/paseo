@@ -258,6 +258,7 @@ export const MutableDaemonConfigSchema = z
     resumePrompt: z.string().optional(),
     appendSystemPrompt: z.string().default(""),
     genuiSystemPrompt: z.boolean().optional(),
+    managedBackgroundCommands: z.boolean().optional(),
     terminalProfiles: z.array(TerminalProfileSchema).optional(),
     agentProfiles: z.array(AgentProfileSchema).optional(),
     skills: z.object({ selection: AgentSkillSelectionSchema.optional() }).strict().optional(),
@@ -288,6 +289,7 @@ export const MutableDaemonConfigPatchSchema = z
     resumePrompt: z.string().optional(),
     appendSystemPrompt: z.string().optional(),
     genuiSystemPrompt: z.boolean().optional(),
+    managedBackgroundCommands: z.boolean().optional(),
     terminalProfiles: z.array(TerminalProfileSchema).optional(),
     agentProfiles: z.array(AgentProfileSchema).optional(),
     pluginsEnabled: z.boolean().optional(),
@@ -985,6 +987,10 @@ export const AgentSnapshotPayloadSchema = z.object({
   // Background agent: hidden from default discovery, tabs, tracks and notifications.
   // Fixed at creation. Effective background also includes the workspace's flag.
   background: z.boolean().optional(),
+  pendingContinuationsCount: z.number().int().nonnegative().optional(),
+  continuationState: z.enum(["none", "waiting", "processing", "needs_attention"]).optional(),
+  continuationBlockedError: z.string().nullable().optional(),
+  continuationRevision: z.number().int().nonnegative().optional(),
 });
 
 export type AgentSnapshotPayload = z.infer<typeof AgentSnapshotPayloadSchema>;
@@ -4243,6 +4249,10 @@ export const ServerInfoStatusPayloadSchema = z
         terminalSecureInput: z.boolean().optional(),
         // COMPAT(secureAgentInput): added in personal v0.11.2, remove after 2027-04-13.
         terminalSecurePrompt: z.boolean().optional(),
+        // COMPAT(managedContinuations): added in v0.4.1, remove gate after 2027-11-19.
+        managedContinuations: z.boolean().optional(),
+        // COMPAT(managedTasks): added in v0.4.1, remove gate after 2027-11-19.
+        managedTasks: z.boolean().optional(),
         // COMPAT(historyTextSearch): added in v0.15.3-personal, remove gate after 2027-05-08.
         historyTextSearch: z.boolean().optional(),
         // COMPAT(genuiSystemPrompt): added in personal v0.11.4, remove gate after 2027-04-21.

@@ -120,6 +120,12 @@ import {
 } from "../../worktree/commands.js";
 import { registerBrowserTools } from "../../browser-tools/tools.js";
 import {
+  buildManagedToolCallerContext,
+  registerManagedContinuationTools,
+  type ManagedContinuationPolicyBundle,
+  type ManagedContinuationsRuntime,
+} from "../../managed-continuations/index.js";
+import {
   acceptRenderUiInput,
   RENDER_UI_DESCRIPTION,
   RENDER_UI_INPUT_SHAPE,
@@ -184,6 +190,11 @@ export interface PaseoToolHostDependencies {
   ) => Promise<string>;
   browserToolsEnabled?: boolean;
   browserToolsBroker?: BrowserToolsBroker | null;
+  managedContinuations?: ManagedContinuationsRuntime;
+  resolveManagedContinuationPolicy?: (
+    agentId: string,
+    provider: string | undefined,
+  ) => ManagedContinuationPolicyBundle;
   paseoToolPolicy?: ProviderPaseoToolsPolicy;
   paseoHome?: string;
   worktreesRoot?: string;
@@ -663,6 +674,82 @@ export function createPaseoAgentToolManifest(
   return { tools: createToolCatalog(options, "agent").tools };
 }
 
+async function parseToolInput(tool: PaseoToolDefinition, input: unknown): Promise<unknown> {
+  const inputSchema = tool.inputSchema;
+  if (!inputSchema) {
+    return input;
+  }
+  const schema =
+    typeof inputSchema === "object" &&
+    inputSchema !== null &&
+    typeof (inputSchema as { safeParseAsync?: unknown }).safeParseAsync === "function"
+      ? (inputSchema as z.ZodType)
+      : z.object(inputSchema as z.ZodRawShape).passthrough();
+  const result = await schema.safeParseAsync(input);
+  if (!result.success) {
+    throw new PaseoToolInputError(result.error.message, result.error.issues);
+  }
+  return result.data;
+}
+
+function registerSpeakTool(params: {
+  registerTool: (
+    name: string,
+    config: PaseoToolConfig,
+    handler: (
+      input: { text: string },
+      context: PaseoToolExecutionContext,
+    ) => Promise<PaseoToolResult>,
+  ) => void;
+  options: PaseoToolHostDependencies;
+  callerAgentId: string | undefined;
+  callerContext: ReturnType<NonNullable<PaseoToolHostDependencies["resolveCallerContext"]>> | null;
+  resolveSpeakHandler: PaseoToolHostDependencies["resolveSpeakHandler"];
+}): void {
+  const { registerTool, options, callerAgentId, callerContext, resolveSpeakHandler } = params;
+  if (!(options.voiceOnly || options.enableVoiceTools || callerContext?.enableVoiceTools)) {
+    return;
+  }
+  registerTool(
+    "speak",
+    {
+      title: "Speak",
+      description:
+        "Speak text to the user via daemon-managed voice output. Blocks until playback completes.",
+      inputSchema: {
+        text: z
+          .string()
+          .trim()
+          .min(1, "text is required")
+          .max(4000, "text must be 4000 characters or fewer"),
+      },
+      outputSchema: {
+        ok: z.boolean(),
+      },
+    },
+    async (args, context) => {
+      if (!callerAgentId) {
+        throw new PaseoToolInputError("speak is only available to agent-scoped tool sessions");
+      }
+      const handler = resolveSpeakHandler?.(callerAgentId) ?? null;
+      if (!handler) {
+        throw new PaseoToolInputError(
+          `No speak handler registered for your session '${callerAgentId}'`,
+        );
+      }
+      await handler({
+        text: args.text,
+        callerAgentId,
+        signal: context?.signal,
+      });
+      return {
+        content: [],
+        structuredContent: ensureValidJson({ ok: true }),
+      };
+    },
+  );
+}
+
 function createToolCatalog(
   options: PaseoToolHostDependencies,
   scope: "agent" | "top-level",
@@ -683,24 +770,6 @@ function createToolCatalog(
   } = options;
   const childLogger = logger.child({ module: "agent", component: "paseo-tool-catalog" });
   const callerContext = callerAgentId ? (resolveCallerContext?.(callerAgentId) ?? null) : null;
-
-  const parseToolInput = async (tool: PaseoToolDefinition, input: unknown): Promise<unknown> => {
-    const inputSchema = tool.inputSchema;
-    if (!inputSchema) {
-      return input;
-    }
-    const schema =
-      typeof inputSchema === "object" &&
-      inputSchema !== null &&
-      typeof (inputSchema as { safeParseAsync?: unknown }).safeParseAsync === "function"
-        ? (inputSchema as z.ZodType)
-        : z.object(inputSchema as z.ZodRawShape).passthrough();
-    const result = await schema.safeParseAsync(input);
-    if (!result.success) {
-      throw new PaseoToolInputError(result.error.message, result.error.issues);
-    }
-    return result.data;
-  };
 
   function agentMessages(): AgentMessageDelivery {
     if (!options.agentMessages) throw new Error("Agent message delivery is not configured");
@@ -1440,46 +1509,13 @@ function createToolCatalog(
   type TopLevelCreateAgentArgs = z.infer<typeof canonicalTopLevelCreateAgentArgsSchema>;
   type LegacyTopLevelCreateAgentArgs = z.infer<typeof legacyTopLevelCreateAgentArgsSchema>;
 
-  if (options.voiceOnly || options.enableVoiceTools || callerContext?.enableVoiceTools) {
-    registerTool(
-      "speak",
-      {
-        title: "Speak",
-        description:
-          "Speak text to the user via daemon-managed voice output. Blocks until playback completes.",
-        inputSchema: {
-          text: z
-            .string()
-            .trim()
-            .min(1, "text is required")
-            .max(4000, "text must be 4000 characters or fewer"),
-        },
-        outputSchema: {
-          ok: z.boolean(),
-        },
-      },
-      async (args, context) => {
-        if (!callerAgentId) {
-          throw new PaseoToolInputError("speak is only available to agent-scoped tool sessions");
-        }
-        const handler = resolveSpeakHandler?.(callerAgentId) ?? null;
-        if (!handler) {
-          throw new PaseoToolInputError(
-            `No speak handler registered for your session '${callerAgentId}'`,
-          );
-        }
-        await handler({
-          text: args.text,
-          callerAgentId,
-          signal: context?.signal,
-        });
-        return {
-          content: [],
-          structuredContent: ensureValidJson({ ok: true }),
-        };
-      },
-    );
-  }
+  registerSpeakTool({
+    registerTool,
+    options,
+    callerAgentId,
+    callerContext,
+    resolveSpeakHandler,
+  });
 
   if (options.voiceOnly) {
     return toCatalog();
@@ -1505,6 +1541,19 @@ function createToolCatalog(
       broker: options.browserToolsBroker,
       callerAgentId,
       resolveCallerAgent,
+    });
+  }
+  if (options.managedContinuations) {
+    registerManagedContinuationTools({
+      registerTool,
+      toolsService: options.managedContinuations.tools,
+      resolveCallerContext: async () =>
+        buildManagedToolCallerContext({
+          callerAgentId,
+          callerAgent: resolveCallerAgent() ?? null,
+          agentManager: options.agentManager,
+          resolvePolicy: options.resolveManagedContinuationPolicy,
+        }),
     });
   }
 

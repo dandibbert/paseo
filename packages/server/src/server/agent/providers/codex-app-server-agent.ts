@@ -6905,9 +6905,11 @@ export class CodexAppServerAgentSession implements AgentSession {
       const state = this.subAgentCallsByCallId.get(callId);
       if (!state) continue;
       // A shared spawn tracks each child on its own; an update moves only the child it names.
-      const previous = state.childStatuses.get(update.threadId) ?? state.toolCall.status;
-      const status = resolveCodexCollabAgentUpdate(previous, update);
-      this.emitSubAgentActivityUpdate(callId, status, { childThreadId: update.threadId });
+      const currentChildStatus = state.childStatuses.get(update.threadId) ?? state.toolCall.status;
+      const status = resolveCodexCollabAgentUpdate(currentChildStatus, update);
+      if (status !== currentChildStatus) {
+        this.emitSubAgentActivityUpdate(callId, status, { childThreadId: update.threadId });
+      }
     }
     // A control rendered at start must also render its completion, even if
     // Codex's final result lists fewer receivers than its started record.

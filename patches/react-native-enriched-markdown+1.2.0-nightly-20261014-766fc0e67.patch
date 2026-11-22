@@ -790,7 +790,7 @@ index c99a52d..c93aaf7 100644
          impl->pushNode(node);
          break;
 diff --git a/node_modules/react-native-enriched-markdown/ios/EnrichedMarkdown.mm b/node_modules/react-native-enriched-markdown/ios/EnrichedMarkdown.mm
-index 5a0b7e3..be7b30a 100644
+index 5a0b7e3..009b3bd 100644
 --- a/node_modules/react-native-enriched-markdown/ios/EnrichedMarkdown.mm
 +++ b/node_modules/react-native-enriched-markdown/ios/EnrichedMarkdown.mm
 @@ -82,7 +82,7 @@ static char kENRMSegmentFadeAnimatorKey;
@@ -815,6 +815,15 @@ index 5a0b7e3..be7b30a 100644
    };
    view.onLinkLongPress = ^(NSString *url) {
      EnrichedMarkdown *strongSelf = weakSelf;
+@@ -943,7 +943,7 @@ static char kENRMSegmentFadeAnimatorKey;
+   EnrichedMarkdownInternalText *view = [[EnrichedMarkdownInternalText alloc] initWithConfig:_config];
+   [self configureTextView:view withRenderedSegment:segment];
+ 
+-  ENRMTapRecognizer *tapRecognizer = [[ENRMTapRecognizer alloc] initWithTarget:self action:@selector(textTapped:)];
++  ENRMTapRecognizer *tapRecognizer = ENRMCreateTextTapRecognizer(self, @selector(textTapped:));
+   [view.textView addGestureRecognizer:tapRecognizer];
+ 
+ #if !TARGET_OS_OSX
 @@ -986,10 +986,10 @@ static char kENRMSegmentFadeAnimatorKey;
  
    __weak EnrichedMarkdown *weakSelf = self;
@@ -854,7 +863,7 @@ index 5a0b7e3..be7b30a 100644
    }
  
 diff --git a/node_modules/react-native-enriched-markdown/ios/EnrichedMarkdownText.mm b/node_modules/react-native-enriched-markdown/ios/EnrichedMarkdownText.mm
-index b7b588b..2fa091f 100644
+index b7b588b..ceede40 100644
 --- a/node_modules/react-native-enriched-markdown/ios/EnrichedMarkdownText.mm
 +++ b/node_modules/react-native-enriched-markdown/ios/EnrichedMarkdownText.mm
 @@ -62,7 +62,7 @@ typedef NS_OPTIONS(NSUInteger, ENRMDirtyFlags) {
@@ -866,6 +875,15 @@ index b7b588b..2fa091f 100644
  - (void)emitLinkLongPress:(NSString *)url;
  - (void)emitLinkContextMenuItemPress:(NSString *)itemText pattern:(NSString *)pattern url:(NSString *)url;
  - (void)emitImagePress:(NSString *)url altText:(NSString *)altText;
+@@ -407,7 +407,7 @@ typedef NS_OPTIONS(NSUInteger, ENRMDirtyFlags) {
+   };
+ #endif
+ 
+-  ENRMTapRecognizer *tapRecognizer = [[ENRMTapRecognizer alloc] initWithTarget:self action:@selector(textTapped:)];
++  ENRMTapRecognizer *tapRecognizer = ENRMCreateTextTapRecognizer(self, @selector(textTapped:));
+   [_textView addGestureRecognizer:tapRecognizer];
+ 
+   self.contentView = _textView;
 @@ -909,11 +909,11 @@ Class<RCTComponentViewProtocol> EnrichedMarkdownTextCls(void)
    return [super touchEventEmitterAtPoint:point];
  }
@@ -958,7 +976,7 @@ index 1657128..85b0c54 100644
  @property (nonatomic, copy, nullable) void (^onImagePress)(NSString *url, NSString *altText);
  
 diff --git a/node_modules/react-native-enriched-markdown/ios/segments/ENRMBlockquoteContainerView.mm b/node_modules/react-native-enriched-markdown/ios/segments/ENRMBlockquoteContainerView.mm
-index 79c79cf..96c7a70 100644
+index 79c79cf..f663cc3 100644
 --- a/node_modules/react-native-enriched-markdown/ios/segments/ENRMBlockquoteContainerView.mm
 +++ b/node_modules/react-native-enriched-markdown/ios/segments/ENRMBlockquoteContainerView.mm
 @@ -229,10 +229,10 @@ static UIEdgeInsets ENRMBlockquoteContentInsets(StyleConfig *config)
@@ -987,6 +1005,15 @@ index 79c79cf..96c7a70 100644
                                };
                                view.onLinkLongPress = ^(NSString *url) {
                                  ENRMBlockquoteContainerView *s = weakSelf;
+@@ -363,7 +363,7 @@ static UIEdgeInsets ENRMBlockquoteContentInsets(StyleConfig *config)
+ 
+ - (void)attachLinkTapToTextView:(EnrichedMarkdownInternalText *)view
+ {
+-  ENRMTapRecognizer *tap = [[ENRMTapRecognizer alloc] initWithTarget:self action:@selector(handleTextTap:)];
++  ENRMTapRecognizer *tap = ENRMCreateTextTapRecognizer(self, @selector(handleTextTap:));
+   [view.textView addGestureRecognizer:tap];
+ #if !TARGET_OS_OSX
+   view.textView.delegate = self;
 @@ -374,10 +374,10 @@ static UIEdgeInsets ENRMBlockquoteContentInsets(StyleConfig *config)
  {
    ENRMPlatformTextView *textView = (ENRMPlatformTextView *)recognizer.view;
@@ -1022,10 +1049,39 @@ index bda3a64..0960bad 100644
  @property (nonatomic, copy, nullable) void (^onImageTap)(NSString *url, NSString *altText);
  /// Asked when a touch lands on a link: a link with a menu is left to the context-menu
 diff --git a/node_modules/react-native-enriched-markdown/ios/segments/ENRMTableIOSGridView.m b/node_modules/react-native-enriched-markdown/ios/segments/ENRMTableIOSGridView.m
-index 3d7bee5..8b31c8b 100644
+index 3d7bee5..4804a26 100644
 --- a/node_modules/react-native-enriched-markdown/ios/segments/ENRMTableIOSGridView.m
 +++ b/node_modules/react-native-enriched-markdown/ios/segments/ENRMTableIOSGridView.m
-@@ -193,6 +193,7 @@ static ENRMTableIOSItemHit *itemInAttributedString(NSAttributedString *text, CGR
+@@ -1,4 +1,5 @@
+ #import "ENRMTableIOSGridView.h"
++#import "ENRMTextInteractionUtils.h"
+ #import "LinkTapUtils.h"
+ 
+ #if !TARGET_OS_OSX
+@@ -31,7 +32,7 @@
+     self.opaque = NO;
+     self.accessibilityElementsHidden = YES;
+ 
+-    UITapGestureRecognizer *tap = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(handleTap:)];
++    UITapGestureRecognizer *tap = ENRMCreateTextTapRecognizer(self, @selector(handleTap:));
+     [self addGestureRecognizer:tap];
+ 
+     UILongPressGestureRecognizer *longPress =
+@@ -186,13 +187,20 @@ static ENRMTableIOSItemHit *itemInAttributedString(NSAttributedString *text, CGR
+ 
+   NSRange glyphRange = [layoutManager glyphRangeForCharacterRange:itemRange actualCharacterRange:NULL];
+   CGRect frame = [layoutManager boundingRectForGlyphRange:glyphRange inTextContainer:textContainer];
+-  // Links keep nearest-glyph hits; an image needs the tap inside its bounds.
+   if (imageURL && !CGRectContainsPoint(frame, local))
+     return nil;
++  if (linkURL) {
++    NSRange charGlyphRange =
++        [layoutManager glyphRangeForCharacterRange:NSMakeRange(charIndex, 1) actualCharacterRange:NULL];
++    CGRect charFrame = [layoutManager boundingRectForGlyphRange:charGlyphRange inTextContainer:textContainer];
++    if (charGlyphRange.length == 0 || !CGRectContainsPoint(CGRectInset(charFrame, -6.0, -4.0), local))
++      return nil;
++  }
+ 
    ENRMTableIOSItemHit *hit = [[ENRMTableIOSItemHit alloc] init];
    hit.kind = linkURL ? ENRMTableIOSItemKindLink : ENRMTableIOSItemKindImage;
    hit.url = linkURL ?: imageURL;
@@ -1033,7 +1089,7 @@ index 3d7bee5..8b31c8b 100644
    hit.title = linkURL ? linkTitleAtIndex(text, charIndex)
                        : [text attribute:@"imageAltText" atIndex:charIndex effectiveRange:NULL];
    hit.frame = CGRectOffset(frame, textRect.origin.x, textRect.origin.y);
-@@ -240,7 +241,7 @@ static ENRMTableIOSItemHit *itemInAttributedString(NSAttributedString *text, CGR
+@@ -240,7 +248,7 @@ static ENRMTableIOSItemHit *itemInAttributedString(NSAttributedString *text, CGR
      return;
    if (hit.kind == ENRMTableIOSItemKindLink) {
      if (self.onLinkTap)
@@ -1073,10 +1129,18 @@ index 987eb21..ec93a4e 100644
    iosGridView.onImageTap = ^(NSString *url, NSString *altText) {
      TableContainerView *strongSelf = weakSelf;
 diff --git a/node_modules/react-native-enriched-markdown/ios/utils/ENRMTextInteractionUtils.h b/node_modules/react-native-enriched-markdown/ios/utils/ENRMTextInteractionUtils.h
-index 65dc272..c5af8c1 100644
+index 65dc272..9d56db7 100644
 --- a/node_modules/react-native-enriched-markdown/ios/utils/ENRMTextInteractionUtils.h
 +++ b/node_modules/react-native-enriched-markdown/ios/utils/ENRMTextInteractionUtils.h
-@@ -11,7 +11,7 @@ extern "C" {
+@@ -7,11 +7,15 @@ NS_ASSUME_NONNULL_BEGIN
+ extern "C" {
+ #endif
+ 
++/// Creates a tap recognizer that stays passive during scrolling and rejects
++/// drags beyond a tight touch slop on iOS.
++ENRMTapRecognizer *ENRMCreateTextTapRecognizer(id target, SEL action);
++
+ /// Resolves the link URL at the tap location.
  /// If a link is found, calls onLinkPress and returns YES.
  /// If no link is found, calls ENRMClearSelection and returns NO.
  BOOL ENRMHandleTapOnTextView(ENRMPlatformTextView *textView, ENRMTapRecognizer *recognizer,
@@ -1086,11 +1150,137 @@ index 65dc272..c5af8c1 100644
  #ifdef __cplusplus
  }
 diff --git a/node_modules/react-native-enriched-markdown/ios/utils/ENRMTextInteractionUtils.m b/node_modules/react-native-enriched-markdown/ios/utils/ENRMTextInteractionUtils.m
-index 88d69da..7bb3234 100644
+index 88d69da..3a462f7 100644
 --- a/node_modules/react-native-enriched-markdown/ios/utils/ENRMTextInteractionUtils.m
 +++ b/node_modules/react-native-enriched-markdown/ios/utils/ENRMTextInteractionUtils.m
-@@ -2,7 +2,7 @@
+@@ -1,8 +1,133 @@
+ #import "ENRMTextInteractionUtils.h"
  #import "LinkTapUtils.h"
++#if !TARGET_OS_OSX
++#import <UIKit/UIGestureRecognizerSubclass.h>
++#include <math.h>
++
++static const CGFloat kENRMMaxTapMovementPt = 10.0;
++
++static BOOL ENRMAncestorScrollViewIsMoving(UIView * _Nullable view)
++{
++  UIView *cursor = view.superview;
++  while (cursor != nil) {
++    if ([cursor isKindOfClass:[UIScrollView class]]) {
++      UIScrollView *scrollView = (UIScrollView *)cursor;
++      if (scrollView.isDragging || scrollView.isDecelerating) {
++        return YES;
++      }
++    }
++    cursor = cursor.superview;
++  }
++  return NO;
++}
++
++@interface ENRMStrictTapGestureRecognizer : UITapGestureRecognizer <UIGestureRecognizerDelegate>
++@end
++
++@implementation ENRMStrictTapGestureRecognizer {
++  CGPoint _initialWindowLocation;
++  BOOL _hasInitialLocation;
++}
++
++- (instancetype)initWithTarget:(id)target action:(SEL)action
++{
++  self = [super initWithTarget:target action:action];
++  if (self) {
++    self.delegate = self;
++  }
++  return self;
++}
++
++- (void)reset
++{
++  [super reset];
++  _initialWindowLocation = CGPointZero;
++  _hasInitialLocation = NO;
++}
++
++- (void)touchesBegan:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event
++{
++  [super touchesBegan:touches withEvent:event];
++  if (self.state == UIGestureRecognizerStateFailed) {
++    return;
++  }
++  if (touches.count != 1 || [event allTouches].count != 1 || ENRMAncestorScrollViewIsMoving(self.view)) {
++    self.state = UIGestureRecognizerStateFailed;
++    return;
++  }
++  UITouch *touch = touches.anyObject;
++  if (!touch) {
++    self.state = UIGestureRecognizerStateFailed;
++    return;
++  }
++  _initialWindowLocation = [touch locationInView:nil];
++  _hasInitialLocation = YES;
++}
++
++- (void)touchesMoved:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event
++{
++  [super touchesMoved:touches withEvent:event];
++  if (self.state == UIGestureRecognizerStateFailed || !_hasInitialLocation) {
++    return;
++  }
++  UITouch *touch = touches.anyObject;
++  if (!touch) {
++    return;
++  }
++  CGPoint current = [touch locationInView:nil];
++  if (hypot(current.x - _initialWindowLocation.x, current.y - _initialWindowLocation.y) > kENRMMaxTapMovementPt) {
++    self.state = UIGestureRecognizerStateFailed;
++  }
++}
++
++- (void)touchesEnded:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event
++{
++  if (self.state != UIGestureRecognizerStateFailed && _hasInitialLocation) {
++    UITouch *touch = touches.anyObject;
++    if (touch) {
++      CGPoint current = [touch locationInView:nil];
++      if (hypot(current.x - _initialWindowLocation.x, current.y - _initialWindowLocation.y) > kENRMMaxTapMovementPt ||
++          ENRMAncestorScrollViewIsMoving(self.view)) {
++        self.state = UIGestureRecognizerStateFailed;
++        return;
++      }
++    }
++  }
++  [super touchesEnded:touches withEvent:event];
++}
++
++- (BOOL)gestureRecognizerShouldBegin:(UIGestureRecognizer *)gestureRecognizer
++{
++  (void)gestureRecognizer;
++  return !ENRMAncestorScrollViewIsMoving(self.view);
++}
++
++- (BOOL)gestureRecognizer:(UIGestureRecognizer *)gestureRecognizer
++    shouldRequireFailureOfGestureRecognizer:(UIGestureRecognizer *)otherGestureRecognizer
++{
++  (void)gestureRecognizer;
++  UIView *otherView = otherGestureRecognizer.view;
++  if (![otherView isKindOfClass:[UIScrollView class]]) {
++    return NO;
++  }
++  UIScrollView *scrollView = (UIScrollView *)otherView;
++  return otherGestureRecognizer == scrollView.panGestureRecognizer && [self.view isDescendantOfView:scrollView];
++}
++
++@end
++#endif
++
++ENRMTapRecognizer *ENRMCreateTextTapRecognizer(id target, SEL action)
++{
++#if !TARGET_OS_OSX
++  return [[ENRMStrictTapGestureRecognizer alloc] initWithTarget:target action:action];
++#else
++  return [[ENRMTapRecognizer alloc] initWithTarget:target action:action];
++#endif
++}
  
  BOOL ENRMHandleTapOnTextView(ENRMPlatformTextView *textView, ENRMTapRecognizer *recognizer,
 -                             void (^onLinkPress)(NSString *url))
@@ -1098,7 +1288,7 @@ index 88d69da..7bb3234 100644
  {
    NSString *url = linkURLAtTapLocation(textView, recognizer);
    if (!url) {
-@@ -10,6 +10,6 @@ BOOL ENRMHandleTapOnTextView(ENRMPlatformTextView *textView, ENRMTapRecognizer *
+@@ -10,6 +135,6 @@ BOOL ENRMHandleTapOnTextView(ENRMPlatformTextView *textView, ENRMTapRecognizer *
      return NO;
    }
    if (onLinkPress)
@@ -1121,24 +1311,92 @@ index 3bab20f..136d07e 100644
  NSString *_Nullable linkURLAtPoint(ENRMPlatformTextView *textView, CGPoint point);
  
 diff --git a/node_modules/react-native-enriched-markdown/ios/utils/LinkTapUtils.m b/node_modules/react-native-enriched-markdown/ios/utils/LinkTapUtils.m
-index 20d8739..6a6ffaa 100644
+index 20d8739..6a8fff4 100644
 --- a/node_modules/react-native-enriched-markdown/ios/utils/LinkTapUtils.m
 +++ b/node_modules/react-native-enriched-markdown/ios/utils/LinkTapUtils.m
-@@ -13,6 +13,14 @@ NSString *_Nullable linkURLAtTapLocation(ENRMPlatformTextView *textView, ENRMTap
-   return [attrText attribute:@"linkURL" atIndex:characterIndex effectiveRange:NULL];
- }
+@@ -3,14 +3,41 @@
+ #import "ENRMSpoilerTapUtils.h"
+ #import "ENRMTextHitTest.h"
  
++static BOOL ENRMPointHitsCharacterGlyph(ENRMPlatformTextView *textView, CGPoint point, NSUInteger characterIndex)
++{
++#if !TARGET_OS_OSX
++  NSLayoutManager *layoutManager = textView.layoutManager;
++  NSTextContainer *textContainer = textView.textContainer;
++  if (!layoutManager || !textContainer) {
++    return YES;
++  }
++  NSRange glyphRange =
++      [layoutManager glyphRangeForCharacterRange:NSMakeRange(characterIndex, 1) actualCharacterRange:NULL];
++  if (glyphRange.length == 0) {
++    return NO;
++  }
++  CGRect glyphRect = [layoutManager boundingRectForGlyphRange:glyphRange inTextContainer:textContainer];
++  CGPoint adjusted = CGPointMake(point.x - textView.textContainerInset.left, point.y - textView.textContainerInset.top);
++  return CGRectContainsPoint(CGRectInset(glyphRect, -6.0, -4.0), adjusted);
++#else
++  (void)textView;
++  (void)point;
++  (void)characterIndex;
++  return YES;
++#endif
++}
++
+ NSString *_Nullable linkURLAtTapLocation(ENRMPlatformTextView *textView, ENRMTapRecognizer *recognizer)
+ {
+-  NSUInteger characterIndex = ENRMCharacterIndexForTap(textView, recognizer);
+-  if (characterIndex == NSNotFound)
+-    return nil;
++  return linkURLAtPoint(textView, [recognizer locationInView:textView]);
++}
+ 
+-  NSAttributedString *attrText = ENRMGetAttributedText(textView);
+-  return [attrText attribute:@"linkURL" atIndex:characterIndex effectiveRange:NULL];
 +NSString *linkSourceTypeAtTapLocation(ENRMPlatformTextView *textView, ENRMTapRecognizer *recognizer)
 +{
 +  NSUInteger index = ENRMCharacterIndexForTap(textView, recognizer);
 +  if (index == NSNotFound)
 +    return @"markdown";
 +  return [ENRMGetAttributedText(textView) attribute:@"linkSourceType" atIndex:index effectiveRange:NULL] ?: @"markdown";
-+}
-+
+ }
+ 
  NSString *_Nullable linkURLAtPoint(ENRMPlatformTextView *textView, CGPoint point)
- {
+@@ -18,7 +45,10 @@ NSString *_Nullable linkURLAtPoint(ENRMPlatformTextView *textView, CGPoint point
    NSUInteger index = ENRMCharacterIndexAtPoint(textView, point);
+   if (index == NSNotFound)
+     return nil;
+-  return [ENRMGetAttributedText(textView) attribute:@"linkURL" atIndex:index effectiveRange:NULL];
++  NSString *url = [ENRMGetAttributedText(textView) attribute:@"linkURL" atIndex:index effectiveRange:NULL];
++  if (!url || !ENRMPointHitsCharacterGlyph(textView, point, index))
++    return nil;
++  return url;
+ }
+ 
+ NSString *_Nullable linkURLAtRange(ENRMPlatformTextView *textView, NSRange characterRange)
+@@ -56,7 +86,7 @@ NSDictionary<NSString *, NSString *> *_Nullable imageAtTapLocation(ENRMPlatformT
+     return nil;
+ 
+   NSString *url = [attrText attribute:@"imageURL" atIndex:characterIndex effectiveRange:NULL];
+-  if (!url)
++  if (!url || !ENRMPointHitsCharacterGlyph(textView, [recognizer locationInView:textView], characterIndex))
+     return nil;
+ 
+   NSString *altText = [attrText attribute:@"imageAltText" atIndex:characterIndex effectiveRange:NULL];
+@@ -87,10 +117,12 @@ BOOL isPointOnInteractiveElement(ENRMPlatformTextView *textView, CGPoint point,
+     return NO;
+ 
+   NSDictionary *attrs = [ENRMGetAttributedText(textView) attributesAtIndex:charIndex effectiveRange:NULL];
+-  if (attrs[@"linkURL"] != nil || [attrs[@"TaskItem"] boolValue] || attrs[SpoilerAttributeName] != nil)
++  if (attrs[@"linkURL"] != nil && ENRMPointHitsCharacterGlyph(textView, point, charIndex))
++    return YES;
++  if ([attrs[@"TaskItem"] boolValue] || attrs[SpoilerAttributeName] != nil)
+     return YES;
+ 
+-  if (includeImages && attrs[@"imageURL"] != nil)
++  if (includeImages && attrs[@"imageURL"] != nil && ENRMPointHitsCharacterGlyph(textView, point, charIndex))
+     return YES;
+ 
+   return includeCodeBlock && attrs[@"codeBlockText"] != nil;
 diff --git a/node_modules/react-native-enriched-markdown/lib/module/EnrichedMarkdownNativeComponent.ts b/node_modules/react-native-enriched-markdown/lib/module/EnrichedMarkdownNativeComponent.ts
 index 32ff768..8e89249 100644
 --- a/node_modules/react-native-enriched-markdown/lib/module/EnrichedMarkdownNativeComponent.ts

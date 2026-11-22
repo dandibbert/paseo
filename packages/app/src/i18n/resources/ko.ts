@@ -308,6 +308,7 @@ export const ko: TranslationResources = {
   sessions: {
     title: "기록",
     empty: "아직 세션이 없습니다",
+    emptyForHost: "이 호스트에 세션이 없습니다",
     noMatches: "일치하는 세션이 없습니다",
     tooManyMatches: "일치 항목이 너무 많습니다 — 검색 범위를 좁히세요",
     hostLoadFailed: "{{host}}: 기록을 불러오지 못했습니다",
@@ -1371,6 +1372,8 @@ export const ko: TranslationResources = {
       settings: "설정",
       closeSidebar: "사이드바 닫기",
       moreActions: "추가 작업",
+      markReadFailed: "워크스페이스를 읽음으로 표시하지 못했습니다",
+      markUnreadFailed: "워크스페이스를 읽지 않음으로 표시하지 못했습니다",
     },
     footer: {
       usage: "사용량",
@@ -2170,6 +2173,22 @@ export const ko: TranslationResources = {
     archiveTooltip: "서브에이전트 보관",
     archiveFinishedAction: "완료된 하위 에이전트 보관",
     archiveFinishedRetry: "다시 시도 ({{failed}}/{{total}})",
+    dialogs: {
+      thisSubagentLower: "이 하위 에이전트",
+      thisSubagentCapitalized: "이 하위 에이전트",
+      detachTitle: "하위 에이전트를 분리할까요?",
+      detachMessage: "{{label}}은(는) 이 트랙을 떠나 독립 에이전트로 계속 실행됩니다.",
+      detachConfirm: "분리",
+      archiveTitle: "하위 에이전트를 보관할까요?",
+      archiveRunningTitle: "실행 중인 하위 에이전트를 보관할까요?",
+      archiveMessage: "{{label}}을(를) 트랙에서 제거합니다. 하위 에이전트가 보관됩니다.",
+      archiveRunningMessage:
+        "{{label}}이(가) 아직 실행 중입니다. 보관하면 하위 에이전트가 중지되고 트랙에서 제거됩니다.",
+      archiveBackgroundMessage:
+        "{{label}}을(를) 보관하면 백그라운드 작업이 중지되고 트랙에서 제거됩니다.",
+      archiveConfirm: "보관",
+      cancel: "취소",
+    },
   },
   panels: {
     draft: {
@@ -3035,6 +3054,11 @@ export const ko: TranslationResources = {
           hint: "차트, 표, 비교를 채팅 카드로 그릴 시점을 에이전트에 알려줍니다",
           accessibilityLabel: "채팅 카드 지침",
         },
+        managedContinuations: {
+          title: "백그라운드 명령 및 자동 깨우기",
+          hint: "에이전트가 관리형 백그라운드 셸 명령을 실행하고 일회성 깨우기를 예약하도록 허용합니다",
+          accessibilityLabel: "백그라운드 명령 및 자동 깨우기",
+        },
         systemPrompt: {
           title: "시스템 프롬프트",
           hint: "모든 에이전트에 시스템 프롬프트를 추가합니다",
@@ -3065,6 +3089,26 @@ export const ko: TranslationResources = {
       },
       workspaces: {
         unavailable: "워크스페이스를 관리하려면 이 호스트에 연결하세요",
+        autoArchiveMerged: {
+          title: "병합된 PR 워크스페이스 보관",
+          hint: "풀 리퀘스트가 병합된 후 변경 사항이 없는 Paseo 워크스페이스를 자동으로 보관합니다",
+          errorTitle: "워크스페이스를 업데이트할 수 없습니다",
+        },
+      },
+      browserTools: {
+        title: "브라우저 도구",
+        warning:
+          "로그인된 브라우저 상태를 포함해 에이전트가 Paseo 브라우저 탭에 접근하고 제어할 수 있도록 허용합니다. 신뢰할 수 있는 에이전트에만 활성화하세요.",
+        updating: "브라우저 도구 업데이트 중…",
+        enableAccessibility: "브라우저 도구 활성화",
+      },
+      terminalAgents: {
+        title: "터미널 에이전트",
+        hooks: {
+          title: "터미널 에이전트 훅 활성화",
+          hint: "터미널 에이전트의 알림과 상태를 받습니다. 에이전트 설정 파일에 훅을 설치합니다.",
+          errorTitle: "터미널 에이전트 훅을 업데이트할 수 없습니다",
+        },
       },
       terminalProfiles: {
         unavailable: "터미널 프로필을 관리하려면 이 호스트에 연결하세요",

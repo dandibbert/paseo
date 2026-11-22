@@ -312,6 +312,7 @@ export const es: TranslationResources = {
   sessions: {
     title: "Historial",
     empty: "Aún no hay sesiones",
+    emptyForHost: "No hay sesiones para este host",
     noMatches: "No hay sesiones que coincidan",
     tooManyMatches: "Demasiadas coincidencias: acota la búsqueda",
     hostLoadFailed: "{{host}}: No se pudo cargar el historial",
@@ -1401,6 +1402,8 @@ export const es: TranslationResources = {
       settings: "Ajustes",
       closeSidebar: "Cerrar barra lateral",
       moreActions: "Más acciones",
+      markReadFailed: "No se pudo marcar el workspace como leído",
+      markUnreadFailed: "No se pudo marcar el workspace como no leído",
     },
     footer: {
       usage: "Uso",
@@ -2209,6 +2212,22 @@ export const es: TranslationResources = {
     archiveTooltip: "Subagente de archivo",
     archiveFinishedAction: "Archivar subagentes finalizados",
     archiveFinishedRetry: "Reintentar ({{failed}}/{{total}})",
+    dialogs: {
+      thisSubagentLower: "este subagente",
+      thisSubagentCapitalized: "Este subagente",
+      detachTitle: "¿Separar subagente?",
+      detachMessage: "{{label}} saldrá de esta pista y continuará como agente independiente.",
+      detachConfirm: "Separar",
+      archiveTitle: "¿Archivar subagente?",
+      archiveRunningTitle: "¿Archivar subagente en ejecución?",
+      archiveMessage: "Quitar {{label}} de la pista. El subagente se archivará.",
+      archiveRunningMessage:
+        "{{label}} sigue ejecutándose. Archivarlo detendrá el subagente y lo quitará de la pista.",
+      archiveBackgroundMessage:
+        "Archivar {{label}} detendrá su trabajo en segundo plano y lo quitará de la pista.",
+      archiveConfirm: "Archivar",
+      cancel: "Cancelar",
+    },
   },
   panels: {
     draft: {
@@ -3083,6 +3102,11 @@ export const es: TranslationResources = {
           hint: "Indica a los agentes cuándo mostrar gráficos, tablas y comparaciones como tarjetas de chat",
           accessibilityLabel: "Instrucciones de tarjetas de chat",
         },
+        managedContinuations: {
+          title: "Comandos en segundo plano y reactivación",
+          hint: "Permite que los agentes ejecuten comandos gestionados en segundo plano y programen reactivaciones",
+          accessibilityLabel: "Comandos en segundo plano y reactivación",
+        },
         systemPrompt: {
           title: "Aviso del sistema",
           hint: "Agrega un mensaje del sistema a todos los agentes.",
@@ -3113,6 +3137,26 @@ export const es: TranslationResources = {
       },
       workspaces: {
         unavailable: "Connect to this host to manage workspaces",
+        autoArchiveMerged: {
+          title: "Archivar workspaces con PR fusionado",
+          hint: "Archivar automáticamente los workspaces limpios de Paseo después de fusionar su PR",
+          errorTitle: "No se pudieron actualizar los workspaces",
+        },
+      },
+      browserTools: {
+        title: "Herramientas del navegador",
+        warning:
+          "Permitir que los agentes accedan y controlen las pestañas del navegador de Paseo, incluido el estado con sesión iniciada. Actívalo solo para agentes de confianza.",
+        updating: "Actualizando herramientas del navegador…",
+        enableAccessibility: "Activar herramientas del navegador",
+      },
+      terminalAgents: {
+        title: "Agentes de terminal",
+        hooks: {
+          title: "Activar hooks de agentes de terminal",
+          hint: "Recibe notificaciones y estado de los agentes de terminal. Esto instala hooks en los archivos de configuración del agente.",
+          errorTitle: "No se pudieron actualizar los hooks de agentes de terminal",
+        },
       },
       terminalProfiles: {
         unavailable: "Connect to this host to manage terminal profiles",

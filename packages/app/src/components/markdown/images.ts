@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { Image } from "react-native";
 import { isWeb } from "@/constants/platform";
 import { useMemo, useEffect, useId } from "react";
@@ -44,6 +45,7 @@ export function useMarkdownSource(
     external?: boolean;
   } = {},
 ) {
+  const { t } = useTranslation();
   const occurrenceKey = useId();
   const { commandNames, forgeReferencePattern, external } = links;
   const prepared = useMemo(
@@ -75,7 +77,7 @@ export function useMarkdownSource(
         : null,
       serverId: context.serverId,
       occurrenceKey,
-      unavailableMessage: "Image unavailable",
+      unavailableMessage: t("agentStream.attachments.imageUnavailable"),
     });
   });
   const results = useFetchQueries(

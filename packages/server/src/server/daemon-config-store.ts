@@ -43,6 +43,7 @@ interface SupportedMutableConfigPatch {
   resumePrompt?: string;
   appendSystemPrompt?: string;
   genuiSystemPrompt?: boolean;
+  managedBackgroundCommands?: boolean;
   terminalProfiles?: MutableDaemonConfig["terminalProfiles"];
   agentProfiles?: MutableDaemonConfig["agentProfiles"];
   skills?: MutableDaemonConfig["skills"];
@@ -261,6 +262,7 @@ const RELOADABLE_PATHS = [
   "daemon.notifyOnAgentErrors",
   "daemon.appendSystemPrompt",
   "daemon.genuiSystemPrompt",
+  "daemon.managedBackgroundCommands",
   "daemon.terminalProfiles",
   "daemon.agentProfiles",
   "app.baseUrl",
@@ -291,6 +293,7 @@ const PERSISTED_TO_MUTABLE_PATH = new Map<string, string>([
   ["daemon.notifyOnAgentErrors", "notifyOnAgentErrors"],
   ["daemon.appendSystemPrompt", "appendSystemPrompt"],
   ["daemon.genuiSystemPrompt", "genuiSystemPrompt"],
+  ["daemon.managedBackgroundCommands", "managedBackgroundCommands"],
   ["daemon.terminalProfiles", "terminalProfiles"],
   ["daemon.agentProfiles", "agentProfiles"],
   ["app.baseUrl", "app.baseUrl"],
@@ -360,6 +363,19 @@ function pickRestartRecoveryPatch(
   };
 }
 
+function pickSystemPromptPatch(
+  patch: MutableDaemonConfigPatch,
+): Pick<SupportedMutableConfigPatch, "appendSystemPrompt" | "genuiSystemPrompt"> {
+  return {
+    ...(patch.appendSystemPrompt !== undefined
+      ? { appendSystemPrompt: patch.appendSystemPrompt }
+      : {}),
+    ...(patch.genuiSystemPrompt !== undefined
+      ? { genuiSystemPrompt: patch.genuiSystemPrompt }
+      : {}),
+  };
+}
+
 function pickSupportedPatchFields(patch: MutableDaemonConfigPatch): SupportedMutableConfigPatch {
   return {
     ...pickRelayPatch(patch.relay),
@@ -388,11 +404,9 @@ function pickSupportedPatchFields(patch: MutableDaemonConfigPatch): SupportedMut
     ...(patch.idleRuntimeCleanup !== undefined
       ? { idleRuntimeCleanup: patch.idleRuntimeCleanup }
       : {}),
-    ...(patch.appendSystemPrompt !== undefined
-      ? { appendSystemPrompt: patch.appendSystemPrompt }
-      : {}),
-    ...(patch.genuiSystemPrompt !== undefined
-      ? { genuiSystemPrompt: patch.genuiSystemPrompt }
+    ...pickSystemPromptPatch(patch),
+    ...(patch.managedBackgroundCommands !== undefined
+      ? { managedBackgroundCommands: patch.managedBackgroundCommands }
       : {}),
     ...(patch.terminalProfiles !== undefined ? { terminalProfiles: patch.terminalProfiles } : {}),
     ...(patch.agentProfiles !== undefined ? { agentProfiles: patch.agentProfiles } : {}),
@@ -896,6 +910,9 @@ function mergeMutableDaemonPatch(
   }
   if (patch.appendSystemPrompt !== undefined) next.appendSystemPrompt = patch.appendSystemPrompt;
   if (patch.genuiSystemPrompt !== undefined) next.genuiSystemPrompt = patch.genuiSystemPrompt;
+  if (patch.managedBackgroundCommands !== undefined) {
+    next.managedBackgroundCommands = patch.managedBackgroundCommands;
+  }
   if (patch.terminalProfiles !== undefined) next.terminalProfiles = patch.terminalProfiles;
   if (patch.agentProfiles !== undefined) next.agentProfiles = patch.agentProfiles;
   return Object.keys(next).length > 0 ? next : undefined;

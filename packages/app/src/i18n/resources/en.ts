@@ -306,6 +306,7 @@ export const en = {
   sessions: {
     title: "History",
     empty: "No sessions yet",
+    emptyForHost: "No sessions for this host",
     noMatches: "No sessions match",
     tooManyMatches: "Too many matches — narrow your search",
     hostLoadFailed: "{{host}}: Could not load history",
@@ -1415,6 +1416,8 @@ export const en = {
       settings: "Settings",
       closeSidebar: "Close sidebar",
       moreActions: "More actions",
+      markReadFailed: "Failed to mark workspace as read",
+      markUnreadFailed: "Failed to mark workspace as unread",
     },
     footer: {
       usage: "Usage",
@@ -1629,6 +1632,9 @@ export const en = {
         workerUpdated: "Worker updated to {{version}}",
         supervisorRefresh:
           "The running supervisor retains its original code. Its launcher must stop and start it to refresh the supervisor.",
+        terminalCleanupHeader:
+          "The daemon restarted, but closing its terminals was not confirmed; these processes may still be running:",
+        terminalCleanupHint: "Stopping the daemon retries the cleanup.",
       },
       status: {
         title: "Status",
@@ -2228,6 +2234,22 @@ export const en = {
     archiveTooltip: "Archive subagent",
     archiveFinishedAction: "Archive finished subagents",
     archiveFinishedRetry: "Retry ({{failed}}/{{total}})",
+    dialogs: {
+      thisSubagentLower: "this subagent",
+      thisSubagentCapitalized: "This subagent",
+      detachTitle: "Detach subagent?",
+      detachMessage: "{{label}} will leave this track and continue as a standalone agent.",
+      detachConfirm: "Detach",
+      archiveTitle: "Archive subagent?",
+      archiveRunningTitle: "Archive running subagent?",
+      archiveMessage: "Remove {{label}} from the track. The subagent will be archived.",
+      archiveRunningMessage:
+        "{{label}} is still running. Archiving it will stop the subagent and remove it from the track.",
+      archiveBackgroundMessage:
+        "Archiving {{label}} will stop its background work and remove it from the track.",
+      archiveConfirm: "Archive",
+      cancel: "Cancel",
+    },
   },
   panels: {
     draft: {
@@ -3196,6 +3218,11 @@ export const en = {
           hint: "Tells agents when to draw charts, tables and comparisons as chat cards",
           accessibilityLabel: "Chat card instructions",
         },
+        managedContinuations: {
+          title: "Background commands & auto-wake",
+          hint: "Allow agents to run managed background shell commands and schedule one-shot wakeups",
+          accessibilityLabel: "Background commands and auto-wake",
+        },
         systemPrompt: {
           title: "System prompt",
           hint: "Adds a system prompt to all agents",
@@ -3226,6 +3253,26 @@ export const en = {
       },
       workspaces: {
         unavailable: "Connect to this host to manage workspaces",
+        autoArchiveMerged: {
+          title: "Archive merged PR workspaces",
+          hint: "Automatically archive clean Paseo workspaces after their pull request is merged",
+          errorTitle: "Unable to update workspaces",
+        },
+      },
+      browserTools: {
+        title: "Browser tools",
+        warning:
+          "Allow agents to access and control Paseo browser tabs, including logged-in browser state. Only enable this for agents you trust.",
+        updating: "Updating browser tools…",
+        enableAccessibility: "Enable browser tools",
+      },
+      terminalAgents: {
+        title: "Terminal agents",
+        hooks: {
+          title: "Enable terminal agent hooks",
+          hint: "Get notifications and status from terminal agents. This installs hooks in your agent config files.",
+          errorTitle: "Unable to update terminal agent hooks",
+        },
       },
       terminalProfiles: {
         unavailable: "Connect to this host to manage terminal profiles",

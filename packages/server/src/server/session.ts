@@ -1241,6 +1241,7 @@ export class Session {
         emit: (msg) => this.emit(msg),
         emitLifecycleIntent: (intent) => this.emitLifecycleIntent(intent),
       },
+      delivery: this.delivery,
       clientId: this.clientId,
       paseoHome: this.paseoHome,
       serverId,
@@ -2299,6 +2300,9 @@ export class Session {
           );
           return;
         }
+
+        // Internal continuation checkpoints are not agent stream events.
+        if (event.type === "continuation_checkpoint") return;
 
         if (
           this.voiceSessions.isActiveForAgent(event.agentId) &&

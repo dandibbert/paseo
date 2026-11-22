@@ -17,6 +17,7 @@ import type { ManagedAgent } from "../../agent/agent-manager.js";
 import type { PersistedProjectRecord, PersistedWorkspaceRecord } from "../../workspace-registry.js";
 import type { HubRelationshipManagement } from "../../hub/relationship-controller.js";
 import type { DaemonConfigReloadResult } from "../../daemon-config-store.js";
+import type { SessionDelivery } from "../owned-subscriptions/index.js";
 
 export interface DaemonRuntimeConfig {
   listen: string | null;
@@ -40,6 +41,7 @@ export interface DaemonSessionHost {
 
 export interface DaemonSessionOptions {
   host: DaemonSessionHost;
+  delivery?: SessionDelivery;
   clientId: string;
   paseoHome: string;
   serverId: string | undefined;
@@ -119,6 +121,7 @@ export class DaemonSession {
       agentBusyReason: options.agentBusyReason,
       emit: (msg) => this.host.emit(msg),
       emitLifecycleIntent: (intent) => this.host.emitLifecycleIntent(intent),
+      delivery: options.delivery,
       logger: this.logger,
     });
   }

@@ -169,3 +169,73 @@ test("a restored public SDK timeline leaves missed history to the consumer", asy
     await daemon.close();
   }
 });
+
+test("registered desktop update host receives commands on owned subscriptions and unregisters on disconnect", async () => {
+  const daemon = await createTestPaseoDaemon({ mcpEnabled: false, desktopManaged: true });
+  const sockets: WebSocket[] = [];
+  const desktopHost = new PublicDaemonClient({
+    url: `ws://127.0.0.1:${daemon.port}/ws`,
+    clientId: "paseo-desktop-update-host",
+    clientType: "cli",
+    appVersion: "0.16.0-beta.1",
+    reconnect: { enabled: false },
+    webSocketFactory: (url) => {
+      const socket = new WebSocket(url);
+      sockets.push(socket);
+      return socket as unknown as WebSocketLike;
+    },
+  });
+  const requester = new PublicDaemonClient({
+    url: `ws://127.0.0.1:${daemon.port}/ws`,
+    clientId: "remote-update-requester",
+    appVersion: "0.16.0-beta.1",
+    reconnect: { enabled: false },
+    webSocketFactory: (url) => new WebSocket(url) as unknown as WebSocketLike,
+  });
+  const commands: string[] = [];
+  const offCommand = desktopHost.on("daemon.desktop_host.update.command", (message) => {
+    commands.push(message.payload.commandId);
+    void desktopHost.reportDesktopHostUpdate({
+      commandId: message.payload.commandId,
+      status: "up_to_date",
+      currentVersion: "0.16.0-beta.1",
+      latestVersion: "0.16.0-beta.1",
+      error: null,
+    });
+  });
+
+  try {
+    await desktopHost.connect();
+    await requester.connect();
+    expect(
+      await desktopHost.registerDesktopHost({
+        releaseChannel: "beta",
+        appVersion: "0.16.0-beta.1",
+      }),
+    ).toBe(true);
+
+    const outcome = await requester.installUpdate({ checkOnly: true });
+    expect(outcome).toMatchObject({
+      installKind: "desktop",
+      status: "up_to_date",
+      currentVersion: "0.16.0-beta.1",
+      targetVersion: "0.16.0-beta.1",
+      error: null,
+    });
+    expect(commands).toHaveLength(1);
+
+    // Closing the physical socket must unregister immediately rather than waiting out the 90s
+    // reconnect grace period with a stale desktop host.
+    sockets[0]!.terminate();
+    await expect.poll(() => desktopHost.getConnectionState().status).not.toBe("connected");
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect((await requester.installUpdate({ checkOnly: true })).error).toContain(
+      "No Paseo Desktop window is connected",
+    );
+  } finally {
+    offCommand();
+    await desktopHost.close();
+    await requester.close();
+    await daemon.close();
+  }
+}, 10_000);

@@ -26,6 +26,14 @@ const sourceSchema = z.discriminatedUnion("kind", [
     title: z.string().min(1).optional(),
     event: z.enum(["finished", "errored", "permission-required", "closed"]),
   }),
+  z.object({
+    kind: z.literal("managed-continuation"),
+    agentId: agentIdSchema,
+    serverId: z.string().min(1).optional(),
+    title: z.string().min(1).optional(),
+    eventIds: z.array(z.string().min(1)).min(1),
+    origin: z.enum(["managed-command", "one-shot", "recovery-diagnostic"]),
+  }),
 ]);
 export type AgentPromptSource = z.infer<typeof sourceSchema>;
 
@@ -81,7 +89,11 @@ export function formatAgentMessage(message: AgentMessage): string {
   const server = source?.serverId ? ` source-server-id="${escapeXml(source.serverId)}"` : "";
   const title = source?.title ? ` source-agent-title="${escapeXml(source.title)}"` : "";
   const event = source?.kind === "agent-notification" ? ` event="${source.event}"` : "";
-  return `<paseo-system version="1" ${attributes} message-id="${escapeXml(message.id)}"${server}${title}${event}>\n${escapeXml(message.text)}\n</paseo-system>`;
+  const continuationAttrs =
+    source?.kind === "managed-continuation"
+      ? ` origin="${source.origin}" event-ids="${escapeXml(source.eventIds.join(","))}"`
+      : "";
+  return `<paseo-system version="1" ${attributes} message-id="${escapeXml(message.id)}"${server}${title}${event}${continuationAttrs}>\n${escapeXml(message.text)}\n</paseo-system>`;
 }
 
 export function parseAgentMessage(text: string): AgentMessage | null {
@@ -103,12 +115,15 @@ export function parseAgentMessage(text: string): AgentMessage | null {
     if (attributes.has("source-agent-id") || attributes.has("event")) return null;
     return { id, source: null, text: body };
   }
+  const rawEventIds = attributes.get("event-ids");
   const source = sourceSchema.safeParse({
     kind: attributes.get("kind"),
     agentId: attributes.get("source-agent-id"),
     serverId: attributes.get("source-server-id"),
     event: attributes.get("event"),
     title: attributes.get("source-agent-title"),
+    origin: attributes.get("origin"),
+    eventIds: rawEventIds ? rawEventIds.split(",").filter(Boolean) : undefined,
     url: attributes.get("source-url"),
   });
   if (!source.success) return null;
@@ -225,7 +240,7 @@ function projectAgentMessage(item: AgentTimelineItem): AgentTimelineItem | null 
     type: "tool_call",
     callId: `paseo-agent-message:${message.id}`,
     agentMessage: {
-      event: source.kind === "agent-message" ? "message" : source.event,
+      event: source.kind === "agent-notification" ? source.event : "message",
       sender: {
         id: source.agentId,
         ...(source.serverId ? { serverId: source.serverId } : {}),

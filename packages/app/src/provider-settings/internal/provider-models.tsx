@@ -85,6 +85,7 @@ export function ProviderModels({
   const { models: discoveredModels, cache } = resolveProviderDiscoveredModels({
     serverId,
     provider,
+    providerConfig: config?.providers?.[provider],
     currentModels: entry.models,
     additionalModels,
     providerSnapshotRefreshing: loading,
