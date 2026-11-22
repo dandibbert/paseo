@@ -878,7 +878,14 @@ export class HostRuntimeController {
     if (options?.verify) {
       this.resetInactiveOnlineProbeBackoff();
     }
-    this.activeClient?.ensureConnected(options);
+    if (this.activeClient) {
+      this.activeClient.ensureConnected(options);
+      return;
+    }
+    // No client is retrying: probe now instead of waiting out the probe backoff.
+    if (!this.started || this.snapshot.activeConnectionId === null) return;
+    this.connectionLastProbedAt.clear();
+    void this.runProbeCycleNow();
   }
 
   async reconnectVia(originServerId: string): Promise<void> {
@@ -1031,7 +1038,7 @@ export class HostRuntimeController {
       connectionId: string,
       client: DaemonClient,
     ): Promise<boolean> => {
-      while (!this.snapshot.activeConnectionId) {
+      while (!this.snapshot.activeConnectionId || !this.activeClient) {
         if (!activationLock) {
           activationLock = this.switchToConnection({
             connectionId,
@@ -1061,7 +1068,11 @@ export class HostRuntimeController {
         ? probeByConnectionId.get(currentActiveConnectionId)
         : null;
 
-      if (!currentActiveConnectionId || !findConnectionById(this.host, currentActiveConnectionId)) {
+      if (
+        !currentActiveConnectionId ||
+        !this.activeClient ||
+        !findConnectionById(this.host, currentActiveConnectionId)
+      ) {
         const nextConnectionId = selectBestConnection({
           candidates: buildConnectionCandidates(this.host),
           probeByConnectionId,
@@ -1692,6 +1703,8 @@ export class HostRuntimeController {
     this.unsubscribeClientHandlers?.();
     this.unsubscribeClientHandlers = null;
     client.setReconnectEnabled(false);
+    // The failed client never retries, so the next probe that reaches a connection replaces it.
+    this.activeClient = null;
     this.applyConnectionEvent({ type: "connect_failed", message: toErrorMessage(error) });
     this.updateSnapshot({
       ...toSnapshotConnectionPatch(this.connectionMachineState, this.connectionEpoch),

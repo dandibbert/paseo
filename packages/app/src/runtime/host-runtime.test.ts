@@ -1349,6 +1349,58 @@ describe("HostRuntimeController", () => {
     await controller.stop();
   });
 
+  it.each(["probe", "foreground"] as const)(
+    "reconnects a connection whose client gave up once a %s reaches the daemon again",
+    async (trigger) => {
+      useHostRuntimeClock();
+      const host = makeHost({
+        connections: [relayPrimary],
+        preferredConnectionId: relayPrimary.id,
+      });
+      const clients: FakeDaemonClient[] = [];
+      const latencies: Record<string, number | Error> = {
+        [relayPrimary.id]: new Error("Connection timed out"),
+      };
+      const baseDeps = makeDeps(latencies, clients);
+      let daemonReachable = false;
+      const controller = new HostRuntimeController({
+        host,
+        deps: {
+          ...baseDeps,
+          createClient: (input) => {
+            const client = baseDeps.createClient(input) as unknown as FakeDaemonClient;
+            if (!daemonReachable) {
+              client.connect = async () => {
+                throw new Error("Connection timed out");
+              };
+            }
+            return client as unknown as DaemonClient;
+          },
+        },
+      });
+
+      await controller.start({ autoProbe: false });
+      await controller.activateConnection({ connectionId: relayPrimary.id });
+      expect(controller.getSnapshot().connectionStatus).toBe("error");
+      expect(controller.getSnapshot().lastError).toBe("Connection timed out");
+
+      daemonReachable = true;
+      latencies[relayPrimary.id] = 40;
+      if (trigger === "probe") {
+        await vi.advanceTimersByTimeAsync(130_000);
+        await controller.runProbeCycleNow();
+      } else {
+        // Foregrounding the app probes at once instead of waiting out the probe backoff.
+        controller.ensureConnected({ verify: true });
+        await controller.runProbeCycleNow();
+      }
+
+      expect(controller.getSnapshot().activeConnectionId).toBe(relayPrimary.id);
+      expect(controller.getSnapshot().connectionStatus).toBe("online");
+      await controller.stop();
+    },
+  );
+
   it("rejects probes that resolve to a different server id", async () => {
     const host = makeHost({
       serverId: "srv_old",
