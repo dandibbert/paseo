@@ -451,9 +451,7 @@ test("fullscreen Send keeps the configured queue behavior while an agent runs", 
   }
 });
 
-test("editing a queued draft restores its original height with the focus hint visible", async ({
-  page,
-}) => {
+test("editing a queued draft opens it in place with the focus hint visible", async ({ page }) => {
   await configureComposerQueueSend(page);
   await resizeComposerViewport(page, "portrait");
   const agent = await startRunningMockAgent(page, {
@@ -470,8 +468,10 @@ test("editing a queued draft restores its original height with the focus hint vi
     await composerLocator(page).blur();
     await expect(page.getByText(/ to focus$/)).toBeVisible();
     await page.getByRole("button", { name: "Edit queued message", exact: true }).click();
-    await expect(composerLocator(page)).toHaveValue(draft);
-    await expectComposerHeight(page, originalHeight);
+    // The fork edits a queued message in its row; the composer keeps its own (empty) draft.
+    await expect(page.getByTestId("composer-queued-message-edit-input")).toHaveValue(draft);
+    await expect(composerLocator(page)).toHaveValue("");
+    expect(originalHeight).toBeGreaterThan(0);
   } finally {
     await agent.cleanup();
   }
