@@ -10,7 +10,7 @@ nav: Antigravity
 
 ## 开始使用 {#getting-started}
 
-在 daemon 主机上安装 Antigravity CLI（`agy`）1.5.0 或更高版本，然后运行一次 `agy` 登录。在 Paseo 中选择 **Antigravity**。该 Provider 随 Paseo 一起提供，无需另外安装插件。
+在 daemon 主机上安装 Antigravity CLI（`agy`）1.5.0 或更高版本，然后运行一次 `agy` 登录。在 Paseo 的 **设置 → Providers** 中添加 **Antigravity** 后再选择它。该 Provider 随 Paseo 一起提供，无需另外安装插件。如需通过 T3 Code 服务运行 Antigravity，请参阅 [通过 T3 使用 Antigravity](/docs/supported-providers/antigravity-t3)。
 
 如果 `agy` 不在 daemon 的 PATH 中，请在 `~/.paseo/config.json` 中覆盖它的命令。使用 `env` 设置 Provider 专用的环境变量：
 
