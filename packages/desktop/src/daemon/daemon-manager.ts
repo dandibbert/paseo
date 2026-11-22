@@ -58,7 +58,6 @@ import {
   readLegacySkillSelection,
 } from "../integrations/legacy-skill-selection.js";
 import { tailFile } from "../diagnostics/tail-file.js";
-import { createHostClient } from "@getpaseo/client/node";
 import {
   startRemoteUpdateHost,
   type RemoteUpdateHostClient,
@@ -570,31 +569,17 @@ export function createDaemonCommandHandlers(): Record<string, DesktopCommandHand
   };
 }
 
-function createRemoteUpdateClient(home: string, listen: string): RemoteUpdateHostClient {
-  const client = createHostClient(listen, {
-    clientId: "paseo-desktop-update-host",
-    clientType: "cli",
-    appVersion: resolveDesktopAppVersion(),
-    localCredential: () => readLocalCredentialForTarget(home, listen) ?? undefined,
-    connectTimeoutMs: 10_000,
-    reconnect: { enabled: false },
-  });
-  return {
-    connect: () => client.connect(),
-    close: () => client.close(),
-    getLastServerInfoMessage: () => client.getLastServerInfoMessage(),
-    subscribeConnectionStatus: (listener) => client.subscribeConnectionStatus(listener),
-    on: (type, handler) => client.on(type, (message) => handler(message)),
-    registerDesktopHost: (input) => client.registerDesktopHost(input),
-    reportDesktopHostUpdate: (report) => client.reportDesktopHostUpdate(report),
-  };
-}
-
 /**
  * Answers remote `paseo host update` requests from the main process, so a locked Mac whose
  * window is throttled still installs the update.
  */
-export function startDesktopRemoteUpdateHost(): () => void {
+export function startDesktopRemoteUpdateHost(
+  createClient: (input: {
+    home: string;
+    listen: string;
+    appVersion: string;
+  }) => RemoteUpdateHostClient,
+): () => void {
   const home = getPaseoHome();
   return startRemoteUpdateHost({
     readTarget: async () => {
@@ -605,7 +590,9 @@ export function startDesktopRemoteUpdateHost(): () => void {
         key: `${instance.pid}:${instance.startedAt}:${instance.listen}`,
       };
     },
-    createClient: (listen) => createRemoteUpdateClient(home, listen),
+    // Injected so daemon management never loads the daemon client and its wire schemas.
+    createClient: (listen) =>
+      createClient({ home, listen, appVersion: resolveDesktopAppVersion() }),
     appVersion: resolveDesktopAppVersion(),
     log: {
       info: (message) => log.info(`[remote-update] ${message}`),

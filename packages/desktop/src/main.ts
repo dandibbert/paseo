@@ -32,6 +32,7 @@ import {
   webContents,
 } from "electron";
 import { registerDaemonManager, startDesktopRemoteUpdateHost } from "./daemon/daemon-manager.js";
+import { createRemoteUpdateClient } from "./daemon/remote-update-client.js";
 import { parsePassthroughCliArgsFromArgv, runPassthroughCli } from "./daemon/cli/passthrough.js";
 import { closeAllTransportSessions } from "./daemon/local-transport.js";
 import {
@@ -1015,7 +1016,7 @@ async function bootstrap(): Promise<void> {
   });
   ensureNotificationCenterRegistration();
   registerDaemonManager();
-  const stopRemoteUpdateHost = startDesktopRemoteUpdateHost();
+  const stopRemoteUpdateHost = startDesktopRemoteUpdateHost(createRemoteUpdateClient);
   registerNotchPanel({ openAgent: (target) => desktopWindowOwner.openOrFocusAgent(target) });
   app.once("will-quit", stopRemoteUpdateHost);
   registerWindowManager({ mode: DESKTOP_WINDOW_CHROME_MODE });
