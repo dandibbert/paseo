@@ -3463,7 +3463,7 @@ export const en = {
         editCustomTitle: "Edit manual model",
         editOverrideTitle: "Edit model override",
         hideModel: "Hide {{id}}",
-        editModel: "Edit {{id}}",
+        editModel: "Edit model {{id}}",
         modelId: "Model ID",
         modelIdPlaceholder: "e.g. openai/gpt-5",
         add: "Add",

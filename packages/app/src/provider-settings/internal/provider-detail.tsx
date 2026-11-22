@@ -27,6 +27,7 @@ import { DiagnosticSheet } from "./diagnostic-sheet";
 import { useProviderConfigActions, type ProviderEntry } from "./provider-config";
 import { ProviderModels } from "./provider-models";
 import { ProviderNotice } from "./provider-notice";
+import { ProviderCliUpdate } from "@/providers/cli-update";
 
 export interface ProviderDetailState {
   provider: string;
@@ -116,6 +117,7 @@ export function ProviderDetail({
         updates={installation.updates}
         action={installation.action}
       />
+      <ProviderCliUpdate provider={entry.provider} serverId={serverId} />
       {sections.models ? (
         <ProviderModels serverId={serverId} entry={entry} discovered={sections.models === "all"} />
       ) : null}

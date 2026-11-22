@@ -23,7 +23,9 @@ import { settingsStyles } from "@/styles/settings";
 import type { Theme } from "@/styles/theme";
 import {
   resolveProviderDiscoveredModels,
+  resolveProviderManualModels,
   type ProviderDiscoveredModelsCache,
+  type ProviderManualModel,
 } from "./discovered-models";
 import type { ProviderEntry } from "./provider-config";
 
@@ -97,8 +99,12 @@ export function ProviderModels({
     [discoveredModels, q],
   );
   const filteredCustom = useMemo(
-    () => rankModels(additionalModels, q, (m) => [m.label, m.id]),
-    [additionalModels, q],
+    () =>
+      rankModels(resolveProviderManualModels(additionalModels, entry.models), q, ({ model }) => [
+        model.label,
+        model.id,
+      ]),
+    [additionalModels, entry.models, q],
   );
 
   const openEditor = useCallback(
@@ -205,10 +211,11 @@ export function ProviderModels({
   } else if (filteredCustom.length === 0) {
     customBody = <MutedRow>{t("settings.providers.models.noSearchMatches")}</MutedRow>;
   } else {
-    customBody = filteredCustom.map((model, index) => (
+    customBody = filteredCustom.map(({ model, status }, index) => (
       <CustomModelRow
         key={model.id}
         model={model}
+        status={status}
         first={index === 0}
         disabled={mutationDisabled}
         deleting={savingModelId === model.id}
@@ -243,7 +250,9 @@ export function ProviderModels({
         <View style={settingsStyles.card}>{customBody}</View>
       </SettingsSection>
       {mutationState.status === "error" && !editorOpen ? (
-        <Text style={styles.errorText}>{mutationState.message}</Text>
+        <Text style={styles.errorText} accessibilityRole="alert">
+          {mutationState.message}
+        </Text>
       ) : null}
       <ProviderModelEditorSheet
         provider={provider}
@@ -288,14 +297,19 @@ function DiscoveredModelRow({
   const handleHide = useCallback(() => onHide(model), [model, onHide]);
   return (
     <View style={[styles.modelRow, !first && settingsStyles.rowBorder]}>
-      <Text style={styles.modelTitle} numberOfLines={1}>
+      <Text style={[styles.modelTitle, styles.customModelText]} numberOfLines={1}>
         {model.label}
       </Text>
-      <Text style={styles.monoHint} numberOfLines={1} selectable dataSet={CODE_SURFACE_DATASET}>
+      <Text
+        style={[styles.monoHint, styles.customModelText]}
+        numberOfLines={1}
+        selectable
+        dataSet={CODE_SURFACE_DATASET}
+      >
         {model.id}
       </Text>
       {model.description ? (
-        <Text style={styles.descriptionInline} numberOfLines={1}>
+        <Text style={[styles.descriptionInline, styles.customModelText]} numberOfLines={1}>
           {model.description}
         </Text>
       ) : (
@@ -323,6 +337,7 @@ function DiscoveredModelRow({
 
 function CustomModelRow({
   model,
+  status,
   first,
   disabled,
   deleting,
@@ -330,6 +345,7 @@ function CustomModelRow({
   onDelete,
 }: {
   model: ProviderProfileModel;
+  status: ProviderManualModel["status"];
   first: boolean;
   disabled: boolean;
   deleting: boolean;
@@ -354,6 +370,13 @@ function CustomModelRow({
       >
         {model.id}
       </Text>
+      {status === "available" ? null : (
+        <Text style={styles.statusText} numberOfLines={1}>
+          {status === "disabled"
+            ? t("settings.providers.statuses.disabled")
+            : t("providerSelection.unavailable")}
+        </Text>
+      )}
       <View style={styles.modelRowFiller} />
       <ToolbarButton
         label={t("settings.providers.models.editModel", { id: model.id })}
@@ -414,6 +437,11 @@ const styles = StyleSheet.create((theme) => ({
   customModelText: {
     flexShrink: 1,
     minWidth: 0,
+  },
+  statusText: {
+    fontSize: theme.fontSize.sm,
+    color: theme.colors.foregroundMuted,
+    flexShrink: 0,
   },
   modelRowFiller: {
     flex: 1,
