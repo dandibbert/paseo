@@ -9,6 +9,7 @@ import { createTestPaseoDaemon } from "../test-utils/paseo-daemon.js";
 import { resolveDaemonVersion } from "../daemon-version.js";
 import { BuiltinPluginLoader } from "./builtin/index.js";
 import { createPaseoApi } from "@getpaseo/client";
+import { RENDER_UI_SYSTEM_PROMPT } from "../agent/tools/render-ui/render-ui-prompt.js";
 
 test("a plugin transforms workspace creation once across receipt replays and observes its committed lifecycle", async () => {
   const directory = await mkdtemp(path.join(tmpdir(), "paseo-lifecycle-"));
@@ -546,6 +547,11 @@ test("agent creation hooks change the provider and environment before the sessio
       `export default function contribute(server) { server.addHook("agent.open.before", async ({ request }) => ({ ...request, appendSystemPrompt: [...(request.appendSystemPrompt ?? []), ${JSON.stringify(prompt)}] })); return () => {}; }`,
     );
   await writePrompt("First plugin");
+  // The fork's render_ui guidance sits where the daemon appends its own instructions.
+  const withRenderUi = (plugin?: string) =>
+    ["Saved instructions", RENDER_UI_SYSTEM_PROMPT, plugin, "Plugin instructions"]
+      .filter(Boolean)
+      .join("\n\n");
   const daemon = await createTestPaseoDaemon();
   const client = new DaemonClient({ url: `ws://127.0.0.1:${daemon.port}/ws` });
   try {
@@ -585,7 +591,7 @@ test("agent creation hooks change the provider and environment before the sessio
           hook: "provider.open",
           config: {
             env: { HOOK_CREATE: "created", HOOK_OPEN: "opened" },
-            systemPrompt: "Saved instructions\n\nFirst plugin\n\nPlugin instructions",
+            systemPrompt: withRenderUi("First plugin"),
           },
         },
         {
@@ -602,9 +608,9 @@ test("agent creation hooks change the provider and environment before the sessio
       .filter((entry) => entry.message.startsWith('{"hook":"provider.open"'))
       .map((entry) => JSON.parse(entry.message).config.systemPrompt);
     expect(opens).toEqual([
-      "Saved instructions\n\nFirst plugin\n\nPlugin instructions",
-      "Saved instructions\n\nChanged plugin\n\nPlugin instructions",
-      "Saved instructions\n\nPlugin instructions",
+      withRenderUi("First plugin"),
+      withRenderUi("Changed plugin"),
+      withRenderUi(),
     ]);
     expect((await daemon.daemon.agentStorage.get(agent.id))?.config?.systemPrompt).toBe(
       "Saved instructions",
