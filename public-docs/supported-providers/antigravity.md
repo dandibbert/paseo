@@ -12,7 +12,7 @@ Run Antigravity in Paseo with your installed `agy` CLI and sign-in. This integra
 
 ## Getting started
 
-Install Antigravity CLI (`agy`) 1.5.0 or later on your daemon host, then run `agy` once to sign in. In Paseo, add **Antigravity** in **Settings → Providers**, then select it. The provider ships with Paseo, so you do not install a plugin. To run Antigravity through a T3 Code server instead, see [Antigravity via T3](/docs/supported-providers/antigravity-t3).
+Install Antigravity CLI (`agy`) 1.5.0 or later on your daemon host, then run `agy` once to sign in. In Paseo, add it with **Settings → Providers → Add provider → Antigravity**, then select it. The provider ships with Paseo, so you do not install a plugin. To run Antigravity through a T3 Code server instead, see [Antigravity via T3](/docs/supported-providers/antigravity-t3).
 
 If `agy` is outside your daemon's PATH, override its command in `~/.paseo/config.json`. Use `env` for provider-specific environment variables:
 

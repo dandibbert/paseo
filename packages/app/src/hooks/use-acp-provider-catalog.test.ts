@@ -151,6 +151,16 @@ describe("ACP provider catalog", () => {
   });
 });
 
+it("adds the opt-in direct Antigravity provider only on hosts that bundle it", () => {
+  const antigravity = findProvider("antigravity");
+  expect(
+    buildAcpProviderConfigPatch(antigravity, (feature) => feature === "antigravityProvider"),
+  ).toEqual({ providers: { antigravity: { enabled: true } } });
+  expect(() => buildAcpProviderConfigPatch(antigravity)).toThrow(
+    "Update the host to add Antigravity.",
+  );
+});
+
 it("adds bundled goose on capable hosts and uses the ACP config on older hosts", () => {
   const goose = findProvider("goose");
   expect(buildAcpProviderConfigPatch(goose, (feature) => feature === "gooseProvider")).toEqual({

@@ -35,6 +35,17 @@ const CATALOG_DATA = [
     command: ["amp-acp"],
   },
   {
+    // Direct `agy` use is opt-in in this fork; Antigravity (via T3) is the default path.
+    id: "antigravity",
+    bundledProvider: { hostFeature: "antigravityProvider" },
+    title: "Antigravity",
+    description: "Antigravity CLI (agy) run directly by Paseo, not through T3",
+    version: "manual",
+    iconId: "agy",
+    installLink: "https://antigravity.google/",
+    command: ["agy", "acp"],
+  },
+  {
     id: "auggie",
     title: "Auggie CLI",
     description:

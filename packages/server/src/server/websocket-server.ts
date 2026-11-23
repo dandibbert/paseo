@@ -2287,6 +2287,9 @@ export class VoiceAssistantWebSocketServer {
         fxProvider: this.providerSnapshotManager.supportsConfigRequiredProvider("fx"),
         // COMPAT(gooseProvider): added in v0.17.0, remove after 2027-05-20 once host floor includes the bundled adapter.
         gooseProvider: this.providerSnapshotManager.supportsConfigRequiredProvider("goose"),
+        // COMPAT(antigravityProvider): fork, added in v0.17.1, remove after 2027-05-23 once host floor includes the opt-in adapter.
+        antigravityProvider:
+          this.providerSnapshotManager.supportsConfigRequiredProvider("antigravity"),
         // COMPAT(importSessionWorkspaceTarget): added in v0.1.110, remove gate after 2027-01-16.
         importSessionWorkspaceTarget: true,
         // COMPAT(importSessionSearch): added in v0.7.3, remove gate after 2027-03-02.

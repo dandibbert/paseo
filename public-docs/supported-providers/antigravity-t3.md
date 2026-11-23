@@ -40,4 +40,4 @@ Assistant text, reasoning, commands, file changes, searches, todos, subagents, c
 
 ## Turn off direct `agy` use
 
-The direct [Antigravity](/docs/supported-providers/antigravity) provider is off until you add it in **Settings → Providers**. While it is off, Paseo does not start `agy` for chats or for its usage readout.
+The direct [Antigravity](/docs/supported-providers/antigravity) provider is off until you add it: **Settings → Providers → Add provider → Antigravity**. While it is off, Paseo does not start `agy` for chats or for its usage readout. To turn it off again, open **Antigravity** in **Settings → Providers** and remove it.

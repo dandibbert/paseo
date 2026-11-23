@@ -40,4 +40,4 @@ category: Providers
 
 ## 关闭直接调用 `agy` {#turn-off-direct-agy-use}
 
-直接调用的 [Antigravity](/docs/supported-providers/antigravity) provider 在你于 **设置 → Providers** 中添加之前处于关闭状态。关闭时，Paseo 不会为对话或用量显示启动 `agy`。
+直接调用的 [Antigravity](/docs/supported-providers/antigravity) provider 在你添加之前处于关闭状态：**设置 → Providers → 添加 Provider → Antigravity**。关闭时，Paseo 不会为对话或用量显示启动 `agy`。要再次关闭，在 **设置 → Providers** 中打开 **Antigravity** 并移除它。

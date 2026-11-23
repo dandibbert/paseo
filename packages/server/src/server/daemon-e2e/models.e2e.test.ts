@@ -234,6 +234,7 @@ test("bundled Hoplite requires a config entry and removal survives restart", asy
     expect(before.entries.some((entry) => entry.provider === "hoplite")).toBe(false);
     // Fork policy: the direct agy integration is opt-in too, like Hoplite.
     expect(before.entries.some((entry) => entry.provider === "antigravity")).toBe(false);
+    expect(client.getLastServerInfoMessage()?.features?.antigravityProvider).toBe(true);
     expect(await readFile(record, "utf8")).toBe("");
 
     await client.patchDaemonConfig({
