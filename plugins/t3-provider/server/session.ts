@@ -99,6 +99,44 @@ export function promptText(prompt: ProviderPrompt): string {
     .join("\n\n");
 }
 
+/** An image from Paseo's prompt, as T3's web app uploads one. */
+export interface T3ImageUpload {
+  type: "image";
+  name: string;
+  mimeType: string;
+  sizeBytes: number;
+  dataUrl: string;
+}
+
+const IMAGE_EXTENSIONS: Record<string, string> = {
+  "image/gif": "gif",
+  "image/jpeg": "jpg",
+  "image/png": "png",
+  "image/webp": "webp",
+};
+
+/** The prompt's images. Paseo sends base64, with or without the `data:` prefix. */
+export function promptImages(prompt: ProviderPrompt): T3ImageUpload[] {
+  if (prompt.input.type !== "message") return [];
+  return prompt.input.content.flatMap((content, index) => {
+    if (content.type !== "image") return [];
+    const match = /^data:([^;,]+);base64,(.*)$/s.exec(content.data);
+    // T3 checks the data URL's type against `mimeType` in lower case.
+    const mimeType = (match?.[1] ?? content.mimeType).toLowerCase();
+    const base64 = match?.[2] ?? content.data;
+    const extension = IMAGE_EXTENSIONS[mimeType] ?? mimeType.split("/")[1] ?? "img";
+    return [
+      {
+        type: "image" as const,
+        name: `image-${index + 1}.${extension}`,
+        mimeType,
+        sizeBytes: Buffer.from(base64, "base64").byteLength,
+        dataUrl: `data:${mimeType};base64,${base64}`,
+      },
+    ];
+  });
+}
+
 export interface T3SessionOptions {
   id: string;
   environment: T3Environment;
@@ -183,15 +221,19 @@ export class T3Session {
 
   async prompt(prompt: ProviderPrompt): Promise<void> {
     const body = promptText(prompt);
-    if (!body.trim()) throw new T3SessionError("The message is empty.", "emptyPrompt");
+    const images = promptImages(prompt);
+    if (!body.trim() && images.length === 0) {
+      throw new T3SessionError("The message is empty.", "emptyPrompt");
+    }
     const messageId = randomUUID();
     this.clientMessageIds.set(messageId, prompt.clientMessageId);
     const active = this.activeRun();
 
     if (!this.threadId) {
-      await this.launch(messageId, body);
+      await this.launch(messageId, body, images);
       return;
     }
+    const attachments = await this.uploadImages(this.threadId, messageId, images);
     const steer = prompt.delivery === "steer" && active !== undefined;
     if (steer) this.steerMessageIds.add(messageId);
     await this.options.environment.dispatch({
@@ -201,7 +243,7 @@ export class T3Session {
       threadId: this.threadId,
       messageId,
       text: body,
-      attachments: [],
+      attachments,
       modelSelection: this.selection(),
       deliveryIntent: steer ? "steer" : "auto",
       dispatchMode: { type: "start_immediately" },
@@ -330,23 +372,44 @@ export class T3Session {
     return this.activeRun() === undefined && this.queuedRun() === undefined;
   }
 
-  private async launch(messageId: string, body: string): Promise<void> {
+  /**
+   * Stores the images on the T3 server, as its web app does before sending, and returns the
+   * attachments the message refers to. T3 accepts this before the thread exists.
+   */
+  private async uploadImages(
+    threadId: string,
+    messageId: string,
+    images: T3ImageUpload[],
+  ): Promise<unknown[]> {
+    if (images.length === 0) return [];
+    const result = record(
+      await this.options.environment.request("assets.persistChatAttachments", {
+        threadId,
+        messageId,
+        attachments: images,
+      }),
+    );
+    return Array.isArray(result.attachments) ? result.attachments : [];
+  }
+
+  private async launch(messageId: string, body: string, images: T3ImageUpload[]): Promise<void> {
     if (!this.ref) throw new T3SessionError("No model is selected.", "modelUnavailable");
     const projectId = await this.options.environment.projectFor(this.config.cwd);
     const threadId = randomUUID();
+    const attachments = await this.uploadImages(threadId, messageId, images);
     // Leaving `creationSource` out lets T3 record it the way its own apps do.
     const result = record(
       await this.options.environment.request("orchestration.launchThread", {
         commandId: randomUUID(),
         threadId,
         projectId,
-        title: this.config.title?.trim() || body.trim().split("\n")[0].slice(0, 80) || "Paseo",
+        title: this.config.title?.trim() || body.trim().split("\n")[0].slice(0, 80) || "Image",
         generateTitle: !this.config.title,
         modelSelection: this.selection(),
         runtimeMode: this.runtimeMode,
         interactionMode: "default",
         workspaceStrategy: { type: "root" },
-        initialMessage: { messageId, text: body, attachments: [] },
+        initialMessage: { messageId, text: body, attachments },
       }),
     );
     this.threadId = text(result.threadId) ?? threadId;

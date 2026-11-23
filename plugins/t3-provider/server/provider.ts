@@ -20,6 +20,7 @@ export const T3_PROVIDER_ID = "antigravity-t3";
 
 const SUPPORTED = [
   "prompt.message",
+  "prompt.image",
   "prompt.command",
   "prompt.steer",
   "session.configure",

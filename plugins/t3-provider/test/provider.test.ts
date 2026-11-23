@@ -261,6 +261,73 @@ test("follow-up messages go through message.dispatch as a person's message", asy
   });
 });
 
+test("uploads prompt images to T3 and sends them with the message", async () => {
+  const h = await harness();
+  await h.open();
+  const png = Buffer.from("fake png bytes").toString("base64");
+  await h.send({
+    type: "session.prompt",
+    sessionId: "s1",
+    prompt: {
+      clientMessageId: "client-image-1",
+      delivery: "auto",
+      input: {
+        type: "message",
+        content: [
+          { type: "text", text: "what is this?" },
+          { type: "image", data: png, mimeType: "image/PNG" },
+        ],
+      },
+    },
+  });
+  await h.waitFor((event) => event.type === "session.persistence");
+  const upload = h.t3.requests.find((r) => r.tag === "assets.persistChatAttachments");
+  const launch = h.t3.requests.find((r) => r.tag === "orchestration.launchThread");
+  expect(upload?.payload).toMatchObject({
+    threadId: launch?.payload.threadId,
+    attachments: [
+      {
+        type: "image",
+        name: "image-2.png",
+        mimeType: "image/png",
+        sizeBytes: 14,
+        dataUrl: `data:image/png;base64,${png}`,
+      },
+    ],
+  });
+  const initialMessage = launch?.payload.initialMessage as Record<string, unknown>;
+  expect(initialMessage.text).toBe("what is this?");
+  expect(initialMessage.attachments).toEqual([
+    {
+      type: "image",
+      id: `${String(launch?.payload.threadId)}-0`,
+      name: "image-2.png",
+      mimeType: "image/png",
+      sizeBytes: 14,
+    },
+  ]);
+
+  // An image-only follow-up, sent as a data URL.
+  await h.send({
+    type: "session.prompt",
+    sessionId: "s1",
+    prompt: {
+      clientMessageId: "client-image-2",
+      delivery: "auto",
+      input: {
+        type: "message",
+        content: [{ type: "image", data: `data:image/jpeg;base64,${png}`, mimeType: "image/jpeg" }],
+      },
+    },
+  });
+  await h.waitFor(() => h.t3.commands("message.dispatch").length === 1);
+  expect(h.t3.commands("message.dispatch")[0]).toMatchObject({
+    threadId: "thread-1",
+    text: "",
+    attachments: [{ type: "image", id: "thread-1-0", name: "image-1.jpg", mimeType: "image/jpeg" }],
+  });
+});
+
 test("reuses the T3 project already rooted at the working directory", async () => {
   const h = await harness();
   // The harness cwd is fixed per run; point the fake's project list at it.

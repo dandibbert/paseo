@@ -296,6 +296,32 @@ export class FakeT3 {
     });
   }
 
+  /** As T3 does: the data URL must match the declared type and size; storage drops the payload. */
+  private persistAttachments(
+    socket: WebSocket,
+    id: string,
+    payload: Record<string, unknown>,
+  ): void {
+    const uploads = payload.attachments as Array<Record<string, unknown>>;
+    const stored = [];
+    for (const [index, upload] of uploads.entries()) {
+      const match = /^data:([^;,]+);base64,(.*)$/s.exec(String(upload.dataUrl));
+      const bytes = match ? Buffer.from(match[2], "base64").byteLength : -1;
+      if (match?.[1] !== String(upload.mimeType).toLowerCase() || bytes !== upload.sizeBytes) {
+        this.fail(socket, id, `Attachment ${String(upload.name)} has an invalid image payload.`);
+        return;
+      }
+      stored.push({
+        type: "image",
+        id: `${String(payload.threadId)}-${index}`,
+        name: upload.name,
+        mimeType: upload.mimeType,
+        sizeBytes: upload.sizeBytes,
+      });
+    }
+    this.succeed(socket, id, { attachments: stored });
+  }
+
   private handleFrame(socket: WebSocket, frame: Record<string, unknown>): void {
     if (frame._tag === "Ping") {
       this.send(socket, { _tag: "Pong" });
@@ -353,6 +379,9 @@ export class FakeT3 {
         else this.succeed(socket, id, { sequence: this.sequence });
         return;
       }
+      case "assets.persistChatAttachments":
+        this.persistAttachments(socket, id, payload);
+        return;
       case "secrets.answerRequest":
         this.succeed(socket, id, null);
         return;
