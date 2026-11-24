@@ -255,6 +255,7 @@ const CATALOG_DATA = [
   },
   {
     id: "hermes",
+    bundledProvider: { hostFeature: "hermesProvider" },
     title: "Hermes",
     description: "Nous Research self-improving AI agent",
     version: "manual",

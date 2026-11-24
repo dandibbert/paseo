@@ -1,5 +1,57 @@
 # Changelog
 
+## 0.17.4 - 2026-11-23
+
+### Fixed
+
+- Fixed numbered sublists overlapping their text and quotes inside lists overlapping later messages on Android ([#10499](https://github.com/getpaseo/paseo/pull/10499))
+- Fixed Android terminal input so it asks the keyboard to exclude typed text from personalized learning ([#10586](https://github.com/getpaseo/paseo/pull/10586))
+- Fixed conversations disappearing when directory capitalization differs on a case-insensitive file system ([#10555](https://github.com/getpaseo/paseo/pull/10555) by [@yzim](https://github.com/yzim))
+- Fixed interrupt and steer messages to archived agents being queued without starting a turn ([#10611](https://github.com/getpaseo/paseo/pull/10611) by [@thomasvan](https://github.com/thomasvan))
+- Fixed Hermes Shell rows omitting part of the command ([#10614](https://github.com/getpaseo/paseo/pull/10614))
+- Fixed OpenCode Go usage for logins stored in the OpenCode 2 database, including Console sign-ins and API keys ([#8729](https://github.com/getpaseo/paseo/pull/8729), [#10612](https://github.com/getpaseo/paseo/pull/10612))
+- Fixed existing OpenCode sessions failing to reopen after Paseo tool definitions change ([#10533](https://github.com/getpaseo/paseo/pull/10533) by [@Peanut-HZM](https://github.com/Peanut-HZM))
+- Fixed Paseo tools missing from agents that use MCP protocol version `2026-07-28` ([#10558](https://github.com/getpaseo/paseo/pull/10558) by [@apple-ouyang](https://github.com/apple-ouyang))
+- Fixed Codex MCP startup failures missing from daemon warning logs ([#10566](https://github.com/getpaseo/paseo/pull/10566))
+- Fixed the daemon exiting when it closes a session after the plugin process has stopped ([#10585](https://github.com/getpaseo/paseo/pull/10585))
+- Fixed Git commands selecting the wrong repository when a directory has the layout of a bare repository ([#10587](https://github.com/getpaseo/paseo/pull/10587))
+- Fixed Claude Auto permission mode being unavailable on Bedrock and Vertex ([#6904](https://github.com/getpaseo/paseo/pull/6904))
+- Fixed the sidebar host settings button requiring two clicks to open settings ([#10562](https://github.com/getpaseo/paseo/pull/10562) by [@ShalokShalom](https://github.com/ShalokShalom))
+- Fixed the Changes pane not offering Push for a new branch that was never pushed in a regular checkout ([#10631](https://github.com/getpaseo/paseo/pull/10631))
+- Fixed the daemon using the wrong model catalog when Hub sends a workspace directory for trigger validation ([#10582](https://github.com/getpaseo/paseo/pull/10582))
+
+## 0.17.3 - 2026-11-22
+
+### Fixed
+
+- Fixed iPhone sheets such as Workspace tabs ignoring body swipes to expand, scroll, or collapse ([#10525](https://github.com/getpaseo/paseo/pull/10525))
+- Fixed Antigravity applying the default model's thinking levels to every model, which blocked Orchestrator chats from opening ([#10524](https://github.com/getpaseo/paseo/pull/10524))
+- Fixed `/` and `@` pickers disappearing until reload after returning to a workspace through window history ([#8954](https://github.com/getpaseo/paseo/pull/8954) by [@viking1201](https://github.com/viking1201))
+
+## 0.17.2 - 2026-11-22
+
+- **Turn and session stats:** View per-turn and session timing, token, cache, and cost metrics for Claude, OpenCode v2, Pi, Oh My Pi, and plugin providers. ([#10496](https://github.com/getpaseo/paseo/pull/10496), [#10510](https://github.com/getpaseo/paseo/pull/10510))
+- **Automatic model list refresh:** Enabled providers refresh their model lists in the background every 30 minutes. ([#10481](https://github.com/getpaseo/paseo/pull/10481))
+- **Sidebar usage by default:** The sidebar usage summary is enabled by default, sources for inactive providers start hidden, and source toggles move to a Sources list. ([#10491](https://github.com/getpaseo/paseo/pull/10491))
+- **Agents can steer turns:** Agents can steer another agent's running turn alongside queueing or interrupting it, and receive delivery guidance in the response. ([#10483](https://github.com/getpaseo/paseo/pull/10483))
+
+### Added
+
+- Added Archive workspace to the mobile workspace actions menu ([#10507](https://github.com/getpaseo/paseo/pull/10507))
+- Added provider docs links, fuller diagnostic reports, and a scrollable Models list with inline refresh to provider settings ([#10487](https://github.com/getpaseo/paseo/pull/10487))
+
+### Changed
+
+- Removed the "This chat uses OpenCode v2." info row from OpenCode v2 chats ([#10490](https://github.com/getpaseo/paseo/pull/10490))
+
+### Fixed
+
+- Fixed pressing Tab or Enter in the slash menu running a stale `/exit` choice and archiving the agent ([#10484](https://github.com/getpaseo/paseo/pull/10484) by [@3ae3ae](https://github.com/3ae3ae))
+- Fixed busy host connections dropping to reconnect when multiple connections are saved ([#10395](https://github.com/getpaseo/paseo/pull/10395))
+- Fixed retrying an edited New workspace form hitting a conflict error after a failed start, and unified composer error alerts ([#10482](https://github.com/getpaseo/paseo/pull/10482))
+- Fixed Antigravity turns staying running after creating a recurring schedule ([#10469](https://github.com/getpaseo/paseo/pull/10469))
+- Fixed daemon startup and plugin reloads leaving zombie child processes for local directory plugins ([#10470](https://github.com/getpaseo/paseo/pull/10470))
+
 ## 0.17.1 - 2026-11-21
 
 - **Antigravity approvals and history:** Choose a permission mode, answer tool approvals, and import or reopen sessions. Requires [Antigravity CLI 1.5.0 or later](https://paseo.sh/docs/supported-providers/antigravity). ([#10193](https://github.com/getpaseo/paseo/pull/10193))

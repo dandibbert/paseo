@@ -151,6 +151,7 @@ import { RenderProfile } from "@/utils/render-profiler";
 import { AfterPaintPublication } from "@/composer/after-paint-publication";
 import { isWeb, isNative } from "@/constants/platform";
 import type { ForgeSearchItem } from "@getpaseo/protocol/messages";
+import type { AgentMetric } from "@getpaseo/protocol/agent-types";
 import type {
   AttachmentMetadata,
   ComposerAttachment,
@@ -299,6 +300,8 @@ function buildRealtimeVoiceButtonStyle(pressed: boolean, voiceButtonDisabled: bo
   );
 }
 
+const EMPTY_METRICS: AgentMetric[] = [];
+
 function buildAgentStateSelector(serverId: string, agentId: string) {
   return (state: ReturnType<typeof useSessionStore.getState>) => {
     const agent = state.sessions[serverId]?.agents?.get(agentId) ?? null;
@@ -309,6 +312,7 @@ function buildAgentStateSelector(serverId: string, agentId: string) {
       contextWindowUsedTokens: lastUsage ? (lastUsage.contextWindowUsedTokens ?? null) : null,
       totalCostUsd: lastUsage ? (lastUsage.totalCostUsd ?? null) : null,
       usage: lastUsage,
+      sessionMetrics: agent?.sessionMetrics ?? EMPTY_METRICS,
       provider: agent ? agent.provider : null,
       model: agent ? (agent.model ?? null) : null,
     };
@@ -2319,6 +2323,7 @@ function ComposerContentImpl({
             usage={agentState.usage}
             provider={agentState.provider}
             model={agentState.model}
+            sessionMetrics={agentState.sessionMetrics}
             toolbarRing={TOOLBAR_RINGS[controlSizing]}
           />
         </View>
@@ -2333,6 +2338,7 @@ function ComposerContentImpl({
       agentState.usage,
       agentState.provider,
       agentState.model,
+      agentState.sessionMetrics,
       controlSizing,
     ],
   );

@@ -13,12 +13,13 @@ import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/h
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { isNative } from "@/constants/platform";
+import type { AgentMetric } from "@getpaseo/protocol/agent-types";
 import { useHostReportsUsage } from "@/usage";
 import type { AgentUsage } from "@getpaseo/protocol/agent-types";
 import type { Theme } from "@/styles/theme";
 import { TOOLBAR_DISC_SIZE, type ToolbarRing } from "@/components/ui/control-geometry";
 import { ContextWindowDetails } from "./context-window-details";
-import { ContextWindowSheet } from "./context-window-sheet";
+import { DetailsSheet } from "./details-sheet";
 import { formatContextPercentage } from "./context-window-meter.utils";
 
 interface ContextWindowMeterProps {
@@ -30,11 +31,14 @@ interface ContextWindowMeterProps {
   usage?: AgentUsage | null;
   provider?: string | null;
   model?: string | null;
+  /** What the provider reports about the session, shown in the details. */
+  sessionMetrics?: AgentMetric[];
   showPercentage?: boolean;
   /** The ring's box and stroke when it sits in an icon toolbar. */
   toolbarRing?: ToolbarRing;
 }
 
+const EMPTY_METRICS: AgentMetric[] = [];
 const SVG_SIZE = 14;
 const USAGE_POPOVER_WIDTH = 300;
 const COMPACT_SVG_SIZE = 12;
@@ -163,13 +167,16 @@ export function ContextWindowMeter({
   usage = null,
   provider = null,
   model = null,
+  sessionMetrics = EMPTY_METRICS,
   showPercentage = false,
   toolbarRing,
 }: ContextWindowMeterProps) {
   const { t, i18n } = useTranslation();
   const { width } = useWindowDimensions();
-  // Usage cards need a wider popover; without them it keeps the plain tooltip shape.
+  // Usage cards and session metrics need a wider popover; without them it keeps the plain tooltip
+  // shape.
   const showsUsage = useHostReportsUsage(serverId);
+  const isWide = showsUsage || sessionMetrics.length > 0;
   const popoverWidth = Math.min(USAGE_POPOVER_WIDTH, width - 24);
   // Compact screens open the details in a sheet, which can hold a pressable Refresh.
   const isCompact = useIsCompactFormFactor();
@@ -233,7 +240,7 @@ export function ContextWindowMeter({
           {ring}
           {percentageLabel}
         </Pressable>
-        <ContextWindowSheet open={isSheetOpen} onClose={closeSheet}>
+        <DetailsSheet open={isSheetOpen} onClose={closeSheet} title={t("contextWindow.title")}>
           <ContextWindowDetails
             serverId={serverId}
             agentId={agentId}
@@ -243,15 +250,16 @@ export function ContextWindowMeter({
             usage={usage}
             provider={provider}
             model={model}
+            sessionMetrics={sessionMetrics}
             showTitle={false}
             refreshable
           />
-        </ContextWindowSheet>
+        </DetailsSheet>
       </>
     );
   }
 
-  const popoverStyle = showsUsage
+  const popoverStyle = isWide
     ? [styles.usagePopover, { width: popoverWidth }]
     : styles.plainPopover;
 
@@ -275,7 +283,7 @@ export function ContextWindowMeter({
           side="top"
           align="center"
           offset={8}
-          maxWidth={showsUsage ? popoverWidth : undefined}
+          maxWidth={isWide ? popoverWidth : undefined}
           style={popoverStyle}
           testID="context-window-meter-tooltip"
         >
@@ -288,6 +296,7 @@ export function ContextWindowMeter({
             usage={usage}
             provider={provider}
             model={model}
+            sessionMetrics={sessionMetrics}
             showTitle
             refreshable={false}
           />
@@ -326,6 +335,7 @@ export function ContextWindowMeter({
           usage={usage}
           provider={provider}
           model={model}
+          sessionMetrics={sessionMetrics}
           showTitle
           refreshable
         />

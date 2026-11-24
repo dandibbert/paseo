@@ -1,3 +1,4 @@
+import type { AgentMetric } from "@getpaseo/protocol/agent-types";
 import React, { memo, useCallback, useMemo, type ReactNode } from "react";
 import { View } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
@@ -83,6 +84,7 @@ export const TurnFooter = memo(function TurnFooter({
       startIndex={host.startIndex}
       continuationItems={host.continuation?.items ?? null}
       continuationStartIndex={host.continuation?.startIndex ?? null}
+      turnMetrics={host.turnMetrics}
       supportsTimelineCursor={supportsTimelineCursor}
       onForkAssistantTurn={onForkAssistantTurn}
     />
@@ -96,6 +98,7 @@ export const CompletedTurnFooterRow = memo(function CompletedTurnFooterRow({
   startIndex,
   continuationItems,
   continuationStartIndex,
+  turnMetrics,
   supportsTimelineCursor,
   onForkAssistantTurn,
 }: {
@@ -106,6 +109,7 @@ export const CompletedTurnFooterRow = memo(function CompletedTurnFooterRow({
   /** Passed as primitives so a freshly built host doesn't defeat the row's memo. */
   continuationItems: StreamItem[] | null;
   continuationStartIndex: number | null;
+  turnMetrics?: AgentMetric[];
   supportsTimelineCursor: boolean;
   onForkAssistantTurn?: AssistantTurnForkHandler;
 }) {
@@ -118,6 +122,7 @@ export const CompletedTurnFooterRow = memo(function CompletedTurnFooterRow({
         startIndex={startIndex}
         continuationItems={continuationItems}
         continuationStartIndex={continuationStartIndex}
+        turnMetrics={turnMetrics}
         supportsTimelineCursor={supportsTimelineCursor}
         onForkAssistantTurn={onForkAssistantTurn}
       />
@@ -176,6 +181,7 @@ function CompletedTurnFooter({
   startIndex,
   continuationItems,
   continuationStartIndex,
+  turnMetrics,
   supportsTimelineCursor,
   onForkAssistantTurn,
 }: {
@@ -185,6 +191,7 @@ function CompletedTurnFooter({
   startIndex: number;
   continuationItems: StreamItem[] | null;
   continuationStartIndex: number | null;
+  turnMetrics?: AgentMetric[];
   supportsTimelineCursor: boolean;
   onForkAssistantTurn?: AssistantTurnForkHandler;
 }) {
@@ -224,6 +231,7 @@ function CompletedTurnFooter({
         turnId={items[startIndex]?.turnId ?? null}
         telemetry={timing?.telemetry ?? null}
         onFork={boundary && onForkAssistantTurn ? handleFork : undefined}
+        metrics={turnMetrics}
       />
     </View>
   );

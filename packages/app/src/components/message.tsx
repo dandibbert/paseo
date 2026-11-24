@@ -3,6 +3,7 @@ import { MessagePreview, MessageSender } from "@/components/user-message";
 import { useStableEvent } from "@/hooks/use-stable-event";
 import { getAgentAttachmentPillContent } from "@/attachments/attachment-pill-content";
 import { AssistantForkMenu, type AssistantForkTarget } from "@/components/assistant-fork-menu";
+import { TurnMetricsButton } from "@/components/turn-metrics";
 import { AttachmentLightbox, type ImageLightboxSource } from "@/components/attachment-lightbox";
 import {
   AttachmentFrame,
@@ -38,6 +39,7 @@ import type { DaemonClient } from "@getpaseo/client/internal/daemon-client";
 import type { AgentMessage } from "@getpaseo/protocol/agent-message";
 import type {
   AgentCapabilityFlags,
+  AgentMetric,
   AgentTurnTelemetry,
   ToolCallDetail,
 } from "@getpaseo/protocol/agent-types";
@@ -568,6 +570,8 @@ interface AssistantTurnFooterProps {
   turnId?: string | null;
   telemetry?: AgentTurnTelemetry | null;
   onFork?: (target: AssistantForkTarget) => Promise<void> | void;
+  /** What the provider reported about the turn. Without any, the footer has no stats button. */
+  metrics?: AgentMetric[];
 }
 
 const assistantTurnFooterStylesheet = StyleSheet.create((theme) => ({
@@ -611,6 +615,8 @@ const assistantTurnFooterStylesheet = StyleSheet.create((theme) => ({
     flexShrink: 0,
     color: theme.colors.foregroundMuted,
     fontSize: STREAM_METADATA_FONT_SIZE,
+    // React Native Web preserves trailing spaces at line wraps by default.
+    ...(isWeb ? { whiteSpace: "normal" } : {}),
   },
   overlappingLabel: {
     marginLeft: "-100%",
@@ -625,11 +631,14 @@ const TIMESTAMP_REVEAL_MS = 3000;
 function AssistantTurnFooterActions({
   getContent,
   onFork,
+  metrics,
 }: {
   getContent?: () => string;
   onFork?: (target: AssistantForkTarget) => Promise<void> | void;
+  metrics?: AgentMetric[];
 }) {
-  if (!getContent && !onFork) {
+  const hasMetrics = metrics !== undefined && metrics.length > 0;
+  if (!getContent && !onFork && !hasMetrics) {
     return null;
   }
   return (
@@ -641,6 +650,7 @@ function AssistantTurnFooterActions({
         />
       ) : null}
       {onFork ? <AssistantForkMenu onFork={onFork} /> : null}
+      {hasMetrics ? <TurnMetricsButton metrics={metrics} /> : null}
     </View>
   );
 }
@@ -689,6 +699,7 @@ export const AssistantTurnFooter = memo(function AssistantTurnFooter({
   turnId = null,
   telemetry = null,
   onFork,
+  metrics,
 }: AssistantTurnFooterProps) {
   const { t } = useTranslation();
   const agentContext = useTurnFooterAgentContext();
@@ -746,6 +757,7 @@ export const AssistantTurnFooter = memo(function AssistantTurnFooter({
       <AssistantTurnFooterActions
         getContent={getContent}
         onFork={onFork ? handleFork : undefined}
+        metrics={metrics}
       />
       {primaryLabel ? (
         <Pressable

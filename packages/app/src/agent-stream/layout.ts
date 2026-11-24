@@ -1,3 +1,4 @@
+import type { AgentMetric } from "@getpaseo/protocol/agent-types";
 import type { TurnTiming } from "@/timeline/turn-time";
 import type { StreamItem } from "@/types/stream";
 import { getAssistantMessageSpacing, getGapBetweenStreamItems } from "./spacing";
@@ -15,6 +16,7 @@ export interface TurnFooterHost {
   itemId: string;
   items: StreamItem[];
   timing?: TurnTiming;
+  turnMetrics?: AgentMetric[];
   startIndex: number;
   /**
    * The history segment a liveHead response continues into. Copy has to walk it too, or a
@@ -78,10 +80,14 @@ function createTurnFooterHost(input: {
   source: TurnFooterSource;
   timingByItemId: Map<string, TurnTiming>;
 }): TurnFooterHost {
+  const { item } = input.source;
+  const turnMetrics =
+    item.kind === "assistant_message" || item.kind === "tool_call" ? item.turnMetrics : undefined;
   return {
-    itemId: input.source.item.id,
+    itemId: item.id,
     items: input.source.items,
-    timing: input.timingByItemId.get(input.source.item.id),
+    timing: input.timingByItemId.get(item.id),
+    ...(turnMetrics ? { turnMetrics } : {}),
     startIndex: input.source.index,
     continuation: input.source.continuation,
   };
@@ -272,6 +278,7 @@ function areTurnFooterHostsEqual(
   return (
     left.itemId === right.itemId &&
     left.timing === right.timing &&
+    left.turnMetrics === right.turnMetrics &&
     left.startIndex === right.startIndex &&
     left.items === right.items &&
     left.continuation?.items === right.continuation?.items &&

@@ -411,6 +411,7 @@ export const es: TranslationResources = {
       copyTurn: "Copiar turno",
       copyMessage: "Copiar mensaje",
       forkMenu: "Bifurcar mensaje",
+      turnStats: "Estadísticas del turno",
       forkInNewTab: "Bifurcar en una pestaña nueva",
       forkInNewWorkspace: "Bifurcar en un espacio de trabajo nuevo",
       forkUnavailable: "Actualiza el host para usar esto.",
@@ -983,6 +984,8 @@ export const es: TranslationResources = {
           pushBehind:
             "Push aún no está disponible porque hay cambios más nuevos que implementar primero",
           pushNothing: "Push no está disponible porque no hay nada nuevo que enviar",
+          pushUpstreamGone:
+            "Push no está disponible porque la rama que sigue esta rama ya no existe",
           pullAndPushNoRemote:
             "Tirar y empujar no está disponible aquí porque esta rama aún no está conectada a un control remoto",
           pullAndPushDirty:
@@ -2446,7 +2449,11 @@ export const es: TranslationResources = {
     title: "Uso del plan",
     refresh: "Actualizar",
     reorderCard: "Reordenar {{source}}",
-    showCard: "Mostrar {{source}}",
+    sources: "Fuentes",
+    sourcesCount: "{{shown}} de {{total}}",
+    providerInactive: "Proveedor inactivo",
+    allSourcesHidden: "No hay fuentes de uso visibles",
+    chooseSources: "Elegir fuentes",
     refreshAll: "Actualizar todo",
     refreshing: "Actualizando...",
     loading: "Cargando uso...",
@@ -3364,6 +3371,7 @@ export const es: TranslationResources = {
         status: "Estado del proveedor",
         checked: "Comprobado {{time}}",
         diagnosticReport: "Informe de diagnóstico",
+        docs: "Documentación",
         dangerZone: "Zona de peligro",
         removeHint: "Elimina este proveedor de config.json",
       },
@@ -3413,6 +3421,7 @@ export const es: TranslationResources = {
         noSearchMatches: "Ningún modelo coincide con tu búsqueda",
         noneDetected: "No se detectaron modelos",
         noCustom: "No hay modelos personalizados",
+        title: "Modelos",
         discovered: "descubierto",
         custom: "Modelos manuales y personalizaciones",
         updated: "{{time}}actualizado",

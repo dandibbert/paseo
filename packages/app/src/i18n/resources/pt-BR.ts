@@ -411,6 +411,7 @@ export const ptBR: TranslationResources = {
       copyTurn: "Copiar turno",
       copyMessage: "Copiar mensagem",
       forkMenu: "Bifurcar mensagem",
+      turnStats: "Estatísticas do turno",
       forkInNewTab: "Bifurcar em uma nova aba",
       forkInNewWorkspace: "Bifurcar em um novo workspace",
       forkUnavailable: "Atualize o host para usar isto.",
@@ -980,6 +981,8 @@ export const ptBR: TranslationResources = {
           pushBehind:
             "Push ainda não está disponível porque há alterações mais recentes para trazer primeiro",
           pushNothing: "Push não está disponível porque não há nada novo para enviar",
+          pushUpstreamGone:
+            "Push não está disponível porque a branch que esta branch acompanha não existe mais",
           pullAndPushNoRemote:
             "Pull e push não estão disponíveis aqui porque esta branch ainda não está conectada a um remoto",
           pullAndPushDirty:
@@ -2431,7 +2434,11 @@ export const ptBR: TranslationResources = {
     title: "Uso do plano",
     refresh: "Atualizar",
     reorderCard: "Reordenar {{source}}",
-    showCard: "Mostrar {{source}}",
+    sources: "Fontes",
+    sourcesCount: "{{shown}} de {{total}}",
+    providerInactive: "Provedor inativo",
+    allSourcesHidden: "Nenhuma fonte de uso exibida",
+    chooseSources: "Escolher fontes",
     refreshAll: "Atualizar tudo",
     refreshing: "Atualizando...",
     loading: "Carregando uso...",
@@ -3344,6 +3351,7 @@ export const ptBR: TranslationResources = {
         status: "Status do provedor",
         checked: "Verificado {{time}}",
         diagnosticReport: "Relatório de diagnóstico",
+        docs: "Documentação",
         dangerZone: "Zona de perigo",
         removeHint: "Exclui este provedor do config.json",
       },
@@ -3393,6 +3401,7 @@ export const ptBR: TranslationResources = {
         noSearchMatches: "Nenhum modelo corresponde à sua busca",
         noneDetected: "Nenhum modelo detectado",
         noCustom: "Nenhum modelo personalizado",
+        title: "Modelos",
         discovered: "Descobertos",
         custom: "Modelos manuais e personalizações",
         updated: "Atualizado {{time}}",

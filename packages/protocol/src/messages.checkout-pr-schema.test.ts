@@ -814,9 +814,13 @@ describe("checkout PR schemas", () => {
 });
 
 test.each(
-  ["hopliteProvider", "fxProvider", "gooseProvider", "antigravityProvider"].flatMap((name) =>
-    [undefined, false, true].map((value) => [name, value] as const),
-  ),
+  [
+    "hopliteProvider",
+    "fxProvider",
+    "gooseProvider",
+    "hermesProvider",
+    "antigravityProvider",
+  ].flatMap((name) => [undefined, false, true].map((value) => [name, value] as const)),
 )("accepts optional bundled provider capability (%s: %s)", (name, value) => {
   const features = value === undefined ? {} : { [name]: value };
   expect(

@@ -133,6 +133,8 @@ export interface ProviderSnapshotEntry {
   label?: string;
   description?: string;
   iconSvg?: string;
+  /** The page that helps users set up and troubleshoot this provider. */
+  docsUrl?: string;
   defaultModeId?: string | null;
 }
 
@@ -236,6 +238,18 @@ export interface AgentTurnTelemetry {
   model?: string;
   canonicalModel?: string;
   usage?: AgentUsage;
+}
+
+export type AgentMetricTone = "default" | "ok" | "warning" | "danger";
+
+/**
+ * One provider-owned label/value row. The provider formats `value`; Paseo renders
+ * it as given and never interprets it.
+ */
+export interface AgentMetric {
+  label: string;
+  value: string;
+  tone?: AgentMetricTone;
 }
 
 export const TOOL_CALL_ICON_NAMES = [
@@ -436,6 +450,7 @@ export type AgentStreamEvent =
       usage?: AgentUsage;
       telemetry?: AgentTurnTelemetry;
       turnId?: string;
+      metrics?: AgentMetric[];
     }
   | { type: "usage_updated"; provider: AgentProvider; usage: AgentUsage; turnId?: string }
   | {
