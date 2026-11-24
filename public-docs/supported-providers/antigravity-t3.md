@@ -36,7 +36,7 @@ For a T3 server on another machine, run `t3 pair --label Paseo` there and give P
 
 Each Paseo chat is a T3 thread in a T3 project rooted at the chat's working directory. Models are listed per T3 account (`Model · Account`); choose the account by choosing the model. Paseo never switches accounts on its own.
 
-Assistant text, reasoning, commands, file changes, searches, todos, subagents, compaction, approvals, questions and secret requests appear in Paseo. Account quota comes from T3. T3 features outside the chat itself, such as checkpoints, forks, handoffs and device previews, stay in T3; the same thread is open there.
+Assistant text, reasoning, commands, file changes, searches, todos, subagents, compaction, approvals, questions and secret requests appear in Paseo. Each turn's tokens (input, cache reads, output) and the context window come from T3, and account quota does too. T3 features outside the chat itself, such as checkpoints, forks, handoffs and device previews, stay in T3; the same thread is open there.
 
 ## Turn off direct `agy` use
 

@@ -328,6 +328,109 @@ test("uploads prompt images to T3 and sends them with the message", async () => 
   });
 });
 
+function providerTurn(fields: Record<string, unknown>): Record<string, unknown> {
+  return {
+    id: "pt-1",
+    providerThreadId: "ptt-1",
+    nodeId: "n1",
+    runAttemptId: "attempt-1",
+    nativeTurnRef: null,
+    ordinal: 1,
+    status: "completed",
+    startedAt: "2026-11-22T00:00:00.000Z",
+    completedAt: "2026-11-22T00:00:01.000Z",
+    ...fields,
+  };
+}
+
+test("reports each run's tokens, cache reads and context to Paseo before the turn ends", async () => {
+  const h = await harness();
+  await h.open();
+  await h.prompt("Fix the bug");
+  await h.waitFor((event) => event.type === "session.persistence");
+  h.t3.emit("run.updated", run({ status: "running", activeAttemptId: "attempt-1" }));
+  // The context figure arrives while the run works.
+  h.t3.emit(
+    "provider-turn.updated",
+    providerTurn({
+      status: "running",
+      tokenUsage: { usedTokens: 50_000, maxTokens: 1_000_000, updatedAt: "2026-11-22T00:00:00Z" },
+    }),
+  );
+  await h.waitFor((event) => event.type === "session.usage");
+  h.t3.emit(
+    "provider-turn.updated",
+    providerTurn({
+      tokenUsage: { usedTokens: 52_000, maxTokens: 1_000_000, updatedAt: "2026-11-22T00:00:01Z" },
+      // T3 counts cached reads inside inputTokens; Paseo reports them apart.
+      turnTokenUsage: {
+        usageScope: "main_agent",
+        usageStatus: "complete",
+        hasSubagents: false,
+        inputTokens: 40_000,
+        cachedInputTokens: 30_000,
+        outputTokens: 1_200,
+      },
+    }),
+  );
+  h.t3.emit("run.updated", run({ status: "completed", activeAttemptId: "attempt-1" }));
+  await h.waitFor((event) => event.type === "session.turn" && event.state === "completed");
+
+  const sequence = h.events.flatMap((event) => {
+    if (event.type === "session.usage") return [{ usage: event.usage, turnId: event.turnId }];
+    return event.type === "session.turn" ? [event.state] : [];
+  });
+  expect(sequence).toEqual([
+    "started",
+    {
+      turnId: "run-1",
+      usage: { contextWindowUsedTokens: 50_000, contextWindowMaxTokens: 1_000_000 },
+    },
+    {
+      turnId: "run-1",
+      usage: {
+        inputTokens: 10_000,
+        cachedInputTokens: 30_000,
+        outputTokens: 1_200,
+        contextWindowUsedTokens: 52_000,
+        contextWindowMaxTokens: 1_000_000,
+      },
+    },
+    "completed",
+  ]);
+});
+
+test("a reopened thread restores the latest run's usage", async () => {
+  const h = await harness();
+  h.t3.setProjection(
+    projection({
+      runs: [run({ status: "completed" })],
+      attempts: [{ id: "attempt-1", runId: "run-1" }],
+      providerTurns: [
+        providerTurn({
+          turnTokenUsage: {
+            usageScope: "main_agent",
+            usageStatus: "complete",
+            hasSubagents: false,
+            inputTokens: 5,
+            cachedInputTokens: 2,
+            outputTokens: 1,
+          },
+        }),
+      ],
+    }),
+  );
+  await h.open({ persistence: { version: 1, data: { threadId: "thread-1" } } });
+  expect(h.events.filter((event) => event.type === "session.usage")).toEqual([
+    {
+      type: "session.usage",
+      sessionId: "s1",
+      turnId: "run-1",
+      usage: { inputTokens: 3, cachedInputTokens: 2, outputTokens: 1 },
+    },
+  ]);
+});
+
 test("reuses the T3 project already rooted at the working directory", async () => {
   const h = await harness();
   // The harness cwd is fixed per run; point the fake's project list at it.

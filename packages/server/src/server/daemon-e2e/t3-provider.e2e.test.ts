@@ -60,10 +60,35 @@ test("an agent on Antigravity via T3 runs its prompt through the T3 server", asy
         ordinal: 2,
       }),
     );
-    t3.emit("run.updated", run({ userMessageId: messageId, status: "completed" }));
+    t3.emit("provider-turn.updated", {
+      id: "pt-1",
+      runAttemptId: "attempt-1",
+      status: "completed",
+      tokenUsage: { usedTokens: 52_000, maxTokens: 1_000_000, updatedAt: "2026-11-22T00:00:01Z" },
+      turnTokenUsage: {
+        usageScope: "main_agent",
+        usageStatus: "complete",
+        hasSubagents: false,
+        inputTokens: 40_000,
+        cachedInputTokens: 30_000,
+        outputTokens: 1_200,
+      },
+    });
+    t3.emit(
+      "run.updated",
+      run({ userMessageId: messageId, status: "completed", activeAttemptId: "attempt-1" }),
+    );
 
     const result = await client.waitForFinish(agent.id, 15_000);
     expect(result.status).toBe("idle");
+    // Better Paseo and Paseo's own usage read this when the turn ends.
+    expect(result.final?.lastUsage).toEqual({
+      inputTokens: 10_000,
+      cachedInputTokens: 30_000,
+      outputTokens: 1_200,
+      contextWindowUsedTokens: 52_000,
+      contextWindowMaxTokens: 1_000_000,
+    });
     const timeline = await client.fetchAgentTimeline(agent.id, { limit: 100 });
     expect(
       timeline.entries.some(

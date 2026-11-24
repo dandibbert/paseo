@@ -7,6 +7,7 @@ import type {
   ProviderPersistence,
   ProviderPrompt,
   ProviderSessionConfig,
+  ProviderUsage,
 } from "@getpaseo/plugin/server/provider";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
@@ -24,6 +25,7 @@ import {
 } from "./catalog.js";
 import { CREATION_SOURCE, type T3Environment, type T3Instance } from "./environment.js";
 import { mapTurnItem, readTurnItem, type T3TurnItem } from "./timeline.js";
+import { usageFromProviderTurn } from "./turn-usage.js";
 
 const PERSISTENCE_VERSION = 1;
 const persistenceSchema = z.object({ threadId: z.string().min(1) });
@@ -164,6 +166,12 @@ export class T3Session {
   private readonly clientMessageIds = new Map<string, string>();
   /** Messages sent as steering: their effect lands in the run already going. */
   private readonly steerMessageIds = new Set<string>();
+  /** Run attempt id → run id: T3 hangs a provider turn's usage on the attempt. */
+  private readonly attemptRuns = new Map<string, string>();
+  /** Provider turns whose attempt has not arrived yet, by attempt id. */
+  private readonly orphanTurns = new Map<string, Record<string, unknown>>();
+  /** Each run's latest usage, and the figure last sent to Paseo for it. */
+  private readonly runUsage = new Map<string, { usage: ProviderUsage; sent?: string }>();
   private replaying = false;
   private closed = false;
   private readonly stopReconnect: () => void;
@@ -535,9 +543,20 @@ export class T3Session {
       .filter((item) => item.threadId === undefined || item.threadId === this.threadId)
       .sort((left, right) => Number(left.ordinal ?? 0) - Number(right.ordinal ?? 0));
     const requests = Array.isArray(projection.runtimeRequests) ? projection.runtimeRequests : [];
+    const attempts = Array.isArray(projection.attempts) ? projection.attempts : [];
+    const providerTurns = Array.isArray(projection.providerTurns) ? projection.providerTurns : [];
+    for (const attempt of attempts) this.onAttempt(record(attempt));
+    for (const run of runs) this.noteActiveAttempt(record(run));
+    // Usage goes in before the runs, so a run that ends here ends with its figure.
+    for (const turn of providerTurns) this.onProviderTurn(record(turn), true);
     for (const run of runs) this.onRun(record(run), replay);
     for (const request of requests) this.onRequest(record(request));
     for (const item of items) this.onItem(item);
+    // History only restores the latest figure, as a resumed agent's current usage.
+    const latest = runs
+      .map((run) => text(record(run).id))
+      .findLast((id) => id && this.runUsage.has(id));
+    if (latest) this.sendUsage(latest);
   }
 
   private applyEvent(event: Record<string, unknown>): void {
@@ -555,9 +574,66 @@ export class T3Session {
       case "runtime-request.updated":
         this.onRequest(record(event.payload));
         return;
+      case "run-attempt.created":
+      case "run-attempt.updated":
+        this.onAttempt(record(event.payload));
+        return;
+      case "provider-turn.updated":
+        this.onProviderTurn(record(event.payload), false);
+        return;
       default:
         return;
     }
+  }
+
+  private onAttempt(attempt: Record<string, unknown>): void {
+    const id = text(attempt.id);
+    const runId = text(attempt.runId);
+    if (!id || !runId) return;
+    this.attemptRuns.set(id, runId);
+    const orphan = this.orphanTurns.get(id);
+    if (orphan) {
+      this.orphanTurns.delete(id);
+      this.onProviderTurn(orphan, false);
+    }
+  }
+
+  private noteActiveAttempt(run: Record<string, unknown>): void {
+    const id = text(run.id);
+    const attemptId = text(run.activeAttemptId);
+    if (id && attemptId && !this.attemptRuns.has(attemptId))
+      this.onAttempt({ id: attemptId, runId: id });
+  }
+
+  /** `quiet` records the figure without sending it, as history does. */
+  private onProviderTurn(turn: Record<string, unknown>, quiet: boolean): void {
+    const attemptId = text(turn.runAttemptId);
+    if (!attemptId) return;
+    const runId = this.attemptRuns.get(attemptId);
+    if (!runId) {
+      this.orphanTurns.set(attemptId, turn);
+      return;
+    }
+    const usage = usageFromProviderTurn(turn);
+    if (!usage) return;
+    const entry = this.runUsage.get(runId);
+    // A retried or restarted attempt adds a provider turn; the run's figure is the latest one.
+    this.runUsage.set(runId, { usage: { ...entry?.usage, ...usage }, sent: entry?.sent });
+    if (!quiet) this.sendUsage(runId);
+  }
+
+  private sendUsage(runId: string): void {
+    const entry = this.runUsage.get(runId);
+    if (!entry) return;
+    const key = JSON.stringify(entry.usage);
+    if (entry.sent === key) return;
+    entry.sent = key;
+    this.options.emit({
+      type: "session.usage",
+      sessionId: this.options.id,
+      turnId: runId,
+      usage: entry.usage,
+    });
   }
 
   private onRun(run: Record<string, unknown>, replay: boolean): void {
@@ -565,6 +641,7 @@ export class T3Session {
     const status = text(run.status);
     if (!id || !status) return;
     if (run.threadId !== undefined && run.threadId !== this.threadId) return;
+    this.noteActiveAttempt(run);
     let state = this.runs.get(id);
     if (!state) {
       state = { id, status, userMessageId: text(run.userMessageId), started: false, ended: false };
@@ -600,6 +677,8 @@ export class T3Session {
     }
     if (terminal && !state.ended) {
       state.ended = true;
+      // Paseo reads the agent's usage when the turn ends, so the figure goes first.
+      this.sendUsage(id);
       this.options.emit({
         type: "session.turn",
         sessionId: this.options.id,
