@@ -38,9 +38,11 @@ import type {
 } from "@getpaseo/protocol/agent-types";
 import type {
   AgentBackgroundWorkSummary,
+  AgentShellContextEntry,
   ServerInfoStatusPayload,
   ProjectPlacementPayload,
   ServerCapabilities,
+  TerminalControlPrompt,
   WorkspaceDescriptorPayload,
   WorkspaceProjectDescriptorPayload,
 } from "@getpaseo/protocol/messages";
@@ -114,6 +116,8 @@ export interface Agent {
   labels: Record<string, string>;
   metadata?: Record<string, JsonValue>;
   projectPlacement?: ProjectPlacementPayload | null;
+  shellTerminalId?: string;
+  pendingShellContext?: AgentShellContextEntry[];
 }
 
 export interface WorkspaceDescriptor {
@@ -521,6 +525,7 @@ export interface SessionState {
 
   // Permissions
   pendingPermissions: Map<string, PendingPermission>;
+  pendingTerminalControlPrompts: TerminalControlPrompt[];
 
   // File explorer
   fileExplorer: Map<string, AgentFileExplorerState>;
@@ -697,6 +702,11 @@ interface SessionStoreActions {
       | Map<string, PendingPermission>
       | ((prev: Map<string, PendingPermission>) => Map<string, PendingPermission>),
   ) => void;
+  setPendingTerminalControlPrompts: (serverId: string, prompts: TerminalControlPrompt[]) => void;
+  upsertTerminalControlPrompt: (
+    serverId: string,
+    change: TerminalControlPrompt & { state: "pending" | "resolved" },
+  ) => void;
 
   // File explorer
   setFileExplorer: (
@@ -767,6 +777,7 @@ function createInitialSessionState(
     projects: new Map(),
     restoringWorkspaces: new Map(),
     pendingPermissions: new Map(),
+    pendingTerminalControlPrompts: [],
     fileExplorer: new Map(),
     queuedMessages: new Map(),
   };
@@ -1892,6 +1903,49 @@ export const useSessionStore = create<SessionStore>()(
             sessions: {
               ...prev.sessions,
               [serverId]: { ...session, pendingPermissions: nextPerms },
+            },
+          };
+        });
+      },
+
+      setPendingTerminalControlPrompts: (serverId, prompts) => {
+        set((prev) => {
+          const session = prev.sessions[serverId];
+          if (!session) {
+            return prev;
+          }
+          if (equal(session.pendingTerminalControlPrompts, prompts)) {
+            return prev;
+          }
+          return {
+            ...prev,
+            sessions: {
+              ...prev.sessions,
+              [serverId]: { ...session, pendingTerminalControlPrompts: prompts },
+            },
+          };
+        });
+      },
+
+      upsertTerminalControlPrompt: (serverId, change) => {
+        const { state, ...prompt } = change;
+        set((prev) => {
+          const session = prev.sessions[serverId];
+          if (!session) {
+            return prev;
+          }
+          const others = session.pendingTerminalControlPrompts.filter(
+            (item) => item.id !== prompt.id,
+          );
+          const next = state === "pending" ? [...others, prompt] : others;
+          if (equal(session.pendingTerminalControlPrompts, next)) {
+            return prev;
+          }
+          return {
+            ...prev,
+            sessions: {
+              ...prev.sessions,
+              [serverId]: { ...session, pendingTerminalControlPrompts: next },
             },
           };
         });

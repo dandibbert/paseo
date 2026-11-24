@@ -3517,4 +3517,6 @@ export const ar: TranslationResources = {
       },
     },
   },
+  agentShell: en.agentShell,
+  terminalControl: en.terminalControl,
 };

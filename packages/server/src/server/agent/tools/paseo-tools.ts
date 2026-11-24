@@ -63,6 +63,8 @@ import { everyMsToFiveFieldCron } from "@getpaseo/protocol/schedule/cadence";
 import { expandUserPath, isSameOrDescendantPath, resolvePathFromBase } from "../../path-utils.js";
 import type { TerminalManager } from "../../../terminal/terminal-manager.js";
 import type { SecureTerminalPromptBroker } from "../../secure-input/secure-terminal-prompt-broker.js";
+import type { TerminalControlBroker } from "../../terminal-control/terminal-control-broker.js";
+import type { AgentShellService } from "../agent-shell-service.js";
 import { encodeTerminalKeyInput } from "@getpaseo/protocol/terminal-key-input";
 import { TerminalInputModeTracker } from "@getpaseo/protocol/terminal-input-mode";
 import type { CreatePaseoWorktreeWorkflowFn } from "../../worktree-session.js";
@@ -158,6 +160,8 @@ export interface PaseoToolHostDependencies {
   agentStorage: AgentStorage;
   terminalManager?: TerminalManager | null;
   secureTerminalPromptBroker?: SecureTerminalPromptBroker;
+  terminalControlBroker?: TerminalControlBroker;
+  agentShellService?: AgentShellService | null;
   getDaemonTcpPort?: () => number | null;
   scheduleService?: ScheduleService | null;
   providerSnapshotManager: ProviderSnapshotManager;
@@ -763,6 +767,8 @@ function createToolCatalog(
     agentStorage,
     terminalManager,
     secureTerminalPromptBroker,
+    terminalControlBroker,
+    agentShellService,
     workspaceScripts,
     scheduleService,
     providerSnapshotManager,
@@ -2733,7 +2739,7 @@ function createToolCatalog(
         throw new Error("Terminal manager is not configured");
       }
 
-      const terminals = all
+      const rawTerminals = all
         ? (
             await Promise.all(
               terminalManager.listDirectories().map(async (directory) =>
@@ -2752,6 +2758,9 @@ function createToolCatalog(
               cwd: terminal.cwd,
             }),
           );
+      const terminals = rawTerminals.filter(
+        (terminal) => !agentShellService?.isDedicatedShellTerminal(terminal.id),
+      );
 
       return {
         content: [],
@@ -2816,6 +2825,12 @@ function createToolCatalog(
         throw new Error("Terminal manager is not configured");
       }
 
+      if (agentShellService?.isDedicatedShellTerminal(terminalId)) {
+        throw new PaseoToolInputError(
+          `Terminal ${terminalId} is a user-dedicated shell terminal and cannot be accessed by agents`,
+        );
+      }
+
       const terminal = terminalManager.getTerminal(terminalId);
       if (!terminal) {
         throw new PaseoToolInputError(`Terminal ${terminalId} not found`);
@@ -2851,6 +2866,12 @@ function createToolCatalog(
     async ({ terminalId, start, end, scrollback, stripAnsi = true }) => {
       if (!terminalManager) {
         throw new Error("Terminal manager is not configured");
+      }
+
+      if (agentShellService?.isDedicatedShellTerminal(terminalId)) {
+        throw new PaseoToolInputError(
+          `Terminal ${terminalId} is a user-dedicated shell terminal and cannot be accessed by agents`,
+        );
       }
 
       if (!terminalManager.getTerminal(terminalId)) {
@@ -2892,6 +2913,19 @@ function createToolCatalog(
     async ({ terminalId, keys, literal = false }) => {
       if (!terminalManager) {
         throw new Error("Terminal manager is not configured");
+      }
+
+      if (agentShellService?.isDedicatedShellTerminal(terminalId)) {
+        throw new PaseoToolInputError(
+          `Terminal ${terminalId} is a user-dedicated shell terminal and cannot be accessed by agents`,
+        );
+      }
+
+      if (
+        terminalControlBroker?.hasPendingForTerminal(terminalId) ||
+        secureTerminalPromptBroker?.hasPendingForTerminal(terminalId)
+      ) {
+        throw new PaseoToolInputError(`Terminal ${terminalId} is currently under human control`);
       }
 
       const terminal = terminalManager.getTerminal(terminalId);
@@ -2946,6 +2980,11 @@ function createToolCatalog(
         if (!agent?.workspaceId) {
           throw new Error("Secure input requires an agent belonging to a workspace");
         }
+        if (agentShellService?.isDedicatedShellTerminal(terminalId)) {
+          throw new PaseoToolInputError(
+            `Terminal ${terminalId} is a user-dedicated shell terminal and cannot be accessed by agents`,
+          );
+        }
         const status = await secureTerminalPromptBroker.request({
           agentId: callerAgentId,
           workspaceId: agent.workspaceId,
@@ -2956,6 +2995,72 @@ function createToolCatalog(
         return {
           content: [],
           structuredContent: ensureValidJson({ status }),
+        };
+      },
+    );
+  }
+
+  if (callerAgentId && terminalControlBroker) {
+    registerTool(
+      "request_terminal_control",
+      {
+        title: "Request terminal control",
+        description:
+          "Ask the human to take direct interactive control of a Paseo terminal (e.g., for SSO/2FA, sudo, interactive debugging, or prompts). " +
+          "First create or use an agent-accessible Paseo terminal and start the command, then call this tool with its terminalId and a clear reason. " +
+          "While pending, the human can interact with the terminal directly and agent send_terminal_keys is blocked until control returns. " +
+          "If status is 'waiting', the request stays open for up to 30 minutes; wait briefly or pass the same requestId to continue waiting.",
+        inputSchema: {
+          terminalId: z.string().min(1),
+          reason: z
+            .string()
+            .trim()
+            .min(1)
+            .max(300)
+            .describe("Explain why human terminal control is needed. Do not include secrets."),
+          requestId: z
+            .string()
+            .min(1)
+            .optional()
+            .describe(
+              "Optional requestId returned by an earlier 'waiting' response to keep waiting on the same control request.",
+            ),
+        },
+        outputSchema: {
+          status: z.enum([
+            "returned",
+            "declined",
+            "waiting",
+            "expired",
+            "canceled",
+            "terminal_exited",
+          ]),
+          requestId: z.string(),
+          screen: z.string(),
+          note: z.string().optional(),
+        },
+      },
+      async ({ terminalId, reason, requestId }, context) => {
+        const agent = resolveCallerAgent();
+        if (!agent?.workspaceId) {
+          throw new Error("Terminal control requires an agent belonging to a workspace");
+        }
+        if (agentShellService?.isDedicatedShellTerminal(terminalId)) {
+          throw new PaseoToolInputError(
+            `Terminal ${terminalId} is a user-dedicated shell terminal and cannot be accessed by agents`,
+          );
+        }
+        const result = await terminalControlBroker.request({
+          agentId: callerAgentId,
+          workspaceId: agent.workspaceId,
+          terminalId,
+          reason,
+          ...(requestId ? { requestId } : {}),
+          signal: context.signal,
+        });
+        return {
+          content: [],
+          structuredContent: ensureValidJson(result),
         };
       },
     );

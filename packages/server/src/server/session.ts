@@ -65,6 +65,11 @@ import type {
 } from "../terminal/terminal-manager.js";
 import { TerminalSessionController } from "../terminal/terminal-session-controller.js";
 import type { SecureTerminalPromptBroker } from "./secure-input/secure-terminal-prompt-broker.js";
+import type { TerminalControlBroker } from "./terminal-control/terminal-control-broker.js";
+import {
+  appendShellAttachmentsToPrompt,
+  type AgentShellService,
+} from "./agent/agent-shell-service.js";
 import { getActiveHistoryTextIndex } from "./history-search/index.js";
 import type { TerminalActivity } from "@getpaseo/protocol/terminal-activity";
 import type { BinaryFrame } from "@getpaseo/protocol/binary-frames/index";
@@ -607,6 +612,8 @@ export interface SessionOptions {
   speechModels?: SpeechModelsSessionOptions["runtime"];
   terminalManager: TerminalManager | null;
   secureTerminalPromptBroker?: SecureTerminalPromptBroker;
+  terminalControlBroker?: TerminalControlBroker;
+  agentShellService?: AgentShellService | null;
   providerSnapshotManager: ProviderSnapshotManager;
   hubExecutionAgents?: HubExecutionAgents;
   hubRelationships?: HubRelationshipManagement;
@@ -878,6 +885,8 @@ export class Session {
   private readonly workspaceUpdateTails = new Map<string, Promise<void>>();
   private readonly terminalManager: TerminalManager | null;
   private readonly secureTerminalPromptBroker: SecureTerminalPromptBroker | undefined;
+  private readonly terminalControlBroker: TerminalControlBroker | undefined;
+  private readonly agentShellService: AgentShellService | null | undefined;
   private readonly providerSnapshotManager: ProviderSnapshotManager;
   private readonly serviceProxy: ServiceProxySubsystem | null;
   private readonly scriptRuntimeStore: WorkspaceScriptRuntimeStore | null;
@@ -1033,6 +1042,8 @@ export class Session {
     });
     this.agentManager = agentManager;
     this.secureTerminalPromptBroker = options.secureTerminalPromptBroker;
+    this.terminalControlBroker = options.terminalControlBroker;
+    this.agentShellService = options.agentShellService;
     this.agentStorage = agentStorage;
     this.projectRegistry = projectRegistry;
     this.workspaceRegistry = workspaceRegistry;
@@ -3416,6 +3427,19 @@ export class Session {
       case "clear_agent_attention":
         return this.handleClearAgentAttention(msg.agentId, msg.requestId);
       default:
+        return this.dispatchAgentShellMessage(msg);
+    }
+  }
+
+  private dispatchAgentShellMessage(msg: SessionInboundMessage): Promise<void> | undefined {
+    switch (msg.type) {
+      case "agent.shell.run.request":
+        return this.handleAgentShellRunRequest(msg);
+      case "agent.shell.finish.request":
+        return this.handleAgentShellFinishRequest(msg);
+      case "agent.shell.context.update.request":
+        return this.handleAgentShellContextUpdateRequest(msg);
+      default:
         return undefined;
     }
   }
@@ -3748,6 +3772,17 @@ export class Session {
         });
         return undefined;
       }
+      case "terminal.control.list.request":
+        this.emit({
+          type: "terminal.control.list.response",
+          payload: {
+            requestId: msg.requestId,
+            prompts: this.terminalControlBroker?.list() ?? [],
+          },
+        });
+        return undefined;
+      case "terminal.control.respond.request":
+        return this.handleTerminalControlRespondRequest(msg);
       case "start_workspace_script_request":
         return this.handleStartWorkspaceScriptRequest(msg);
       case "workspace.script.list.request":
@@ -9521,7 +9556,14 @@ export class Session {
     try {
       const agentId = resolved.agentId;
 
-      const prompt = buildAgentPrompt(msg.text, msg.images, msg.attachments);
+      const pendingShell = !msg.sourceAgentId
+        ? (this.agentShellService?.buildPromptAttachmentForAgent(agentId) ?? null)
+        : null;
+      const effectiveAttachments = appendShellAttachmentsToPrompt(
+        msg.attachments,
+        pendingShell?.attachment ?? null,
+      );
+      const prompt = buildAgentPrompt(msg.text, msg.images, effectiveAttachments);
       this.sessionLogger.trace(
         {
           agentId,
@@ -9586,6 +9628,9 @@ export class Session {
             this.delivery.requestSignal,
           );
         }
+        if (pendingShell?.attachedIds.length) {
+          await this.agentShellService?.consumePendingContextIds(agentId, pendingShell.attachedIds);
+        }
       };
       const sent = msg.messageId
         ? this.messageReceipts.send({
@@ -9641,6 +9686,220 @@ export class Session {
         },
       });
     }
+  }
+
+  private async handleAgentShellRunRequest(
+    msg: Extract<SessionInboundMessage, { type: "agent.shell.run.request" }>,
+  ): Promise<void> {
+    if (!this.agentShellService) {
+      this.emit({
+        type: "agent.shell.run.response",
+        payload: {
+          requestId: msg.requestId,
+          agentId: msg.agentId,
+          terminalId: null,
+          callId: null,
+          accepted: false,
+          error: "Agent shell commands are unavailable on this host",
+        },
+      });
+      return;
+    }
+
+    const resolved = await this.resolveAgentIdentifier(msg.agentId);
+    if (!resolved.ok) {
+      this.emit({
+        type: "agent.shell.run.response",
+        payload: {
+          requestId: msg.requestId,
+          agentId: msg.agentId,
+          terminalId: null,
+          callId: null,
+          accepted: false,
+          error: resolved.error,
+        },
+      });
+      return;
+    }
+
+    try {
+      const result = await this.agentShellService.runCommand({
+        agentId: resolved.agentId,
+        command: msg.command,
+      });
+      this.emit({
+        type: "agent.shell.run.response",
+        payload: {
+          requestId: msg.requestId,
+          agentId: resolved.agentId,
+          terminalId: result.terminalId,
+          callId: result.callId,
+          accepted: true,
+          error: null,
+        },
+      });
+    } catch (error) {
+      this.emit({
+        type: "agent.shell.run.response",
+        payload: {
+          requestId: msg.requestId,
+          agentId: resolved.agentId,
+          terminalId: null,
+          callId: null,
+          accepted: false,
+          error: errorToFriendlyMessage(error),
+        },
+      });
+    }
+  }
+
+  private async handleAgentShellFinishRequest(
+    msg: Extract<SessionInboundMessage, { type: "agent.shell.finish.request" }>,
+  ): Promise<void> {
+    if (!this.agentShellService) {
+      this.emit({
+        type: "agent.shell.finish.response",
+        payload: {
+          requestId: msg.requestId,
+          agentId: msg.agentId,
+          callId: msg.callId ?? "",
+          success: false,
+          error: "Agent shell commands are unavailable on this host",
+        },
+      });
+      return;
+    }
+
+    const resolved = await this.resolveAgentIdentifier(msg.agentId);
+    if (!resolved.ok) {
+      this.emit({
+        type: "agent.shell.finish.response",
+        payload: {
+          requestId: msg.requestId,
+          agentId: msg.agentId,
+          callId: msg.callId ?? "",
+          success: false,
+          error: resolved.error,
+        },
+      });
+      return;
+    }
+
+    try {
+      const result = await this.agentShellService.finishCommand({
+        agentId: resolved.agentId,
+        callId: msg.callId,
+      });
+      this.emit({
+        type: "agent.shell.finish.response",
+        payload: {
+          requestId: msg.requestId,
+          agentId: resolved.agentId,
+          callId: result.callId,
+          success: true,
+          error: null,
+        },
+      });
+    } catch (error) {
+      this.emit({
+        type: "agent.shell.finish.response",
+        payload: {
+          requestId: msg.requestId,
+          agentId: resolved.agentId,
+          callId: msg.callId ?? "",
+          success: false,
+          error: errorToFriendlyMessage(error),
+        },
+      });
+    }
+  }
+
+  private async handleAgentShellContextUpdateRequest(
+    msg: Extract<SessionInboundMessage, { type: "agent.shell.context.update.request" }>,
+  ): Promise<void> {
+    if (!this.agentShellService) {
+      this.emit({
+        type: "agent.shell.context.update.response",
+        payload: {
+          requestId: msg.requestId,
+          agentId: msg.agentId,
+          pendingShellContext: [],
+          error: "Agent shell commands are unavailable on this host",
+        },
+      });
+      return;
+    }
+
+    const resolved = await this.resolveAgentIdentifier(msg.agentId);
+    if (!resolved.ok) {
+      this.emit({
+        type: "agent.shell.context.update.response",
+        payload: {
+          requestId: msg.requestId,
+          agentId: msg.agentId,
+          pendingShellContext: [],
+          error: resolved.error,
+        },
+      });
+      return;
+    }
+
+    try {
+      const pendingShellContext = await this.agentShellService.updatePendingContext({
+        agentId: resolved.agentId,
+        remove: msg.remove,
+        clear: msg.clear,
+      });
+      this.emit({
+        type: "agent.shell.context.update.response",
+        payload: {
+          requestId: msg.requestId,
+          agentId: resolved.agentId,
+          pendingShellContext,
+          error: null,
+        },
+      });
+    } catch (error) {
+      this.emit({
+        type: "agent.shell.context.update.response",
+        payload: {
+          requestId: msg.requestId,
+          agentId: resolved.agentId,
+          pendingShellContext: [],
+          error: errorToFriendlyMessage(error),
+        },
+      });
+    }
+  }
+
+  private async handleTerminalControlRespondRequest(
+    msg: Extract<SessionInboundMessage, { type: "terminal.control.respond.request" }>,
+  ): Promise<void> {
+    if (!this.terminalControlBroker) {
+      this.emit({
+        type: "terminal.control.respond.response",
+        payload: {
+          requestId: msg.requestId,
+          success: false,
+          error: "Terminal control is unavailable on this host",
+        },
+      });
+      return;
+    }
+
+    const result = await this.terminalControlBroker.respond({
+      controlId: msg.controlId,
+      action: msg.action,
+      shareScreen: msg.shareScreen,
+      note: msg.note,
+    });
+    this.emit({
+      type: "terminal.control.respond.response",
+      payload: {
+        requestId: msg.requestId,
+        ...result,
+      },
+    });
   }
 
   private async handleWaitForFinish(

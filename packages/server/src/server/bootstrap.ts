@@ -157,6 +157,8 @@ import { AgentStorage } from "./agent/agent-storage.js";
 import { attachAgentStoragePersistence } from "./persistence-hooks.js";
 import { createAgentMcpServer } from "./agent/mcp-server.js";
 import { SecureTerminalPromptBroker } from "./secure-input/secure-terminal-prompt-broker.js";
+import { TerminalControlBroker } from "./terminal-control/terminal-control-broker.js";
+import { AgentShellService } from "./agent/agent-shell-service.js";
 import { HistoryTextIndex, setActiveHistoryTextIndex } from "./history-search/index.js";
 import {
   createPaseoToolCatalog,
@@ -778,9 +780,21 @@ export async function createPaseoDaemon(
     appBaseUrl = typeof value === "string" ? value : "https://app.paseo.sh";
   });
   let wsServer: VoiceAssistantWebSocketServer | null = null;
+  let agentShellService: AgentShellService | null = null;
+  let terminalControlBroker: TerminalControlBroker;
   const secureTerminalPromptBroker = new SecureTerminalPromptBroker({
     terminalManager,
     publish: (message) => wsServer?.publishSecureTerminalPrompt(message),
+    isTerminalBusy: (terminalId) =>
+      terminalControlBroker.hasPendingForTerminal(terminalId) ||
+      (agentShellService?.isTerminalBusy(terminalId) ?? false),
+  });
+  terminalControlBroker = new TerminalControlBroker({
+    terminalManager,
+    publish: (message) => wsServer?.publishTerminalControlPrompt(message),
+    isTerminalBusy: (terminalId) =>
+      secureTerminalPromptBroker.hasPendingForTerminal(terminalId) ||
+      (agentShellService?.isTerminalBusy(terminalId) ?? false),
   });
   let serviceProxyListenTarget: ListenTarget | null = null;
   const scriptHealthMonitor = new ScriptHealthMonitor({
@@ -1622,12 +1636,23 @@ export async function createPaseoDaemon(
     serverId,
   });
 
+  agentShellService = new AgentShellService({
+    agentManager,
+    terminalManager,
+    logger,
+    resolveWorkspaceId: createAgentCommandDependencies.ensureWorkspaceForCreate,
+    isTerminalBusyByOther: (terminalId) =>
+      terminalControlBroker.hasPendingForTerminal(terminalId) ||
+      secureTerminalPromptBroker.hasPendingForTerminal(terminalId),
+  });
+
   const idleRuntimeCleanup = createIdleRuntimeCleanup({
     enabled: daemonConfigStore.get().idleRuntimeCleanup !== false,
     runtimes: () => agentManager.getRuntimeCleanupCandidates(),
     isProtected: (agentId) =>
       finishSubscriptions.hasPendingForCaller(agentId) ||
-      (wsServer?.agentMessages.hasPending(agentId) ?? false),
+      (wsServer?.agentMessages.hasPending(agentId) ?? false) ||
+      (agentShellService?.hasRunningCommandForAgent(agentId) ?? false),
     logger,
   });
 
@@ -1654,6 +1679,8 @@ export async function createPaseoDaemon(
     agentStorage,
     terminalManager,
     secureTerminalPromptBroker,
+    terminalControlBroker,
+    agentShellService,
     getDaemonTcpPort: () => (boundListenTarget?.type === "tcp" ? boundListenTarget.port : null),
     scheduleService,
     providerSnapshotManager,
@@ -2013,6 +2040,8 @@ export async function createPaseoDaemon(
               workspaceLabelService,
               secureTerminalPromptBroker,
               workspaceArchiveOperations,
+              terminalControlBroker,
+              agentShellService,
             );
             pluginRuntime.bindPaseoSessionHost(wsServer);
             await pluginRuntime.start();

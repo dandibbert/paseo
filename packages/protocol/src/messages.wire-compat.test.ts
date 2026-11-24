@@ -737,3 +737,88 @@ describe("provider metrics", () => {
     ).toBe(false);
   });
 });
+
+test("agent shell commands and terminal control preserve older wire parsing and accept new fields", () => {
+  const userShellItem = {
+    type: "tool_call",
+    callId: "shell-1",
+    name: "shell",
+    status: "completed",
+    error: null,
+    detail: {
+      type: "shell",
+      command: "git status",
+      cwd: "/repo",
+      output: "clean",
+      exitCode: 0,
+      origin: "user",
+      terminalId: "term-shell-1",
+    },
+  };
+  expect(AgentTimelineItemPayloadSchema.parse(userShellItem)).toEqual(userShellItem);
+
+  const controlAttention = {
+    type: "terminal_attention_required",
+    payload: {
+      terminalId: "term-1",
+      cwd: "/repo",
+      workspaceId: "ws-1",
+      reason: "needs_input",
+      title: "Terminal needs your input",
+      body: "Select deployment target",
+      shouldNotify: true,
+      kind: "control",
+      controlPrompt: {
+        id: "ctrl-1",
+        agentId: "agent-1",
+        terminalId: "term-1",
+        terminalName: "Shell",
+        cwd: "/repo",
+        workspaceId: "ws-1",
+        reason: "Select deployment target",
+        expiresAt: 1_800_000_000_000,
+        state: "pending",
+      },
+    },
+  };
+  expect(SessionOutboundMessageSchema.parse(controlAttention)).toEqual(controlAttention);
+
+  const snapshot = AgentSnapshotPayloadSchema.parse({
+    id: "agent-1",
+    provider: "claude",
+    cwd: "/repo",
+    model: "claude-sonnet",
+    createdAt: "2026-11-24T00:00:00.000Z",
+    updatedAt: "2026-11-24T00:00:00.000Z",
+    lastUserMessageAt: null,
+    status: "idle",
+    capabilities: {
+      supportsStreaming: true,
+      supportsSessionPersistence: true,
+      supportsDynamicModes: false,
+      supportsMcpServers: true,
+      supportsReasoningStream: true,
+      supportsToolInvocations: true,
+    },
+    currentModeId: null,
+    availableModes: [],
+    pendingPermissions: [],
+    persistence: null,
+    title: "Test",
+    shellTerminalId: "term-shell-1",
+    pendingShellContext: [
+      {
+        id: "ctx-1",
+        command: "git status",
+        cwd: "/repo",
+        exitCode: 0,
+        output: "clean",
+        outputBytes: 5,
+        completedAt: "2026-11-24T00:00:01.000Z",
+        terminalId: "term-shell-1",
+      },
+    ],
+  });
+  expect(snapshot.shellTerminalId).toBe("term-shell-1");
+  expect(snapshot.pendingShellContext).toHaveLength(1);
+});

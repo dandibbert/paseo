@@ -52,6 +52,7 @@ import {
   Check,
   Square,
   Pencil,
+  Terminal,
   X,
   AudioLines,
   CircleDot,
@@ -61,6 +62,9 @@ import {
   ClipboardPaste,
   Paperclip,
 } from "lucide-react-native";
+import type { AgentShellContextEntry } from "@getpaseo/protocol/messages";
+import { PendingShellContextBar } from "./pending-shell-context-bar";
+import { parseComposerShellInput, validateComposerShellSubmit } from "./shell-command";
 import * as Clipboard from "expo-clipboard";
 import { FOOTER_HEIGHT } from "@/constants/layout";
 import {
@@ -215,6 +219,9 @@ type AttachmentListUpdater =
   | ((prev: UserComposerAttachment[]) => UserComposerAttachment[]);
 
 const EMPTY_ATTACHMENT_SCOPE_KEYS: readonly string[] = [];
+const EMPTY_SHELL_CONTEXT: readonly AgentShellContextEntry[] = [];
+const ThemedTerminalIcon = withUnistyles(Terminal);
+const shellAccentIconMapping = (theme: Theme) => ({ color: theme.colors.palette.blue[500] });
 
 function noop() {}
 const noopCallback = () => {};
@@ -1819,6 +1826,58 @@ function ComposerContentImpl({
     hasPendingPermission,
   );
   const hasAgent = agentState.status !== null;
+  const supportsAgentShellCommands = useSessionStore(
+    (state) => state.sessions[serverId]?.serverInfo?.features?.agentShellCommands === true,
+  );
+  const pendingShellContext = useSessionStore(
+    (state) =>
+      state.sessions[serverId]?.agents.get(agentId)?.pendingShellContext ?? EMPTY_SHELL_CONTEXT,
+  );
+  const canTriggerAgentShell = inputMode === "chat" && !onSubmitMessage && hasAgent;
+  const isShellDraftRaw = useSyncExternalStore(
+    textSource.subscribe,
+    () => textSource.getSnapshot().startsWith("!"),
+    () => false,
+  );
+  const isShellDraft = canTriggerAgentShell && isShellDraftRaw;
+  const [isShellContextUpdating, setIsShellContextUpdating] = useState(false);
+
+  const handleRemovePendingShellEntry = useCallback(
+    (entryId: string) => {
+      if (!client || isShellContextUpdating) return;
+      setIsShellContextUpdating(true);
+      void client
+        .updateAgentShellContext({ agentId, remove: [entryId] })
+        .then((res) => {
+          if (res.error) toastErrorRef.current(res.error);
+          return undefined;
+        })
+        .catch((error) => {
+          toastErrorRef.current(resolveErrorMessage(error) || t("composer.errors.failedToSend"));
+        })
+        .finally(() => {
+          setIsShellContextUpdating(false);
+        });
+    },
+    [agentId, client, isShellContextUpdating, t],
+  );
+
+  const handleClearPendingShellContext = useCallback(() => {
+    if (!client || isShellContextUpdating) return;
+    setIsShellContextUpdating(true);
+    void client
+      .updateAgentShellContext({ agentId, clear: true })
+      .then((res) => {
+        if (res.error) toastErrorRef.current(res.error);
+        return undefined;
+      })
+      .catch((error) => {
+        toastErrorRef.current(resolveErrorMessage(error) || t("composer.errors.failedToSend"));
+      })
+      .finally(() => {
+        setIsShellContextUpdating(false);
+      });
+  }, [agentId, client, isShellContextUpdating, t]);
 
   const queueWriter = useMemo<QueueWriter>(
     () => ({
@@ -1915,15 +1974,66 @@ function ComposerContentImpl({
   const handleSubmit = useCallback(
     (payload: MessagePayload) => {
       const outgoingAttachments = buildOutgoingAttachments(attachments);
+      const parsedInput = canTriggerAgentShell ? parseComposerShellInput(payload.text) : null;
+      if (parsedInput?.mode === "shell") {
+        const validation = validateComposerShellSubmit({
+          command: parsedInput.command,
+          hasAttachments: outgoingAttachments.length > 0 || pendingFiles.length > 0,
+          isShellSupported: supportsAgentShellCommands,
+          isConnected,
+          hasAgent,
+        });
+        if (!validation.allowed) {
+          if (validation.reason === "unsupported") {
+            setSendError(t("agentShell.unsupportedHint"));
+          } else if (validation.reason === "attachments_conflict") {
+            setSendError(t("agentShell.attachmentsConflictHint"));
+          }
+          return;
+        }
+        if (!client) {
+          setSendError(t("workspace.terminal.hostDisconnected"));
+          return;
+        }
+        if (blurOnSubmit) {
+          messageInputRef.current?.blur();
+        }
+        setSendError(null);
+        setIsProcessing(true);
+        void client
+          .runAgentShellCommand({
+            agentId: agentIdRef.current,
+            command: parsedInput.command,
+          })
+          .then((result) => {
+            if (!result.accepted) {
+              setSendError(result.error ?? t("composer.errors.failedToSend"));
+              return undefined;
+            }
+            clearDraft("sent");
+            replaceUserInput("");
+            onMessageSent?.();
+            return undefined;
+          })
+          .catch((error) => {
+            setSendError(resolveErrorMessage(error) || t("composer.errors.failedToSend"));
+          })
+          .finally(() => {
+            setIsProcessing(false);
+          });
+        return;
+      }
+
+      const outgoingText = parsedInput ? parsedInput.text : payload.text;
       const clientSlashCommand = resolveClientSlashCommand({
-        text: payload.text,
+        text: outgoingText,
         hasAttachments: outgoingAttachments.length > 0,
       });
       if (clientSlashCommand && runClientSlashCommand(clientSlashCommand)) {
         return;
       }
       const pluginSlashCommand = resolvePluginClientSlashCommand({
-        text: payload.text,
+        text: outgoingText,
         hasAttachments: outgoingAttachments.length > 0,
         commands: pluginClientSlashCommands,
       });
@@ -1932,16 +2042,26 @@ function ComposerContentImpl({
       if (blurOnSubmit) {
         messageInputRef.current?.blur();
       }
-      void sendMessageWithContent(payload.text, outgoingAttachments, payload.forceSend);
+      void sendMessageWithContent(outgoingText, outgoingAttachments, payload.forceSend);
     },
     [
       attachments,
       blurOnSubmit,
       buildOutgoingAttachments,
-      runClientSlashCommand,
+      canTriggerAgentShell,
+      clearDraft,
+      client,
+      hasAgent,
+      isConnected,
+      onMessageSent,
+      pendingFiles.length,
       pluginClientSlashCommands,
+      replaceUserInput,
+      runClientSlashCommand,
       runPluginClientSlashCommand,
       sendMessageWithContent,
+      supportsAgentShellCommands,
+      t,
     ],
   );
 
@@ -2642,10 +2762,72 @@ function ComposerContentImpl({
     ],
   );
 
+  const hasShellAttachmentsConflict =
+    isShellDraft && (selectedAttachments.length > 0 || pendingFiles.length > 0);
+  const isShellBlocked =
+    isShellDraft && (!supportsAgentShellCommands || hasShellAttachmentsConflict);
+
   const isSubmitLoadingVisible =
     isProcessing || isSubmitLoading || isUploadingFile || pendingNativeImagePastes > 0;
   const isSubmitDisabled =
-    isSubmitLoadingVisible || (waitForForgeAutoAttachOnSubmit && isForgeResolving);
+    isSubmitLoadingVisible ||
+    (waitForForgeAutoAttachOnSubmit && isForgeResolving) ||
+    isShellBlocked;
+  const effectiveInputWrapperStyle = useMemo(
+    () =>
+      isShellDraft
+        ? (RNStyleSheet.flatten([
+            inputWrapperStyle,
+            styles.shellInputWrapper,
+          ]) as import("react-native").ViewStyle)
+        : inputWrapperStyle,
+    [inputWrapperStyle, isShellDraft],
+  );
+  const shellModeBanner = useMemo(() => {
+    if (!isShellDraft || isFullscreen) {
+      return null;
+    }
+    let hintText: string | null = null;
+    if (!supportsAgentShellCommands) {
+      hintText = t("agentShell.unsupportedHint");
+    } else if (hasShellAttachmentsConflict) {
+      hintText = t("agentShell.attachmentsConflictHint");
+    }
+    return (
+      <View style={styles.shellModeBanner} testID="composer-shell-mode-banner">
+        <View style={styles.shellModeBadge}>
+          <ThemedTerminalIcon size={13} uniProps={shellAccentIconMapping} />
+          <Text style={styles.shellModeBadgeText}>{t("agentShell.modeBadge")}</Text>
+        </View>
+        {hintText ? (
+          <Text style={styles.shellModeHintText} numberOfLines={2}>
+            {hintText}
+          </Text>
+        ) : null}
+      </View>
+    );
+  }, [hasShellAttachmentsConflict, isFullscreen, isShellDraft, supportsAgentShellCommands, t]);
+  const pendingShellContextSlot = useMemo(() => {
+    if (isFullscreen || !canTriggerAgentShell || pendingShellContext.length === 0) {
+      return null;
+    }
+    return (
+      <PendingShellContextBar
+        entries={pendingShellContext}
+        disabled={isShellContextUpdating || !isConnected}
+        onRemoveEntry={handleRemovePendingShellEntry}
+        onClearAll={handleClearPendingShellContext}
+      />
+    );
+  }, [
+    canTriggerAgentShell,
+    handleClearPendingShellContext,
+    handleRemovePendingShellEntry,
+    isConnected,
+    isFullscreen,
+    isShellContextUpdating,
+    pendingShellContext,
+  ]);
 
   // Disable drops while submitting/uploading: the submit path clears and restores attachments,
   // so a drop in that window would be lost or land on a locked draft. `disabled` hides the
@@ -2699,6 +2881,8 @@ function ComposerContentImpl({
         >
           <View style={inputAreaContentStyle}>
             {isFullscreen ? null : queueList}
+            {pendingShellContextSlot}
+            {shellModeBanner}
             {!isFullscreen && sendErrorNode}
 
             <ComposerAutocompleteBinding
@@ -2707,7 +2891,7 @@ function ComposerContentImpl({
               recall={recall}
               inputRef={messageInputRef}
               anchorStyle={messageInputContainerStyle}
-              show={mode.showAutocomplete && !isFullscreen}
+              show={mode.showAutocomplete && !isFullscreen && !isShellDraft}
               ref={autocompleteRef}
               configuration={autocompleteConfiguration}
             >
@@ -2731,7 +2915,7 @@ function ComposerContentImpl({
                   allowEmptySubmit={allowEmptySubmit}
                   submitButtonAccessibilityLabel={submitButtonAccessibilityLabel}
                   submitButtonTestID={submitButtonTestID}
-                  submitIcon={submitIcon}
+                  submitIcon={isShellDraft ? "return" : submitIcon}
                   isSubmitDisabled={isSubmitDisabled}
                   isSubmitLoading={isSubmitLoadingVisible}
                   preserveHeightOnSubmit={submitBehavior === "preserve-and-lock"}
@@ -2743,7 +2927,7 @@ function ComposerContentImpl({
                   onPasteImages={handleNativePasteImages}
                   client={client}
                   isReadyForDictation={isDictationReady}
-                  placeholder={messagePlaceholder}
+                  placeholder={isShellDraft ? t("agentShell.placeholder") : messagePlaceholder}
                   autoFocus={messageInputAutoFocus}
                   autoFocusKey={`${serverId}:${agentId}:${autoFocusKey ?? ""}`}
                   disabled={isSubmitLoading}
@@ -2753,16 +2937,16 @@ function ComposerContentImpl({
                   activeActionContent={activeActionContent}
                   voiceServerId={serverId}
                   voiceAgentId={agentId}
-                  isAgentRunning={isAgentRunning}
+                  isAgentRunning={isShellDraft ? false : isAgentRunning}
                   defaultSendBehavior={activeSendBehavior}
                   sendShortcut={appSettings.sendShortcut}
-                  onQueue={handleQueue}
+                  onQueue={isShellDraft ? undefined : handleQueue}
                   onSubmitLoadingPress={submitLoadingPressHandler}
                   onKeyPress={handleCommandKeyPress}
                   onSelectionChange={handleSelectionChange}
                   onFocusChange={handleFocusChange}
                   onHeightChange={onComposerHeightChange}
-                  inputWrapperStyle={inputWrapperStyle}
+                  inputWrapperStyle={effectiveInputWrapperStyle}
                   attachmentSlot={attachmentTray}
                   inputMode={inputMode}
                   readOnly={readOnly}
@@ -2960,6 +3144,39 @@ const styles = StyleSheet.create((theme: Theme) => ({
   },
   queueSendButton: {
     backgroundColor: theme.colors.accent,
+  },
+  sendErrorText: {
+    color: theme.colors.palette.red[500],
+    fontSize: theme.fontSize.base,
+  },
+  shellInputWrapper: {
+    borderColor: theme.colors.palette.blue[500],
+  },
+  shellModeBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    flexWrap: "wrap",
+    gap: theme.spacing[2],
+  },
+  shellModeBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: theme.spacing[2],
+    paddingVertical: 2,
+    borderRadius: theme.borderRadius.sm,
+    backgroundColor: theme.colors.surface2,
+    borderWidth: 1,
+    borderColor: theme.colors.palette.blue[500],
+  },
+  shellModeBadgeText: {
+    fontSize: theme.fontSize.sm,
+    fontWeight: theme.fontWeight.medium,
+    color: theme.colors.palette.blue[500],
+  },
+  shellModeHintText: {
+    fontSize: theme.fontSize.sm,
+    color: theme.colors.palette.amber[500],
   },
 })) as unknown as Record<string, object>;
 

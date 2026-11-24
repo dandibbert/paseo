@@ -57,6 +57,16 @@ export function derivePendingPermissionKey(
   return `${agentId}:${fallbackId}`;
 }
 
+function projectAgentShellSnapshotFields(source: {
+  shellTerminalId?: string;
+  pendingShellContext?: Agent["pendingShellContext"];
+}): Partial<Pick<AgentSnapshotPayload, "shellTerminalId" | "pendingShellContext">> {
+  const fields: Partial<Pick<AgentSnapshotPayload, "shellTerminalId" | "pendingShellContext">> = {};
+  if (source.shellTerminalId) fields.shellTerminalId = source.shellTerminalId;
+  if (source.pendingShellContext?.length) fields.pendingShellContext = source.pendingShellContext;
+  return fields;
+}
+
 export function projectAgentSnapshot(agent: Agent): AgentSnapshotPayload {
   return {
     id: agent.id,
@@ -91,6 +101,7 @@ export function projectAgentSnapshot(agent: Agent): AgentSnapshotPayload {
     attentionTimestamp: agent.attentionTimestamp?.toISOString() ?? null,
     archivedAt: agent.archivedAt?.toISOString() ?? null,
     ...(agent.background ? { background: true } : {}),
+    ...projectAgentShellSnapshotFields(agent),
   };
 }
 
@@ -147,5 +158,9 @@ export function normalizeAgentSnapshot(snapshot: AgentSnapshotPayload, serverId:
     parentAgentId,
     labels: snapshot.labels,
     metadata: snapshot.metadata,
+    ...(snapshot.shellTerminalId ? { shellTerminalId: snapshot.shellTerminalId } : {}),
+    ...(snapshot.pendingShellContext?.length
+      ? { pendingShellContext: snapshot.pendingShellContext }
+      : {}),
   };
 }

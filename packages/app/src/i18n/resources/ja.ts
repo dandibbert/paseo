@@ -3519,4 +3519,6 @@ export const ja: TranslationResources = {
       },
     },
   },
+  agentShell: en.agentShell,
+  terminalControl: en.terminalControl,
 } as const;

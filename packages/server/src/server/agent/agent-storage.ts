@@ -51,6 +51,25 @@ const PERSISTENCE_HANDLE_SCHEMA = z
   .nullable()
   .optional();
 
+const STORED_SHELL_CONTEXT_ENTRY_SCHEMA = z.object({
+  id: z.string(),
+  command: z.string(),
+  cwd: z.string(),
+  exitCode: z.number().int().nullable(),
+  output: z.string(),
+  outputBytes: z.number().int().nonnegative(),
+  truncated: z.boolean().optional(),
+  completedAt: z.string(),
+  terminalId: z.string(),
+});
+
+const STORED_SHELL_TIMELINE_ITEM_SCHEMA = z.object({
+  timestamp: z.string(),
+  item: z.custom<import("./agent-sdk-types.js").AgentTimelineItem>(),
+});
+
+export type StoredShellTimelineItem = z.infer<typeof STORED_SHELL_TIMELINE_ITEM_SCHEMA>;
+
 const RAW_STORED_AGENT_SCHEMA = z.object({
   id: z.string(),
   provider: z.string(),
@@ -93,6 +112,10 @@ const RAW_STORED_AGENT_SCHEMA = z.object({
   background: z.boolean().optional(),
   archivedAt: z.string().nullable().optional(),
   owner: AgentOwnerSchema.optional(),
+  // COMPAT(agentShellCommands): fork, added in v0.17.4.
+  shellTerminalId: z.string().optional(),
+  pendingShellContext: z.array(STORED_SHELL_CONTEXT_ENTRY_SCHEMA).optional(),
+  shellTimelineItems: z.array(STORED_SHELL_TIMELINE_ITEM_SCHEMA).optional(),
 });
 
 export type SerializableAgentConfig = Pick<

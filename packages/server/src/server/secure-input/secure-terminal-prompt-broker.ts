@@ -18,6 +18,7 @@ interface PendingPrompt {
 export interface SecureTerminalPromptBrokerOptions {
   terminalManager: Pick<TerminalManager, "getTerminal">;
   publish: (message: TerminalAttentionRequired) => void;
+  isTerminalBusy?: (terminalId: string) => boolean;
   ttlMs?: number;
   createId?: () => string;
 }
@@ -33,14 +34,23 @@ export class SecureTerminalPromptBroker {
   private readonly pending = new Map<string, PendingPrompt>();
   private readonly terminalManager: SecureTerminalPromptBrokerOptions["terminalManager"];
   private readonly publish: SecureTerminalPromptBrokerOptions["publish"];
+  private readonly isTerminalBusy?: (terminalId: string) => boolean;
   private readonly ttlMs: number;
   private readonly createId: () => string;
 
   constructor(options: SecureTerminalPromptBrokerOptions) {
     this.terminalManager = options.terminalManager;
     this.publish = options.publish;
+    this.isTerminalBusy = options.isTerminalBusy;
     this.ttlMs = options.ttlMs ?? SECURE_PROMPT_TTL_MS;
     this.createId = options.createId ?? randomUUID;
+  }
+
+  hasPendingForTerminal(terminalId: string): boolean {
+    for (const item of this.pending.values()) {
+      if (item.terminal.id === terminalId) return true;
+    }
+    return false;
   }
 
   list(): SecureTerminalPrompt[] {
@@ -60,8 +70,11 @@ export class SecureTerminalPromptBroker {
       throw new Error("Secure input can only target a terminal in the calling agent's workspace");
     }
     if (input.signal?.aborted) return Promise.resolve("canceled");
-    if ([...this.pending.values()].some((item) => item.terminal.id === terminal.id)) {
+    if (this.hasPendingForTerminal(terminal.id)) {
       throw new Error("Another secure input request is already pending for this terminal");
+    }
+    if (this.isTerminalBusy?.(terminal.id)) {
+      throw new Error("The user is currently operating this terminal");
     }
     if (this.pending.size >= MAX_PENDING_PROMPTS) {
       throw new Error("Too many secure input requests are pending");

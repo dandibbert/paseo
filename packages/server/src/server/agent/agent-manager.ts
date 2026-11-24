@@ -79,6 +79,7 @@ import {
   type ListImportableSessionsOptions,
 } from "./agent-sdk-types.js";
 import { buildArchivedAgentRecord, type ArchivedStoredAgentRecord } from "./agent-archive.js";
+import type { AgentShellContextEntry } from "@getpaseo/protocol/messages";
 import type { JsonValue, ProviderOptions } from "@getpaseo/protocol/agent-types";
 import { toStoredAgentRecord } from "./agent-projections.js";
 import { sanitizeAgentMetrics, withModelMetric } from "./agent-metrics.js";
@@ -92,7 +93,7 @@ import {
   foldHookFeatureValues,
   type ProviderOptionsPatch,
 } from "./option-controls.js";
-import type { StoredAgentRecord, AgentStorage } from "./agent-storage.js";
+import type { AgentStorage, StoredAgentRecord, StoredShellTimelineItem } from "./agent-storage.js";
 import type { AgentOwner } from "./agent-owner.js";
 import {
   InMemoryAgentTimelineStore,
@@ -395,6 +396,9 @@ export interface CreateAgentOptions {
   owner?: AgentOwner;
   /** Background agents stay out of discovery, tabs, tracks and attention. Fixed at creation. */
   background?: boolean;
+  shellTerminalId?: string;
+  pendingShellContext?: AgentShellContextEntry[];
+  shellTimelineItems?: StoredShellTimelineItem[];
 }
 
 export interface AgentManagerOptions {
@@ -557,6 +561,12 @@ interface ManagedAgentBase {
   labels: Record<string, string>;
   /** Plugin-owned data. Paseo persists and forwards it and never reads a key. */
   metadata: AgentMetadata;
+  /** Dedicated terminal ID for `!` user shell mode, if created. */
+  shellTerminalId?: string;
+  /** Pending finished `!` commands awaiting inclusion in the next user prompt. */
+  pendingShellContext?: AgentShellContextEntry[];
+  /** Durable user-initiated shell timeline items merged across legacy history rehydration. */
+  shellTimelineItems?: StoredShellTimelineItem[];
 }
 
 type ManagedAgentWithSession = ManagedAgentBase & {
@@ -1009,6 +1019,7 @@ export class AgentManager {
   private readonly rescueTimeouts: Required<AgentManagerRescueTimeouts>;
   private readonly beforeSteerUnavailableFallback?: AgentManagerOptions["beforeSteerUnavailableFallback"];
   private acceptingAgentRegistrations = true;
+  private readonly activeUserShellCallIds = new Map<string, Set<string>>();
 
   constructor(options: AgentManagerOptions) {
     this.pluginLifecycle = options.pluginLifecycle;
@@ -1925,6 +1936,9 @@ export class AgentManager {
           owner: record.owner,
           background: record.background,
           env: record.launchEnv,
+          shellTerminalId: record.shellTerminalId,
+          pendingShellContext: record.pendingShellContext,
+          shellTimelineItems: record.shellTimelineItems,
         });
       }),
     );
@@ -1999,6 +2013,9 @@ export class AgentManager {
       background: options.background,
       launchEnv: options.env ? { ...options.env } : undefined,
       historyPrimed: true,
+      shellTerminalId: options.shellTerminalId,
+      pendingShellContext: options.pendingShellContext,
+      shellTimelineItems: options.shellTimelineItems,
     });
     if (!agent.internal) {
       this.pluginLifecycle?.emit("agent.create.after", {
@@ -2147,6 +2164,7 @@ export class AgentManager {
             sessionMetrics: record.sessionMetrics,
           }
         : {}),
+      ...restoredShellState(record),
       workspaceId,
       launchEnv,
       persistence:
@@ -2290,6 +2308,9 @@ export class AgentManager {
     const preservedSessionMetrics = existing.sessionMetrics;
     const preservedLastError = existing.lastError;
     const preservedAttention = existing.attention;
+    const preservedShellTerminalId = existing.shellTerminalId;
+    const preservedPendingShellContext = existing.pendingShellContext;
+    const preservedShellTimelineItems = existing.shellTimelineItems;
     const handle = existing.persistence;
     const provider = handle?.provider ?? existing.provider;
     const client = this.requireClient(provider);
@@ -2377,6 +2398,9 @@ export class AgentManager {
         sessionMetrics: preservedSessionMetrics,
         lastError: preservedLastError,
         attention: preservedAttention,
+        shellTerminalId: preservedShellTerminalId,
+        pendingShellContext: preservedPendingShellContext,
+        shellTimelineItems: preservedShellTimelineItems,
         restoring: true,
       });
     } catch (error) {
@@ -3595,6 +3619,106 @@ export class AgentManager {
     );
     await this.persistSnapshot(agent);
     return { seq: row.seq, epoch: this.timelineStore.getEpoch(agentId) };
+  }
+
+  getShellState(agentId: string): {
+    shellTerminalId?: string;
+    pendingShellContext: AgentShellContextEntry[];
+  } {
+    const agent = this.requireAgent(agentId);
+    return {
+      shellTerminalId: agent.shellTerminalId,
+      pendingShellContext: [...(agent.pendingShellContext ?? [])],
+    };
+  }
+
+  async setShellTerminalId(agentId: string, terminalId: string): Promise<void> {
+    const agent = this.requireAgent(agentId);
+    agent.shellTerminalId = terminalId;
+    this.touchUpdatedAt(agent);
+    await this.persistSnapshot(agent);
+    this.emitState(agent, { persist: false });
+  }
+
+  getPendingShellContext(agentId: string): AgentShellContextEntry[] {
+    const agent = this.requireAgent(agentId);
+    return [...(agent.pendingShellContext ?? [])];
+  }
+
+  async updatePendingShellContext(
+    agentId: string,
+    next: readonly AgentShellContextEntry[] | undefined,
+  ): Promise<AgentShellContextEntry[]> {
+    const agent = this.requireAgent(agentId);
+    const cloned = next?.length ? next.map((entry) => ({ ...entry })) : undefined;
+    agent.pendingShellContext = cloned;
+    this.touchUpdatedAt(agent);
+    await this.persistSnapshot(agent);
+    this.emitState(agent, { persist: false });
+    return [...(agent.pendingShellContext ?? [])];
+  }
+
+  async upsertUserShellTimelineItem(
+    agentId: string,
+    item: Extract<AgentTimelineItem, { type: "tool_call" }>,
+    options?: { timestamp?: string },
+  ): Promise<{ seq: number; epoch: string; timestamp: string }> {
+    const agent = this.requireAgent(agentId);
+    const limitedItem = limitAgentTimelineItemContent(item) as Extract<
+      AgentTimelineItem,
+      { type: "tool_call" }
+    >;
+
+    if (limitedItem.status === "running") {
+      let active = this.activeUserShellCallIds.get(agentId);
+      if (!active) {
+        active = new Set();
+        this.activeUserShellCallIds.set(agentId, active);
+      }
+      active.add(limitedItem.callId);
+    } else {
+      const active = this.activeUserShellCallIds.get(agentId);
+      if (active) {
+        active.delete(limitedItem.callId);
+        if (active.size === 0) {
+          this.activeUserShellCallIds.delete(agentId);
+        }
+      }
+    }
+
+    const existing = [...(agent.shellTimelineItems ?? [])];
+    const existingIndex = existing.findIndex(
+      (entry) => entry.item.type === "tool_call" && entry.item.callId === limitedItem.callId,
+    );
+    const timestamp =
+      options?.timestamp ??
+      (existingIndex >= 0 ? existing[existingIndex].timestamp : new Date().toISOString());
+    const storedEntry: StoredShellTimelineItem = { timestamp, item: limitedItem };
+    if (existingIndex >= 0) {
+      existing[existingIndex] = storedEntry;
+    } else {
+      existing.push(storedEntry);
+    }
+    agent.shellTimelineItems = existing.slice(-200);
+
+    this.touchUpdatedAt(agent);
+    const row = this.recordTimeline(agentId, limitedItem, { timestamp });
+    const epoch = this.timelineStore.getEpoch(agentId);
+    this.dispatchStream(
+      agentId,
+      {
+        type: "timeline",
+        item: limitedItem,
+        provider: agent.provider,
+      },
+      {
+        seq: row.seq,
+        epoch,
+        timestamp: row.timestamp,
+      },
+    );
+    await this.persistSnapshot(agent);
+    return { seq: row.seq, epoch, timestamp: row.timestamp };
   }
 
   async emitLiveTimelineItem(agentId: string, item: AgentTimelineItem): Promise<void> {
@@ -4916,6 +5040,9 @@ export class AgentManager {
       owner?: AgentOwner;
       background?: boolean;
       launchEnv?: Record<string, string>;
+      shellTerminalId?: string;
+      pendingShellContext?: AgentShellContextEntry[];
+      shellTimelineItems?: StoredShellTimelineItem[];
     },
   ): Promise<ManagedAgent> {
     let registered = false;
@@ -5128,6 +5255,9 @@ export class AgentManager {
           workspaceId?: string;
           owner?: AgentOwner;
           launchEnv?: Record<string, string>;
+          shellTerminalId?: string;
+          pendingShellContext?: AgentShellContextEntry[];
+          shellTimelineItems?: StoredShellTimelineItem[];
         }
       | undefined;
   }): ActiveManagedAgent {
@@ -5181,8 +5311,36 @@ export class AgentManager {
       attention: resolveInitialAttention(options?.attention),
       internal: config.internal ?? false,
       background: params.background,
+      ...this.initialShellAgentState(resolvedAgentId, options),
       ...agentEntityData(options),
     } as ActiveManagedAgent;
+  }
+
+  private initialShellAgentState(
+    agentId: string,
+    options?: {
+      shellTerminalId?: string;
+      pendingShellContext?: AgentShellContextEntry[];
+      shellTimelineItems?: StoredShellTimelineItem[];
+    },
+  ): Pick<ManagedAgentBase, "shellTerminalId" | "pendingShellContext" | "shellTimelineItems"> {
+    if (!options) return {};
+    return {
+      ...(options.shellTerminalId ? { shellTerminalId: options.shellTerminalId } : {}),
+      ...(options.pendingShellContext
+        ? {
+            pendingShellContext: options.pendingShellContext.map((entry) => ({ ...entry })),
+          }
+        : {}),
+      ...(options.shellTimelineItems
+        ? {
+            shellTimelineItems: options.shellTimelineItems.map((entry) => ({
+              timestamp: entry.timestamp,
+              item: this.normalizeOrphanedUserShellTimelineItem(agentId, entry.item),
+            })),
+          }
+        : {}),
+    };
   }
 
   private async loadCommittedTimelineSeed(
@@ -5192,7 +5350,26 @@ export class AgentManager {
     if (!this.durableTimelineStore) {
       return { timestamp: now.toISOString() };
     }
-    const rows = await this.durableTimelineStore.getCommittedRows(agentId);
+    const rawRows = await this.durableTimelineStore.getCommittedRows(agentId);
+    const rows: AgentTimelineRow[] = [];
+    for (const row of rawRows) {
+      const normalized = this.normalizeOrphanedUserShellTimelineItem(agentId, row.item);
+      if (normalized === row.item) {
+        rows.push(row);
+        continue;
+      }
+      const nextRow: AgentTimelineRow = {
+        seq: row.seq,
+        timestamp: row.timestamp,
+        item: normalized,
+        ...(row.providerMessageId !== undefined
+          ? { providerMessageId: row.providerMessageId }
+          : {}),
+        ...(row.turnId !== undefined ? { turnId: row.turnId } : {}),
+        ...(row.telemetry !== undefined ? { telemetry: row.telemetry } : {}),
+      };
+      rows.push(nextRow);
+    }
     const latestSeq = rows.reduce(
       (max, row) => Math.max(max, row.seq),
       await this.durableTimelineStore.getLatestCommittedSeq(agentId),
@@ -5204,6 +5381,26 @@ export class AgentManager {
     };
   }
 
+  private normalizeOrphanedUserShellTimelineItem(
+    agentId: string,
+    item: AgentTimelineItem,
+  ): AgentTimelineItem {
+    if (
+      item.type === "tool_call" &&
+      item.detail.type === "shell" &&
+      item.detail.origin === "user" &&
+      item.status === "running" &&
+      !this.activeUserShellCallIds.get(agentId)?.has(item.callId)
+    ) {
+      return {
+        ...item,
+        status: "failed",
+        error: item.error ?? "Interrupted before completion",
+      };
+    }
+    return item;
+  }
+
   private prepareAgentForClosure(
     agent: LiveManagedAgent,
     cancelReason: string,
@@ -5211,6 +5408,7 @@ export class AgentManager {
     this.agentStreamCoalescer.flushAndDiscard(agent.id);
     this.agents.delete(agent.id);
     this.previousStatuses.delete(agent.id);
+    this.activeUserShellCallIds.delete(agent.id);
     if (agent.unsubscribeSession) {
       agent.unsubscribeSession();
       agent.unsubscribeSession = null;
@@ -5242,6 +5440,7 @@ export class AgentManager {
   private discardRetainedAgentState(agentId: string): void {
     this.timelineStore.delete(agentId);
     this.paseoToolPolicies.delete(agentId);
+    this.activeUserShellCallIds.delete(agentId);
     this.detachPluginTools(agentId);
     for (const event of this.providerSubagents.deleteParent(agentId)) {
       this.dispatch({ type: "provider_subagent", event });
@@ -5578,7 +5777,8 @@ export class AgentManager {
         this.dispatch({ type: "provider_subagent", event: update });
       }
     }
-    for (const entry of historyEntries) {
+    const mergedHistoryEntries = this.mergeHistoryEntriesWithShellTimeline(agent, historyEntries);
+    for (const entry of mergedHistoryEntries) {
       const replayed = this.replayProviderHistoryEntry(agent, entry);
       if (replayed && broadcastTimeline) {
         this.dispatchStream(agent.id, replayed.event, {
@@ -5615,6 +5815,76 @@ export class AgentManager {
       event.timestamp ? { timestamp: event.timestamp } : undefined,
     );
     return { event, row };
+  }
+
+  private mergeHistoryEntriesWithShellTimeline(
+    agent: ActiveManagedAgent,
+    historyEntries: readonly ProviderHistoryEntry[],
+  ): ProviderHistoryEntry[] {
+    const shellItems = agent.shellTimelineItems;
+    if (!shellItems?.length) {
+      return [...historyEntries];
+    }
+
+    interface SortableEntry {
+      entry: ProviderHistoryEntry;
+      sortMs: number;
+      kindOrder: number;
+      index: number;
+    }
+
+    const entries: SortableEntry[] = [];
+    let lastValidMs = Number.NEGATIVE_INFINITY;
+    for (let i = 0; i < historyEntries.length; i += 1) {
+      const entry = historyEntries[i];
+      if (entry.type === "row") {
+        const parsed = entry.event.timestamp ? Date.parse(entry.event.timestamp) : Number.NaN;
+        if (Number.isFinite(parsed)) {
+          lastValidMs = parsed;
+        }
+      }
+      entries.push({
+        entry,
+        sortMs: lastValidMs,
+        kindOrder: 0,
+        index: i,
+      });
+    }
+
+    for (let i = 0; i < shellItems.length; i += 1) {
+      const shellEntry = shellItems[i];
+      const parsed = Date.parse(shellEntry.timestamp);
+      const item = this.normalizeOrphanedUserShellTimelineItem(
+        agent.id,
+        limitAgentTimelineItemContent(shellEntry.item),
+      );
+      entries.push({
+        entry: {
+          type: "row",
+          event: {
+            type: "timeline",
+            provider: agent.provider,
+            item,
+            timestamp: shellEntry.timestamp,
+          },
+        },
+        sortMs: Number.isFinite(parsed) ? parsed : Number.POSITIVE_INFINITY,
+        kindOrder: 1,
+        index: i,
+      });
+    }
+
+    entries.sort((a, b) => {
+      if (a.sortMs !== b.sortMs) {
+        return a.sortMs - b.sortMs;
+      }
+      if (a.kindOrder !== b.kindOrder) {
+        return a.kindOrder - b.kindOrder;
+      }
+      return a.index - b.index;
+    });
+
+    return entries.map((sortable) => sortable.entry);
   }
 
   private async primeTimelineFromLegacyProviderHistory(
@@ -5664,7 +5934,8 @@ export class AgentManager {
         this.dispatch(managerEvent);
       }
     }
-    for (const entry of historyEntries) {
+    const mergedHistoryEntries = this.mergeHistoryEntriesWithShellTimeline(agent, historyEntries);
+    for (const entry of mergedHistoryEntries) {
       const replayed = this.replayProviderHistoryEntry(agent, entry);
       if (!replayed) continue;
       if (deferredBroadcast) {
@@ -7242,6 +7513,14 @@ function restoredWorkspaceActivity(
       record.workspaceActivityAt ?? record.lastUserMessageAt ?? record.createdAt,
     ),
     workspaceActivitySource: record.workspaceActivitySource,
+  };
+}
+function restoredShellState(record: StoredAgentRecord | null) {
+  if (!record) return {};
+  return {
+    ...(record.shellTerminalId ? { shellTerminalId: record.shellTerminalId } : {}),
+    ...(record.pendingShellContext ? { pendingShellContext: record.pendingShellContext } : {}),
+    ...(record.shellTimelineItems ? { shellTimelineItems: record.shellTimelineItems } : {}),
   };
 }
 function recordLiveWorkspaceActivity(agent: ManagedAgent, event: AgentStreamEvent): void {

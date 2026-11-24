@@ -210,9 +210,36 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
   const supportsAgentSecureInput = useSessionStore(
     (state) => state.sessions[serverId]?.serverInfo?.features?.terminalSecurePrompt === true,
   );
+  const supportsTerminalControl = useSessionStore(
+    (state) => state.sessions[serverId]?.serverInfo?.features?.terminalControl === true,
+  );
   const [pendingSecurePrompts, setPendingSecurePrompts] = useState<SecureTerminalPrompt[]>([]);
   const activeSecurePrompt = pendingSecurePrompts[0] ?? null;
+  const setPendingTerminalControlPrompts = useSessionStore(
+    (state) => state.setPendingTerminalControlPrompts,
+  );
+  const upsertTerminalControlPrompt = useSessionStore((state) => state.upsertTerminalControlPrompt);
   const toast = useToast();
+
+  useEffect(() => {
+    if (!isConnected || !supportsTerminalControl) {
+      setPendingTerminalControlPrompts(serverId, []);
+      return;
+    }
+    let active = true;
+    void client
+      .listTerminalControlPrompts()
+      .then(({ prompts }) => {
+        if (active) setPendingTerminalControlPrompts(serverId, prompts);
+        return undefined;
+      })
+      .catch(() => {
+        // The event stream still updates live requests; reconnect retries listing.
+      });
+    return () => {
+      active = false;
+    };
+  }, [client, isConnected, serverId, setPendingTerminalControlPrompts, supportsTerminalControl]);
 
   useEffect(() => {
     if (!isConnected || !supportsAgentSecureInput) {
@@ -724,6 +751,10 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
       if (change) {
         updateSecurePrompt(change);
       }
+      const controlChange = message.payload.controlPrompt;
+      if (controlChange) {
+        upsertTerminalControlPrompt(serverId, controlChange);
+      }
       if (!message.payload.shouldNotify) {
         return;
       }
@@ -737,6 +768,9 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
           terminalId: message.payload.terminalId,
           cwd: message.payload.cwd,
           ...(message.payload.workspaceId ? { workspaceId: message.payload.workspaceId } : {}),
+          ...(controlChange
+            ? { agentId: controlChange.agentId, controlRequestId: controlChange.id }
+            : {}),
         },
       });
     });
@@ -774,6 +808,7 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
     voiceRuntime,
     voiceAudioEngine,
     updateSecurePrompt,
+    upsertTerminalControlPrompt,
   ]);
 
   const _cancelAgentRun = useCallback(

@@ -58,9 +58,14 @@ import { useLoadOlderAgentHistory } from "@/hooks/use-load-older-agent-history";
 import { resolveContentMaxWidth, useSettings } from "@/hooks/use-settings";
 import type { ToastApi } from "@/components/toast-host";
 import { returnToTimelineTail } from "./timeline-tail-navigation";
-import { isRenderUiToolName } from "@getpaseo/protocol/tool-name-normalization";
+import {
+  isRenderUiToolName,
+  isTerminalControlToolName,
+} from "@getpaseo/protocol/tool-name-normalization";
 import { RenderUiCard } from "@/genui/render-ui-card";
 import { resolveRenderUiCardState } from "@/genui/render-ui-call";
+import { TerminalControlCard } from "@/components/terminal-control-card";
+import { UserShellCommandCard } from "@/components/user-shell-command-card";
 import type { DaemonClient } from "@getpaseo/client/internal/daemon-client";
 import { ToolCallDetailsContent } from "@/components/tool-call-details";
 import { QuestionFormCard } from "@/components/question-form-card";
@@ -836,6 +841,38 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
                 followUpServerId={readOnly ? null : resolvedServerId}
                 agentId={agentId}
                 itemId={item.id}
+              />
+            );
+          }
+
+          if (data.detail.type === "shell" && data.detail.origin === "user") {
+            return (
+              <UserShellCommandCard
+                serverId={resolvedServerId}
+                agentId={agentId}
+                callId={data.callId}
+                command={data.detail.command}
+                cwd={data.detail.cwd}
+                output={data.detail.output}
+                exitCode={data.detail.exitCode}
+                terminalId={data.detail.terminalId}
+                status={data.status}
+                error={data.error}
+                readOnly={readOnly}
+                disableOuterSpacing={!isLastInSequence}
+              />
+            );
+          }
+
+          if (isTerminalControlToolName(data.name)) {
+            return (
+              <TerminalControlCard
+                serverId={resolvedServerId}
+                agentId={agentId}
+                detail={data.detail}
+                status={data.status}
+                readOnly={readOnly}
+                disableOuterSpacing={!isLastInSequence}
               />
             );
           }

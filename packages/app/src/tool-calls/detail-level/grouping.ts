@@ -1,4 +1,7 @@
-import { isRenderUiToolName } from "@getpaseo/protocol/tool-name-normalization";
+import {
+  isRenderUiToolName,
+  isTerminalControlToolName,
+} from "@getpaseo/protocol/tool-name-normalization";
 import { isTurnTrigger, isTurnBoundary } from "@/agent-stream/turn-membership";
 import type { ToolCallDetail } from "@getpaseo/protocol/agent-types";
 import type { StreamItem, ToolCallItem, ThoughtItem } from "@/types/stream";
@@ -41,6 +44,23 @@ export interface ToolCallGroupLookup<TGroup> {
 
 const EMPTY_GROUPS = new Map<string, never>();
 
+export function isUserShellToolCallItem(item: StreamItem): item is ToolCallItem {
+  return (
+    item.kind === "tool_call" &&
+    item.payload.source === "agent" &&
+    item.payload.data.detail.type === "shell" &&
+    item.payload.data.detail.origin === "user"
+  );
+}
+
+export function isTerminalControlToolCallItem(item: StreamItem): item is ToolCallItem {
+  return (
+    item.kind === "tool_call" &&
+    item.payload.source === "agent" &&
+    isTerminalControlToolName(item.payload.data.name)
+  );
+}
+
 export function describeToolCall(item: ToolCallItem): ToolCallDescriptor {
   if (item.payload.source === "agent") {
     const { data } = item.payload;
@@ -75,11 +95,13 @@ export function isGroupableToolCall(
     return false;
   }
   const descriptor = describeToolCall(item);
-  // speak and render_ui are content, not tool activity; they stay in the reading flow.
+  // speak, render_ui, user shell commands, and terminal control cards stay first-class in the chat flow.
   return (
     descriptor.detail.type !== "plan" &&
+    !(descriptor.detail.type === "shell" && descriptor.detail.origin === "user") &&
     descriptor.name.trim().toLowerCase() !== "speak" &&
-    !isRenderUiToolName(descriptor.name)
+    !isRenderUiToolName(descriptor.name) &&
+    !isTerminalControlToolName(descriptor.name)
   );
 }
 

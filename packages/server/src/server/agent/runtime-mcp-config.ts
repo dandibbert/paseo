@@ -1,9 +1,12 @@
 import type { AgentSessionConfig, McpServerConfig } from "./agent-sdk-types.js";
 
 export const PASEO_MCP_SERVER_NAME = "paseo";
-// Paseo tools that never ask for permission. They only display content and have no side
-// effects, so a prompt per call adds friction without protecting anything.
-export const AUTO_APPROVED_PASEO_TOOLS: readonly string[] = ["render_ui"];
+// Paseo tools that never ask for permission. `render_ui` only displays content;
+// `request_terminal_control` already prompts the user via the control handoff card.
+export const AUTO_APPROVED_PASEO_TOOLS: readonly string[] = [
+  "render_ui",
+  "request_terminal_control",
+];
 const PASEO_MCP_PATHNAME = "/mcp/agents";
 
 export function stripInternalPaseoMcpServer(config: AgentSessionConfig): AgentSessionConfig {

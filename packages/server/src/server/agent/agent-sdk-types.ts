@@ -267,6 +267,8 @@ export type ToolCallDetail =
       cwd?: string;
       output?: string;
       exitCode?: number | null;
+      origin?: "user";
+      terminalId?: string;
     }
   | {
       type: "read";

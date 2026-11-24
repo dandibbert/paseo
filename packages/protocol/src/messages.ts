@@ -668,6 +668,9 @@ const ToolCallDetailPayloadSchema: z.ZodType<ToolCallDetail, unknown> = z.discri
       cwd: z.string().optional(),
       output: z.string().optional(),
       exitCode: z.number().nullable().optional(),
+      // COMPAT(agentShellCommands): fork, added in v0.17.4.
+      origin: z.literal("user").optional(),
+      terminalId: z.string().optional(),
     }),
     z.object({
       type: z.literal("read"),
@@ -1001,7 +1004,37 @@ export const AgentSnapshotPayloadSchema = z.object({
   continuationState: z.enum(["none", "waiting", "processing", "needs_attention"]).optional(),
   continuationBlockedError: z.string().nullable().optional(),
   continuationRevision: z.number().int().nonnegative().optional(),
+  // COMPAT(agentShellCommands): fork, added in v0.17.4.
+  shellTerminalId: z.string().optional(),
+  pendingShellContext: z
+    .array(
+      z.object({
+        id: z.string(),
+        command: z.string(),
+        cwd: z.string(),
+        exitCode: z.number().int().nullable(),
+        output: z.string(),
+        outputBytes: z.number().int().nonnegative(),
+        truncated: z.boolean().optional(),
+        completedAt: z.string(),
+        terminalId: z.string(),
+      }),
+    )
+    .optional(),
 });
+
+export const AgentShellContextEntrySchema = z.object({
+  id: z.string(),
+  command: z.string(),
+  cwd: z.string(),
+  exitCode: z.number().int().nullable(),
+  output: z.string(),
+  outputBytes: z.number().int().nonnegative(),
+  truncated: z.boolean().optional(),
+  completedAt: z.string(),
+  terminalId: z.string(),
+});
+export type AgentShellContextEntry = z.infer<typeof AgentShellContextEntrySchema>;
 
 export type AgentSnapshotPayload = z.infer<typeof AgentSnapshotPayloadSchema>;
 
@@ -3649,6 +3682,57 @@ export const TerminalSecurePromptRespondRequestSchema = z.object({
   submitNewline: z.boolean().optional(),
 });
 
+// COMPAT(agentShellCommands): fork, added in v0.17.4.
+export const AgentShellRunRequestSchema = z.object({
+  type: z.literal("agent.shell.run.request"),
+  requestId: z.string(),
+  agentId: z.string(),
+  command: z.string(),
+  clientMessageId: z.string().optional(),
+});
+
+export const AgentShellFinishRequestSchema = z.object({
+  type: z.literal("agent.shell.finish.request"),
+  requestId: z.string(),
+  agentId: z.string(),
+  callId: z.string(),
+});
+
+export const AgentShellContextUpdateRequestSchema = z.object({
+  type: z.literal("agent.shell.context.update.request"),
+  requestId: z.string(),
+  agentId: z.string(),
+  remove: z.array(z.string()).optional(),
+  clear: z.boolean().optional(),
+});
+
+// COMPAT(terminalControl): fork, added in v0.17.4.
+export const TerminalControlPromptSchema = z.object({
+  id: z.string(),
+  agentId: z.string(),
+  terminalId: z.string(),
+  terminalName: z.string(),
+  cwd: z.string(),
+  workspaceId: z.string(),
+  reason: z.string(),
+  expiresAt: z.number(),
+});
+export type TerminalControlPrompt = z.infer<typeof TerminalControlPromptSchema>;
+
+export const TerminalControlListRequestSchema = z.object({
+  type: z.literal("terminal.control.list.request"),
+  requestId: z.string(),
+});
+
+export const TerminalControlRespondRequestSchema = z.object({
+  type: z.literal("terminal.control.respond.request"),
+  requestId: z.string(),
+  controlId: z.string(),
+  action: z.enum(["return", "decline"]),
+  shareScreen: z.boolean().optional(),
+  note: z.string().max(2000).optional(),
+});
+
 export const KillTerminalRequestSchema = z.object({
   type: z.literal("kill_terminal_request"),
   terminalId: z.string(),
@@ -4022,6 +4106,11 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   TerminalSecurePromptListRequestSchema,
   AgentHistorySearchTextRequestSchema,
   TerminalSecurePromptRespondRequestSchema,
+  AgentShellRunRequestSchema,
+  AgentShellFinishRequestSchema,
+  AgentShellContextUpdateRequestSchema,
+  TerminalControlListRequestSchema,
+  TerminalControlRespondRequestSchema,
   KillTerminalRequestSchema,
   CaptureTerminalRequestSchema,
   ChatCreateRequestSchema,
@@ -4264,6 +4353,10 @@ export const ServerInfoStatusPayloadSchema = z
         terminalSecureInput: z.boolean().optional(),
         // COMPAT(secureAgentInput): added in personal v0.11.2, remove after 2027-04-13.
         terminalSecurePrompt: z.boolean().optional(),
+        // COMPAT(agentShellCommands): fork, added in v0.17.4.
+        agentShellCommands: z.boolean().optional(),
+        // COMPAT(terminalControl): fork, added in v0.17.4.
+        terminalControl: z.boolean().optional(),
         // COMPAT(managedContinuations): added in v0.4.1, remove gate after 2027-11-19.
         managedContinuations: z.boolean().optional(),
         // COMPAT(managedTasks): added in v0.4.1, remove gate after 2027-11-19.
@@ -7621,6 +7714,58 @@ export const TerminalSecurePromptRespondResponseSchema = z.object({
   }),
 });
 
+// COMPAT(agentShellCommands): fork, added in v0.17.4.
+export const AgentShellRunResponseSchema = z.object({
+  type: z.literal("agent.shell.run.response"),
+  payload: z.object({
+    requestId: z.string(),
+    agentId: z.string(),
+    terminalId: z.string().nullable(),
+    callId: z.string().nullable(),
+    accepted: z.boolean(),
+    error: z.string().nullable(),
+  }),
+});
+
+export const AgentShellFinishResponseSchema = z.object({
+  type: z.literal("agent.shell.finish.response"),
+  payload: z.object({
+    requestId: z.string(),
+    agentId: z.string(),
+    callId: z.string(),
+    success: z.boolean(),
+    error: z.string().nullable(),
+  }),
+});
+
+export const AgentShellContextUpdateResponseSchema = z.object({
+  type: z.literal("agent.shell.context.update.response"),
+  payload: z.object({
+    requestId: z.string(),
+    agentId: z.string(),
+    pendingShellContext: z.array(AgentShellContextEntrySchema),
+    error: z.string().nullable(),
+  }),
+});
+
+// COMPAT(terminalControl): fork, added in v0.17.4.
+export const TerminalControlListResponseSchema = z.object({
+  type: z.literal("terminal.control.list.response"),
+  payload: z.object({
+    requestId: z.string(),
+    prompts: z.array(TerminalControlPromptSchema),
+  }),
+});
+
+export const TerminalControlRespondResponseSchema = z.object({
+  type: z.literal("terminal.control.respond.response"),
+  payload: z.object({
+    requestId: z.string(),
+    success: z.boolean(),
+    error: z.string().nullable(),
+  }),
+});
+
 export const CaptureTerminalResponseSchema = z.object({
   type: z.literal("capture_terminal_response"),
   payload: z.object({
@@ -7656,6 +7801,15 @@ export const TerminalAttentionRequiredSchema = z.object({
     // COMPAT(secureAgentInput): optional so old clients ignore new prompt metadata.
     securePrompt: SecureTerminalPromptSchema.extend({
       state: z.enum(["pending", "resolved"]),
+    }).optional(),
+    // COMPAT(terminalControl): fork, added in v0.17.4; optional so old clients treat it as regular terminal attention.
+    kind: z.enum(["attention", "secure_prompt", "control"]).optional(),
+    controlPrompt: TerminalControlPromptSchema.extend({
+      state: z.enum(["pending", "resolved"]),
+      resolution: z
+        .enum(["returned", "declined", "expired", "canceled", "terminal_exited"])
+        .optional(),
+      note: z.string().optional(),
     }).optional(),
   }),
 });
@@ -8350,6 +8504,11 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   TerminalSecurePromptListResponseSchema,
   AgentHistorySearchTextResponseSchema,
   TerminalSecurePromptRespondResponseSchema,
+  AgentShellRunResponseSchema,
+  AgentShellFinishResponseSchema,
+  AgentShellContextUpdateResponseSchema,
+  TerminalControlListResponseSchema,
+  TerminalControlRespondResponseSchema,
   KillTerminalResponseSchema,
   CaptureTerminalResponseSchema,
   TerminalStreamExitSchema,

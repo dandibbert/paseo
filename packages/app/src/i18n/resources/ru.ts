@@ -3547,4 +3547,6 @@ export const ru: TranslationResources = {
       },
     },
   },
+  agentShell: en.agentShell,
+  terminalControl: en.terminalControl,
 };

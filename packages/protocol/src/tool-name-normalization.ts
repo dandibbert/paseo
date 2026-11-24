@@ -93,6 +93,15 @@ export function isRenderUiToolName(name: string): boolean {
   );
 }
 
+export function isTerminalControlToolName(name: string): boolean {
+  const normalized = normalizeToolName(name);
+  return (
+    normalized === "request_terminal_control" ||
+    normalized === "paseo_request_terminal_control" ||
+    getPaseoToolLeafName(normalized) === "request_terminal_control"
+  );
+}
+
 export function isLikelyExternalToolName(name: string): boolean {
   const normalized = normalizeToolName(name);
   if (!normalized) {

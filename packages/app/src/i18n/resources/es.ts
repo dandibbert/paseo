@@ -3553,4 +3553,6 @@ export const es: TranslationResources = {
       },
     },
   },
+  agentShell: en.agentShell,
+  terminalControl: en.terminalControl,
 };

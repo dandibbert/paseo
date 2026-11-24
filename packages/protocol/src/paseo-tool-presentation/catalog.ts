@@ -307,6 +307,12 @@ export const PASEO_TOOL_CATALOG = {
     context: field("terminalId"),
     detail: { inputOrder: ["terminalId"] },
   },
+  request_terminal_control: {
+    label: "Request terminal control",
+    completedLabel: "Terminal control",
+    context: field("reason", "terminalId"),
+    detail: { inputOrder: ["terminalId", "reason", "requestId"], outputFields: ["status", "note"] },
+  },
 
   subscribe_change_request: {
     label: "Watch change request",

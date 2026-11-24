@@ -7636,6 +7636,113 @@ export class DaemonClient {
     });
   }
 
+  async runAgentShellCommand(input: {
+    agentId: string;
+    command: string;
+    clientMessageId?: string;
+  }): Promise<CorrelatedResponsePayload<"agent.shell.run.response">> {
+    // COMPAT(agentShellCommands): fork, added in v0.17.4.
+    if (this.getLastServerInfoMessage()?.features?.agentShellCommands !== true) {
+      throw new Error("Update the host to run shell commands from chat.");
+    }
+    const requestId = this.createRequestId();
+    return this.sendCorrelatedRequest({
+      requestId,
+      message: SessionInboundMessageSchema.parse({
+        type: "agent.shell.run.request",
+        requestId,
+        ...input,
+      }),
+      responseType: "agent.shell.run.response",
+      options: { skipQueue: true },
+    });
+  }
+
+  async finishAgentShellCommand(input: {
+    agentId: string;
+    callId: string;
+  }): Promise<CorrelatedResponsePayload<"agent.shell.finish.response">> {
+    // COMPAT(agentShellCommands): fork, added in v0.17.4.
+    if (this.getLastServerInfoMessage()?.features?.agentShellCommands !== true) {
+      throw new Error("Update the host to run shell commands from chat.");
+    }
+    const requestId = this.createRequestId();
+    return this.sendCorrelatedRequest({
+      requestId,
+      message: SessionInboundMessageSchema.parse({
+        type: "agent.shell.finish.request",
+        requestId,
+        ...input,
+      }),
+      responseType: "agent.shell.finish.response",
+      options: { skipQueue: true },
+    });
+  }
+
+  async updateAgentShellContext(input: {
+    agentId: string;
+    remove?: string[];
+    clear?: boolean;
+  }): Promise<CorrelatedResponsePayload<"agent.shell.context.update.response">> {
+    // COMPAT(agentShellCommands): fork, added in v0.17.4.
+    if (this.getLastServerInfoMessage()?.features?.agentShellCommands !== true) {
+      throw new Error("Update the host to manage attached shell context.");
+    }
+    const requestId = this.createRequestId();
+    return this.sendCorrelatedRequest({
+      requestId,
+      message: SessionInboundMessageSchema.parse({
+        type: "agent.shell.context.update.request",
+        requestId,
+        ...input,
+      }),
+      responseType: "agent.shell.context.update.response",
+      options: { skipQueue: true },
+    });
+  }
+
+  async listTerminalControlPrompts(): Promise<
+    CorrelatedResponsePayload<"terminal.control.list.response">
+  > {
+    // COMPAT(terminalControl): fork, added in v0.17.4.
+    if (this.getLastServerInfoMessage()?.features?.terminalControl !== true) {
+      throw new Error("Update the host to use terminal control handoffs.");
+    }
+    const requestId = this.createRequestId();
+    return this.sendCorrelatedRequest({
+      requestId,
+      message: SessionInboundMessageSchema.parse({
+        type: "terminal.control.list.request",
+        requestId,
+      }),
+      responseType: "terminal.control.list.response",
+      options: { skipQueue: true },
+    });
+  }
+
+  async respondToTerminalControlPrompt(input: {
+    controlId: string;
+    action: "return" | "decline";
+    shareScreen?: boolean;
+    note?: string;
+  }): Promise<CorrelatedResponsePayload<"terminal.control.respond.response">> {
+    // COMPAT(terminalControl): fork, added in v0.17.4.
+    if (this.getLastServerInfoMessage()?.features?.terminalControl !== true) {
+      throw new Error("Update the host to use terminal control handoffs.");
+    }
+    const requestId = this.createRequestId();
+    return this.sendCorrelatedRequest({
+      requestId,
+      message: SessionInboundMessageSchema.parse({
+        type: "terminal.control.respond.request",
+        requestId,
+        ...input,
+      }),
+      responseType: "terminal.control.respond.response",
+      options: { skipQueue: true },
+    });
+  }
+
   async killTerminal(terminalId: string, requestId?: string): Promise<KillTerminalPayload> {
     const resolvedRequestId = this.createRequestId(requestId);
     const message = SessionInboundMessageSchema.parse({

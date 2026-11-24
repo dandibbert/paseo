@@ -3532,4 +3532,6 @@ export const ptBR: TranslationResources = {
       },
     },
   },
+  agentShell: en.agentShell,
+  terminalControl: en.terminalControl,
 };

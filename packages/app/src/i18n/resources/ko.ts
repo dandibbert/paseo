@@ -3502,4 +3502,6 @@ export const ko: TranslationResources = {
       },
     },
   },
+  agentShell: en.agentShell,
+  terminalControl: en.terminalControl,
 };

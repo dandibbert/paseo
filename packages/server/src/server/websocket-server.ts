@@ -35,6 +35,8 @@ import type { AgentStorage } from "./agent/agent-storage.js";
 import type { DownloadTokenStore } from "./file-download/token-store.js";
 import type { TerminalManager } from "../terminal/terminal-manager.js";
 import type { SecureTerminalPromptBroker } from "./secure-input/secure-terminal-prompt-broker.js";
+import type { TerminalControlBroker } from "./terminal-control/terminal-control-broker.js";
+import type { AgentShellService } from "./agent/agent-shell-service.js";
 import { getActiveHistoryTextIndex } from "./history-search/index.js";
 import type pino from "pino";
 import type { ProjectRegistry, WorkspaceRegistry } from "./workspace-registry.js";
@@ -656,6 +658,8 @@ export class VoiceAssistantWebSocketServer {
   private readonly pluginRuntime: SessionOptions["pluginRuntime"];
   private readonly orchestrationSkills: SessionOptions["orchestrationSkills"];
   private readonly secureTerminalPromptBroker: SecureTerminalPromptBroker | undefined;
+  private readonly terminalControlBroker: TerminalControlBroker | undefined;
+  private readonly agentShellService: AgentShellService | null | undefined;
 
   private async validateCompletedCreation(snapshot: CreationSnapshot): Promise<void> {
     if (snapshot.workspace && snapshot.kind === "workspace") {
@@ -725,6 +729,8 @@ export class VoiceAssistantWebSocketServer {
     workspaceLabelService?: WorkspaceLabelService,
     secureTerminalPromptBroker?: SecureTerminalPromptBroker,
     workspaceArchiveOperations?: WorkspaceArchiveOperations,
+    terminalControlBroker?: TerminalControlBroker,
+    agentShellService?: AgentShellService | null,
   ) {
     this.logger = logger.child({ module: "websocket-server" });
     this.workspaceSetupRuntime = workspaceSetupRuntime;
@@ -744,6 +750,8 @@ export class VoiceAssistantWebSocketServer {
     this.pluginRuntime = pluginRuntime;
     this.orchestrationSkills = orchestrationSkills;
     this.secureTerminalPromptBroker = secureTerminalPromptBroker;
+    this.terminalControlBroker = terminalControlBroker;
+    this.agentShellService = agentShellService;
     this.agentManager = agentManager;
     this.agentStorage = agentStorage;
     this.agentMessages = createAgentMessageDelivery({
@@ -1773,6 +1781,8 @@ export class VoiceAssistantWebSocketServer {
       speechModels: this.speech,
       terminalManager: this.terminalManager,
       secureTerminalPromptBroker: this.secureTerminalPromptBroker,
+      terminalControlBroker: this.terminalControlBroker,
+      agentShellService: this.agentShellService,
       providerSnapshotManager: this.providerSnapshotManager,
       hubExecutionAgents: options.hubExecutionAgents,
       hubRelationships: options.hubRelationships,
@@ -2196,6 +2206,10 @@ export class VoiceAssistantWebSocketServer {
         workspaceTerminals: true,
         // COMPAT(secureAgentInput): added in personal v0.11.2, remove after 2027-04-13.
         terminalSecurePrompt: this.secureTerminalPromptBroker !== undefined,
+        // COMPAT(agentShellCommands): fork, added in v0.17.4.
+        agentShellCommands: Boolean(this.agentShellService),
+        // COMPAT(terminalControl): fork, added in v0.17.4.
+        terminalControl: this.terminalControlBroker !== undefined,
         // COMPAT(managedContinuations): added in v0.4.1, remove gate after 2027-11-19.
         managedContinuations: true,
         // COMPAT(managedTasks): added in v0.4.1, remove gate after 2027-11-19.
@@ -3135,6 +3149,32 @@ export class VoiceAssistantWebSocketServer {
         this.logger.warn(
           { err, terminalId: payload.terminalId },
           "Failed to send secure input push notification",
+        );
+      });
+  }
+
+  public publishTerminalControlPrompt(message: TerminalAttentionRequired): void {
+    const payload = { ...message.payload, serverId: this.serverId };
+    this.broadcast(wrapSessionMessage({ ...message, payload }));
+    if (payload.controlPrompt?.state !== "pending") return;
+    void this.pushNotificationSender
+      .send({
+        title: payload.title,
+        body: payload.body,
+        urgent: true,
+        data: {
+          serverId: this.serverId,
+          terminalId: payload.terminalId,
+          cwd: payload.cwd,
+          ...(payload.workspaceId ? { workspaceId: payload.workspaceId } : {}),
+          agentId: payload.controlPrompt.agentId,
+          controlRequestId: payload.controlPrompt.id,
+        },
+      })
+      .catch((err) => {
+        this.logger.warn(
+          { err, terminalId: payload.terminalId },
+          "Failed to send terminal control push notification",
         );
       });
   }

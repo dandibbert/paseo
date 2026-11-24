@@ -77,6 +77,36 @@ export function resolveEffectiveThinkingOptionId(options: {
   return normalizeThinkingOptionId(options.configuredThinkingOptionId);
 }
 
+function projectShellWireFields(source: {
+  shellTerminalId?: string;
+  pendingShellContext?: AgentSnapshotPayload["pendingShellContext"];
+}): Pick<AgentSnapshotPayload, "shellTerminalId" | "pendingShellContext"> {
+  const fields: Pick<AgentSnapshotPayload, "shellTerminalId" | "pendingShellContext"> = {};
+  if (source.shellTerminalId) {
+    fields.shellTerminalId = source.shellTerminalId;
+  }
+  if (source.pendingShellContext?.length) {
+    fields.pendingShellContext = source.pendingShellContext;
+  }
+  return fields;
+}
+
+function projectShellRecordFields(agent: ManagedAgent): {
+  shellTerminalId?: string;
+  pendingShellContext?: StoredAgentRecord["pendingShellContext"];
+  shellTimelineItems?: StoredAgentRecord["shellTimelineItems"];
+} {
+  const fields: {
+    shellTerminalId?: string;
+    pendingShellContext?: StoredAgentRecord["pendingShellContext"];
+    shellTimelineItems?: StoredAgentRecord["shellTimelineItems"];
+  } = projectShellWireFields(agent);
+  if (agent.shellTimelineItems?.length) {
+    fields.shellTimelineItems = agent.shellTimelineItems;
+  }
+  return fields;
+}
+
 export function toStoredAgentRecord(
   agent: ManagedAgent,
   options?: ProjectionOptions,
@@ -117,6 +147,7 @@ export function toStoredAgentRecord(
     internal: options?.internal,
     ...(agent.background ? { background: true } : {}),
     owner: agent.owner,
+    ...projectShellRecordFields(agent),
   } satisfies StoredAgentRecord;
 }
 
@@ -173,6 +204,7 @@ export function toAgentPayload(
     archivedAt: options?.archivedAt ?? null,
     ...visibilityFlags(agent),
     ...projectSessionMetrics(agent.sessionMetrics),
+    ...projectShellWireFields(agent),
   };
 
   const usageScopeKey = projectUsageScopeKey(agent);
@@ -337,6 +369,7 @@ export function buildStoredAgentPayload(
     ...(typeof record.lastError === "string" ? { lastError: record.lastError } : {}),
     ...projectSessionMetrics(record.sessionMetrics),
     ...(providerAvailable ? {} : { providerUnavailable: true }),
+    ...projectShellWireFields(record),
   };
 }
 

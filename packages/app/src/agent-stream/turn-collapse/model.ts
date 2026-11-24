@@ -7,6 +7,10 @@ import {
   type ToolCallItem,
   type TurnSummaryItem,
 } from "@/types/stream";
+import {
+  isTerminalControlToolCallItem,
+  isUserShellToolCallItem,
+} from "@/tool-calls/detail-level/grouping";
 import { summarizeToolCalls, type OverviewSummary } from "@/tool-calls/detail-level/overview/model";
 
 export interface TurnCollapse {
@@ -45,8 +49,14 @@ function summarizeTurn(
 ): OverviewSummary {
   const calls: (ToolCallItem | ThoughtItem)[] = [];
   for (const item of items) {
-    if ((item.kind === "tool_call" || item.kind === "thought") && !isTurnTrigger(item))
+    if (
+      (item.kind === "tool_call" || item.kind === "thought") &&
+      !isTurnTrigger(item) &&
+      !isUserShellToolCallItem(item) &&
+      !isTerminalControlToolCallItem(item)
+    ) {
       calls.push(...(getGroupedCalls(item.id) ?? [item]));
+    }
   }
   return summarizeToolCalls(calls);
 }
@@ -100,7 +110,12 @@ function summaryRow(
 }
 
 function staysVisibleWhenCollapsed(item: StreamItem): boolean {
-  return isTurnTrigger(item) || item.kind === "compaction";
+  return (
+    isTurnTrigger(item) ||
+    item.kind === "compaction" ||
+    isUserShellToolCallItem(item) ||
+    isTerminalControlToolCallItem(item)
+  );
 }
 
 function isAssistantReply(item: StreamItem): boolean {
