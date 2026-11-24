@@ -293,6 +293,66 @@ test("E2E: ! shell command mode lifecycle, isolation, context attachment, and re
   }
 }, 60_000);
 
+test("E2E: archiving or deleting an agent closes its dedicated ! shell", async () => {
+  const workRoot = await mkdtemp(path.join(os.tmpdir(), "paseo-shell-close-e2e-"));
+  const paseoHomeRoot = path.join(workRoot, "paseo-home-root");
+  const repoCwd = path.join(workRoot, "repo");
+  await mkdir(paseoHomeRoot, { recursive: true });
+  await mkdir(repoCwd, { recursive: true });
+  const daemon = await createTestPaseoDaemon({
+    paseoHomeRoot,
+    mcpEnabled: true,
+    cleanup: false,
+    agentClients: createTestAgentClients(),
+  });
+  const client = new DaemonClient({
+    url: `ws://127.0.0.1:${daemon.port}/ws`,
+    appVersion: "0.17.4",
+  });
+  try {
+    await client.connect();
+    await client.fetchAgents({ subscribe: {} });
+    const terminalIds = async () =>
+      (await client.listTerminals(repoCwd)).terminals.map((terminal) => terminal.id);
+
+    // Archived while a command still runs: the shell and the command go.
+    const archived = await client.createAgent({ provider: "claude", cwd: repoCwd, title: "A" });
+    const running = await client.runAgentShellCommand({
+      agentId: archived.id,
+      command: "sleep 30",
+    });
+    expect(running.accepted).toBe(true);
+    const archivedShell = String(running.terminalId);
+    expect(await terminalIds()).toContain(archivedShell);
+    await client.archiveAgent(archived.id);
+    await expect.poll(terminalIds, { timeout: 10_000 }).not.toContain(archivedShell);
+    // The running command's card ended with the shell instead of staying "running".
+    const archivedTimeline = await client.fetchAgentTimeline(archived.id, {
+      projection: "canonical",
+    });
+    const card = archivedTimeline.entries.find(
+      (entry) => entry.item.type === "tool_call" && entry.item.callId === running.callId,
+    );
+    expect(card?.item).toMatchObject({ type: "tool_call", status: "failed" });
+
+    // Deleted after a finished command.
+    const deleted = await client.createAgent({ provider: "claude", cwd: repoCwd, title: "B" });
+    const finished = await client.runAgentShellCommand({
+      agentId: deleted.id,
+      command: "printf 'DONE\\n'; printf '\\033]633;D;0\\007'",
+    });
+    expect(finished.accepted).toBe(true);
+    const deletedShell = String(finished.terminalId);
+    await expect.poll(terminalIds, { timeout: 10_000 }).toContain(deletedShell);
+    await client.deleteAgent(deleted.id);
+    await expect.poll(terminalIds, { timeout: 10_000 }).not.toContain(deletedShell);
+  } finally {
+    await client.close().catch(() => undefined);
+    await daemon.close().catch(() => undefined);
+    await rm(workRoot, { recursive: true, force: true });
+  }
+}, 60_000);
+
 test("E2E: agent request_terminal_control -> attention event + key lock + user PTY input -> hand back & decline", async () => {
   const workRoot = await mkdtemp(path.join(os.tmpdir(), "paseo-ctrl-e2e-"));
   const daemon = await createTestPaseoDaemon({ mcpEnabled: true });

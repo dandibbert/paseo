@@ -3963,6 +3963,8 @@ export class Session {
 
     // File-backed storage still needs an early delete fence before closeAgent().
     beginAgentDeleteIfSupported(this.agentStorage, agentId);
+    // A deleted agent's dedicated ! shell goes with it.
+    await this.agentShellService?.closeDedicatedTerminal(knownAgent?.shellTerminalId);
 
     try {
       await closeAgentCommand({ agentManager: this.agentManager }, agentId);

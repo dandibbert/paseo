@@ -435,6 +435,30 @@ export class AgentShellService {
     return false;
   }
 
+  /**
+   * Closes an archived or deleted agent's dedicated shell. A command still running in it is
+   * killed with the terminal; its card ends through the terminal's exit like any other exit.
+   * Unarchiving does not bring the shell back: the next ! command opens a new one.
+   */
+  async closeDedicatedTerminal(terminalId: string | undefined): Promise<void> {
+    if (!terminalId || !this.isDedicatedShellTerminal(terminalId)) return;
+    // End the running command's card first, while the agent is still loaded to record it.
+    const active = this.activeByTerminalId.get(terminalId);
+    if (active && !active.finished) {
+      await this.finalizeActiveCommand(active, {
+        exitCode: null,
+        stripTrailingPrompt: false,
+        exited: true,
+      }).catch((error: unknown) =>
+        this.logger.warn({ err: error, terminalId }, "Could not end the shell command's card"),
+      );
+    }
+    if (this.terminalManager.getTerminal(terminalId)) {
+      this.terminalManager.killTerminal(terminalId);
+    }
+    this.dedicatedTerminalIds.delete(terminalId);
+  }
+
   isTerminalBusy(terminalId: string): boolean {
     return this.activeByTerminalId.has(terminalId);
   }
@@ -487,14 +511,14 @@ export class AgentShellService {
     this.activeByTerminalId.set(terminal.id, active);
 
     active.unsubscribeCommandFinished = terminal.onCommandFinished((info) => {
-      void this.finalizeActiveCommand(active, {
+      this.finalizeInBackground(active, {
         exitCode: info.exitCode,
         stripTrailingPrompt: false,
       });
     });
 
     active.unsubscribeExit = terminal.onExit((info) => {
-      void this.finalizeActiveCommand(active, {
+      this.finalizeInBackground(active, {
         exitCode: info.exitCode,
         stripTrailingPrompt: false,
         exited: true,
@@ -724,6 +748,25 @@ export class AgentShellService {
             error: null,
           };
 
+      if (!this.agentManager.getAgent(active.agentId)) {
+        // The agent was archived or deleted while the command ran; nothing is left to record on.
+        return {
+          callId: active.callId,
+          terminalId: active.terminalId,
+          status: updatedItem.status,
+          exitCode: options.exitCode,
+          entry: {
+            id: active.callId,
+            command: active.command,
+            cwd: active.cwd,
+            exitCode: options.exitCode,
+            output: contextOutput.output,
+            outputBytes: contextOutput.outputBytes,
+            completedAt,
+            terminalId: active.terminalId,
+          },
+        };
+      }
       await this.agentManager.upsertUserShellTimelineItem(active.agentId, updatedItem, {
         timestamp: active.startedAt,
       });
@@ -756,6 +799,19 @@ export class AgentShellService {
     })();
 
     return active.finalizePromise;
+  }
+
+  /** Terminal callbacks cannot await; a failed finish is logged, never left unhandled. */
+  private finalizeInBackground(
+    active: ActiveShellCommand,
+    options: Parameters<AgentShellService["finalizeActiveCommand"]>[1],
+  ): void {
+    this.finalizeActiveCommand(active, options).catch((error: unknown) =>
+      this.logger.warn(
+        { err: error, agentId: active.agentId, callId: active.callId },
+        "Could not record the end of a shell command",
+      ),
+    );
   }
 
   private async runAgentContextMutation<T>(agentId: string, fn: () => Promise<T>): Promise<T> {

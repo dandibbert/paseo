@@ -1576,6 +1576,11 @@ export async function createPaseoDaemon(
   });
 
   agentManager.setAgentArchivedCallback(async (agentId) => {
+    // An archived agent's dedicated ! shell goes with it.
+    const shellTerminalId =
+      agentManager.getAgent(agentId)?.shellTerminalId ??
+      (await agentStorage.get(agentId).catch(() => null))?.shellTerminalId;
+    await agentShellService?.closeDedicatedTerminal(shellTerminalId);
     await changeRequestWatches
       .archive(agentId)
       .catch((err) =>
