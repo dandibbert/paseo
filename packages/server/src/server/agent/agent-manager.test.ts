@@ -13790,8 +13790,15 @@ test("a completed turn's metrics go out with the turn and stay on its footer row
   await manager.runAgent(agent.id, { text: "go" });
   await manager.flush();
 
+  // The fork's turn telemetry rides along; the metrics are what this test checks.
   expect(completedTurns(events)).toEqual([
-    { type: "turn_completed", provider: "codex", turnId: "turn-fake-codex", metrics },
+    {
+      type: "turn_completed",
+      provider: "codex",
+      turnId: "turn-fake-codex",
+      metrics,
+      telemetry: expect.any(Object),
+    },
   ]);
   const stamped = { item: { type: "assistant_message", text: "Done" }, turnMetrics: metrics };
   expect(manager.fetchTimeline(agent.id).rows.filter((row) => row.turnMetrics)).toEqual([

@@ -6140,10 +6140,16 @@ export class AgentManager {
       });
       if (telemetry) {
         nextEvent = { ...event, telemetry };
-        this.timelineStore.enrichTurnTelemetry(agent.id, eventTurnId, telemetry, targetRow?.seq);
-        if (targetRow) {
-          this.enqueueDurableTimelineUpdate(agent.id, { ...targetRow, telemetry });
-        }
+        // The store's row also carries the turn's metrics, stamped just before; the tracker's
+        // snapshot of it does not, and persisting that would drop them.
+        const enriched = this.timelineStore.enrichTurnTelemetry(
+          agent.id,
+          eventTurnId,
+          telemetry,
+          targetRow?.seq,
+        );
+        const persisted = enriched ?? (targetRow ? { ...targetRow, telemetry } : null);
+        if (persisted) this.enqueueDurableTimelineUpdate(agent.id, persisted);
       }
     }
     // If no usage on turn_completed, keep lastUsage as-is so context window
