@@ -170,6 +170,24 @@ function submittedPromptText(prompt: AgentPromptInput): string {
     .trim();
 }
 
+const MAX_STORED_SHELL_TIMELINE_ITEMS = 50;
+const MAX_STORED_SHELL_OUTPUT_CHARS = 4 * 1024;
+
+function trimStoredShellOutput(
+  item: Extract<AgentTimelineItem, { type: "tool_call" }>,
+): Extract<AgentTimelineItem, { type: "tool_call" }> {
+  const { detail } = item;
+  if (detail.type !== "shell" || !detail.output) return item;
+  if (detail.output.length <= MAX_STORED_SHELL_OUTPUT_CHARS) return item;
+  return {
+    ...item,
+    detail: {
+      ...detail,
+      output: `[...earlier output truncated...]\n${detail.output.slice(-MAX_STORED_SHELL_OUTPUT_CHARS)}`,
+    },
+  };
+}
+
 export class AgentManagerShuttingDownError extends Error {
   constructor() {
     super("Agent manager is shutting down");
@@ -3693,13 +3711,18 @@ export class AgentManager {
     const timestamp =
       options?.timestamp ??
       (existingIndex >= 0 ? existing[existingIndex].timestamp : new Date().toISOString());
-    const storedEntry: StoredShellTimelineItem = { timestamp, item: limitedItem };
+    // The agent record keeps this copy only so a provider history reload can put the card back.
+    // The record is rewritten on every change, so the copy keeps the tail of the output.
+    const storedEntry: StoredShellTimelineItem = {
+      timestamp,
+      item: trimStoredShellOutput(limitedItem),
+    };
     if (existingIndex >= 0) {
       existing[existingIndex] = storedEntry;
     } else {
       existing.push(storedEntry);
     }
-    agent.shellTimelineItems = existing.slice(-200);
+    agent.shellTimelineItems = existing.slice(-MAX_STORED_SHELL_TIMELINE_ITEMS);
 
     this.touchUpdatedAt(agent);
     const row = this.recordTimeline(agentId, limitedItem, { timestamp });

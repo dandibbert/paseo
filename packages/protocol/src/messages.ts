@@ -957,6 +957,19 @@ export const AgentBackgroundWorkSummarySchema = z.object({
 
 export type AgentBackgroundWorkSummary = z.infer<typeof AgentBackgroundWorkSummarySchema>;
 
+// COMPAT(agentShellCommands): fork, added in v0.17.4.
+export const AgentShellContextSummarySchema = z.object({
+  id: z.string(),
+  command: z.string(),
+  cwd: z.string(),
+  exitCode: z.number().int().nullable(),
+  outputBytes: z.number().int().nonnegative(),
+  truncated: z.boolean().optional(),
+  completedAt: z.string(),
+  terminalId: z.string(),
+});
+export type AgentShellContextSummary = z.infer<typeof AgentShellContextSummarySchema>;
+
 export const AgentSnapshotPayloadSchema = z.object({
   id: z.string(),
   provider: AgentProviderSchema,
@@ -1006,33 +1019,13 @@ export const AgentSnapshotPayloadSchema = z.object({
   continuationRevision: z.number().int().nonnegative().optional(),
   // COMPAT(agentShellCommands): fork, added in v0.17.4.
   shellTerminalId: z.string().optional(),
-  pendingShellContext: z
-    .array(
-      z.object({
-        id: z.string(),
-        command: z.string(),
-        cwd: z.string(),
-        exitCode: z.number().int().nullable(),
-        output: z.string(),
-        outputBytes: z.number().int().nonnegative(),
-        truncated: z.boolean().optional(),
-        completedAt: z.string(),
-        terminalId: z.string(),
-      }),
-    )
-    .optional(),
+  // Summaries only: agent snapshots go to every client on every change, so the output stays on
+  // the daemon until it is attached to the next prompt.
+  pendingShellContext: z.array(AgentShellContextSummarySchema).optional(),
 });
 
-export const AgentShellContextEntrySchema = z.object({
-  id: z.string(),
-  command: z.string(),
-  cwd: z.string(),
-  exitCode: z.number().int().nullable(),
+export const AgentShellContextEntrySchema = AgentShellContextSummarySchema.extend({
   output: z.string(),
-  outputBytes: z.number().int().nonnegative(),
-  truncated: z.boolean().optional(),
-  completedAt: z.string(),
-  terminalId: z.string(),
 });
 export type AgentShellContextEntry = z.infer<typeof AgentShellContextEntrySchema>;
 
@@ -7743,7 +7736,7 @@ export const AgentShellContextUpdateResponseSchema = z.object({
   payload: z.object({
     requestId: z.string(),
     agentId: z.string(),
-    pendingShellContext: z.array(AgentShellContextEntrySchema),
+    pendingShellContext: z.array(AgentShellContextSummarySchema),
     error: z.string().nullable(),
   }),
 });

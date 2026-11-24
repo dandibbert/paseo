@@ -217,6 +217,8 @@ test("E2E: ! shell command mode lifecycle, isolation, context attachment, and re
     // 5. Verify pendingShellContext entries, partial deletion, and prompt attachment injection
     const pendingBefore = (await client1.fetchAgent(agent.id))?.agent.pendingShellContext ?? [];
     expect(pendingBefore).toHaveLength(4);
+    // Snapshots carry summaries; the output stays on the daemon until it is attached.
+    expect(pendingBefore.every((entry) => !("output" in entry))).toBe(true);
 
     const removeFirst = await client1.updateAgentShellContext({
       agentId: agent.id,
@@ -269,7 +271,7 @@ test("E2E: ! shell command mode lifecycle, isolation, context attachment, and re
     const restoredAgent = await client2.fetchAgent(agent.id);
     expect(restoredAgent?.agent.shellTerminalId).toBe(shellTerminalId);
     expect(restoredAgent?.agent.pendingShellContext).toHaveLength(1);
-    expect(restoredAgent?.agent.pendingShellContext?.[0]?.output).toContain("SURVIVED_RESTART");
+    expect(restoredAgent?.agent.pendingShellContext?.[0]?.command).toContain("SURVIVED_RESTART");
 
     const restoredTimeline = await client2.fetchAgentTimeline(agent.id, {
       projection: "canonical",

@@ -1,4 +1,4 @@
-import type { AgentShellContextEntry } from "@getpaseo/protocol/messages";
+import type { AgentShellContextSummary } from "@getpaseo/protocol/messages";
 import { ChevronRight, Terminal, X } from "lucide-react-native";
 import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -16,7 +16,7 @@ const ThemedX = withUnistyles(X);
 const mutedIcon = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
 
 export interface PendingShellContextBarProps {
-  entries: readonly AgentShellContextEntry[];
+  entries: readonly AgentShellContextSummary[];
   disabled?: boolean;
   onRemoveEntry: (entryId: string) => void;
   onClearAll: () => void;
@@ -27,7 +27,7 @@ function PendingShellContextEntryRow({
   disabled,
   onRemoveEntry,
 }: {
-  entry: AgentShellContextEntry;
+  entry: AgentShellContextSummary;
   disabled: boolean;
   onRemoveEntry: (entryId: string) => void;
 }) {

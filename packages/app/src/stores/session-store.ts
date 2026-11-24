@@ -38,7 +38,7 @@ import type {
 } from "@getpaseo/protocol/agent-types";
 import type {
   AgentBackgroundWorkSummary,
-  AgentShellContextEntry,
+  AgentShellContextSummary,
   ServerInfoStatusPayload,
   ProjectPlacementPayload,
   ServerCapabilities,
@@ -117,7 +117,7 @@ export interface Agent {
   metadata?: Record<string, JsonValue>;
   projectPlacement?: ProjectPlacementPayload | null;
   shellTerminalId?: string;
-  pendingShellContext?: AgentShellContextEntry[];
+  pendingShellContext?: AgentShellContextSummary[];
 }
 
 export interface WorkspaceDescriptor {

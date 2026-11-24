@@ -62,7 +62,7 @@ import {
   ClipboardPaste,
   Paperclip,
 } from "lucide-react-native";
-import type { AgentShellContextEntry } from "@getpaseo/protocol/messages";
+import type { AgentShellContextSummary } from "@getpaseo/protocol/messages";
 import { PendingShellContextBar } from "./pending-shell-context-bar";
 import { parseComposerShellInput, validateComposerShellSubmit } from "./shell-command";
 import * as Clipboard from "expo-clipboard";
@@ -219,7 +219,7 @@ type AttachmentListUpdater =
   | ((prev: UserComposerAttachment[]) => UserComposerAttachment[]);
 
 const EMPTY_ATTACHMENT_SCOPE_KEYS: readonly string[] = [];
-const EMPTY_SHELL_CONTEXT: readonly AgentShellContextEntry[] = [];
+const EMPTY_SHELL_CONTEXT: readonly AgentShellContextSummary[] = [];
 const ThemedTerminalIcon = withUnistyles(Terminal);
 const shellAccentIconMapping = (theme: Theme) => ({ color: theme.colors.palette.blue[500] });
 

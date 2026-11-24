@@ -70,6 +70,7 @@ import {
   appendShellAttachmentsToPrompt,
   type AgentShellService,
 } from "./agent/agent-shell-service.js";
+import { summarizeShellContextEntry } from "./agent/agent-shell-context.js";
 import { getActiveHistoryTextIndex } from "./history-search/index.js";
 import type { TerminalActivity } from "@getpaseo/protocol/terminal-activity";
 import type { BinaryFrame } from "@getpaseo/protocol/binary-frames/index";
@@ -9855,7 +9856,7 @@ export class Session {
         payload: {
           requestId: msg.requestId,
           agentId: resolved.agentId,
-          pendingShellContext,
+          pendingShellContext: pendingShellContext.map(summarizeShellContextEntry),
           error: null,
         },
       });

@@ -23,6 +23,7 @@ import type {
 } from "./agent-sdk-types.js";
 import type { ProviderOptions } from "@getpaseo/protocol/agent-types";
 import type { ManagedAgent } from "./agent-manager.js";
+import { summarizeShellContextEntry } from "./agent-shell-context.js";
 import { featuresFromControls } from "@getpaseo/protocol/option-controls";
 import type { JsonValue } from "../json-utils.js";
 import {
@@ -77,16 +78,20 @@ export function resolveEffectiveThinkingOptionId(options: {
   return normalizeThinkingOptionId(options.configuredThinkingOptionId);
 }
 
+/**
+ * Snapshots go to every client on every agent change, so pending shell context travels as
+ * summaries; the output stays on the daemon until it is attached to the next prompt.
+ */
 function projectShellWireFields(source: {
   shellTerminalId?: string;
-  pendingShellContext?: AgentSnapshotPayload["pendingShellContext"];
+  pendingShellContext?: StoredAgentRecord["pendingShellContext"];
 }): Pick<AgentSnapshotPayload, "shellTerminalId" | "pendingShellContext"> {
   const fields: Pick<AgentSnapshotPayload, "shellTerminalId" | "pendingShellContext"> = {};
   if (source.shellTerminalId) {
     fields.shellTerminalId = source.shellTerminalId;
   }
   if (source.pendingShellContext?.length) {
-    fields.pendingShellContext = source.pendingShellContext;
+    fields.pendingShellContext = source.pendingShellContext.map(summarizeShellContextEntry);
   }
   return fields;
 }
@@ -100,7 +105,13 @@ function projectShellRecordFields(agent: ManagedAgent): {
     shellTerminalId?: string;
     pendingShellContext?: StoredAgentRecord["pendingShellContext"];
     shellTimelineItems?: StoredAgentRecord["shellTimelineItems"];
-  } = projectShellWireFields(agent);
+  } = {};
+  if (agent.shellTerminalId) {
+    fields.shellTerminalId = agent.shellTerminalId;
+  }
+  if (agent.pendingShellContext?.length) {
+    fields.pendingShellContext = agent.pendingShellContext;
+  }
   if (agent.shellTimelineItems?.length) {
     fields.shellTimelineItems = agent.shellTimelineItems;
   }
