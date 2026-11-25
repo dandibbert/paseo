@@ -447,6 +447,30 @@ describe("resolveFormState", () => {
     expect(resolved.thinkingOptionId).toBe("xhigh");
   });
 
+  it("defaults a personal space draft to full access, over the last mode the user picked", () => {
+    const resolved = resolveFormState(
+      { preferFullAccessMode: true },
+      { provider: "codex", providerPreferences: { codex: { mode: "auto" } } },
+      CODEX_MODELS,
+      INITIAL_USER_MODIFIED,
+      makeState({ provider: "codex" }).form,
+
+      codexProviderMap,
+    );
+    expect(resolved.modeId).toBe("full-access");
+
+    const explicit = resolveFormState(
+      { preferFullAccessMode: true, modeId: "auto" },
+      { provider: "codex" },
+      CODEX_MODELS,
+      INITIAL_USER_MODIFIED,
+      makeState({ provider: "codex" }).form,
+
+      codexProviderMap,
+    );
+    expect(explicit.modeId).toBe("auto");
+  });
+
   it("normalizes legacy model id 'default' from initial values to the provider default model", () => {
     const resolved = resolveFormState(
       { model: "default" },

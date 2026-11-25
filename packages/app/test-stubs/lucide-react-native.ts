@@ -213,6 +213,7 @@ export const Tag = StubIcon;
 export const TestTube = StubIcon;
 export const Timer = StubIcon;
 export const Type = StubIcon;
+export const UserRound = StubIcon;
 export const Waypoints = StubIcon;
 export const WrapText = StubIcon;
 export const Summary = StubIcon;

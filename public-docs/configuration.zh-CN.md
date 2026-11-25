@@ -246,6 +246,7 @@ URI 中的 `password=` 总是优先于环境变量，因此你可以全局设置
 ## 常用环境变量 {#common-env-vars}
 
 - `PASEO_HOME`，设置 Paseo 主目录
+- `PASEO_PERSONAL_SPACE_DIR`，个人空间打开的文件夹（默认 `~/Paseo`）
 - `PASEO_HOST`，设置 CLI 命令的 daemon 目标
 - `PASEO_PASSWORD`，在 daemon 上表示要求的密码（明文，启动时哈希）；在 CLI 上表示主机 URI 未包含密码时用于连接的密码
 - `PASEO_LISTEN`，覆盖 `daemon.listen`

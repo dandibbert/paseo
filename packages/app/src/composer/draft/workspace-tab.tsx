@@ -243,13 +243,16 @@ function buildDraftAgentSnapshot(input: {
 
 function buildDraftInitialValues(input: {
   initialSetup: WorkspaceDraftTabSetup | null;
+  personal: boolean;
 }): CreateAgentInitialValues | undefined {
-  if (!input.initialSetup) return undefined;
+  const preferFullAccess = input.personal ? { preferFullAccessMode: true } : {};
+  if (!input.initialSetup) return input.personal ? preferFullAccess : undefined;
   return {
     provider: input.initialSetup.provider,
     modeId: input.initialSetup.modeId,
     model: input.initialSetup.model,
     thinkingOptionId: input.initialSetup.thinkingOptionId,
+    ...preferFullAccess,
   };
 }
 
@@ -296,6 +299,7 @@ export function WorkspaceDraftComposer({
   const workspaceFields = useWorkspaceFields(serverId, workspaceId, (w) => ({
     workspaceDirectory: w.workspaceDirectory,
     id: w.id,
+    personal: w.personal === true,
   }));
   const workspaceDirectory = workspaceFields?.workspaceDirectory || null;
   const draftSetup = initialSetup ?? null;
@@ -303,9 +307,11 @@ export function WorkspaceDraftComposer({
     workspaceDirectory,
     initialSetup: draftSetup,
   });
-  const draftInitialValues = buildDraftInitialValues({
-    initialSetup: draftSetup,
-  });
+  const personalWorkspace = workspaceFields?.personal ?? false;
+  const draftInitialValues = useMemo(
+    () => buildDraftInitialValues({ initialSetup: draftSetup, personal: personalWorkspace }),
+    [draftSetup, personalWorkspace],
+  );
   const draftStoreKey = useMemo(
     () =>
       buildDraftStoreKey({

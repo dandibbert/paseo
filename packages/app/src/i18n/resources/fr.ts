@@ -1420,6 +1420,7 @@ export const fr: TranslationResources = {
       sessions: "Historique",
       search: "Recherche",
       schedules: "Planifications",
+      personal: "Personnel",
     },
     worktreeSetup: {
       title: "Configurer les scripts de worktree",

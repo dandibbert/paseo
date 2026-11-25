@@ -324,6 +324,7 @@ const StoredWorkspaceSchema = z.strictObject({
   workspaceKind: z.enum(["directory", "local_checkout", "checkout", "worktree"]),
   // Require the flag so older rows that lost background visibility invalidate the workspace cursor.
   background: z.boolean(),
+  personal: z.boolean().optional(),
   name: z.string(),
   title: z.string().nullable(),
   pinnedAt: z.string().nullable(),
@@ -757,6 +758,7 @@ function serializeWorkspace(workspace: WorkspaceDescriptor): StoredWorkspace {
     projectKind: workspace.projectKind,
     workspaceKind: workspace.workspaceKind,
     background: workspace.background ?? false,
+    ...(workspace.personal ? { personal: true } : {}),
     name: workspace.name,
     title: workspace.title ?? null,
     pinnedAt: workspace.pinnedAt ?? null,

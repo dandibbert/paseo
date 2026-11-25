@@ -9,6 +9,7 @@ import {
   type FormPreferences,
   type ProviderPreferences,
 } from "@/hooks/use-form-preferences";
+import { pickFullAccessModeId } from "@getpaseo/protocol/personal-space";
 import { findModelByReference } from "./model-catalog";
 
 export interface FormInitialValues {
@@ -16,6 +17,11 @@ export interface FormInitialValues {
   modeId?: string | null;
   model?: string | null;
   thinkingOptionId?: string | null;
+  /**
+   * Default to the provider's full-access mode, ahead of the last mode the user picked: the
+   * personal space needs agents that can work outside their folder.
+   */
+  preferFullAccessMode?: boolean;
 }
 
 export interface FormState {
@@ -294,6 +300,11 @@ function resolveModeId(input: {
     input;
   if (userModified) return currentModeId;
   if (!provider) return "";
+  const fullAccessModeId =
+    initialValues?.preferFullAccessMode && !initialValues.modeId
+      ? pickFullAccessModeId(providerDef?.modes ?? [])
+      : null;
+  if (fullAccessModeId) return fullAccessModeId;
   return resolvePreferredModeId({
     initialModeId: initialValues?.modeId,
     preferredModeId: providerPrefs?.mode,

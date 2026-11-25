@@ -138,6 +138,8 @@ export interface WorkspaceDescriptor {
   projectKind: WorkspaceDescriptorPayload["projectKind"];
   workspaceKind: WorkspaceDescriptorPayload["workspaceKind"];
   background?: boolean;
+  /** The host's personal space, not a project. */
+  personal?: boolean;
   name: string;
   title?: string | null;
   pinnedAt?: string | null;
@@ -184,6 +186,7 @@ export function normalizeWorkspaceDescriptor(
     projectKind: payload.projectKind,
     workspaceKind: payload.workspaceKind,
     background: payload.background ?? false,
+    ...(payload.personal ? { personal: true } : {}),
     parentWorkspaceId: payload.parentWorkspaceId,
     name: payload.name,
     title: payload.title ?? null,

@@ -254,6 +254,7 @@ Set the persisted value in `config.json`:
 ## Common env vars
 
 - `PASEO_HOME`, set Paseo home directory
+- `PASEO_PERSONAL_SPACE_DIR`, the folder the personal space opens in (default `~/Paseo`)
 - `PASEO_HOST`, set the daemon target for CLI commands
 - `PASEO_PASSWORD`, on the daemon, the password to require (plaintext, hashed at startup); on the CLI, the password used to connect when the host URI doesn't include one
 - `PASEO_LISTEN`, override `daemon.listen`

@@ -13,6 +13,7 @@ import {
   Plus,
   Search,
   type LucideIcon,
+  UserRound,
 } from "lucide-react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { Button } from "@/components/ui/button";
@@ -42,6 +43,7 @@ const moveDownIcon = <ThemedArrowDown size={ICON_SIZE.sm} uniProps={mutedColorMa
 
 const BUILTIN_ICONS: Record<BuiltinSidebarItemId, LucideIcon> = {
   "new-workspace": Plus,
+  personal: UserRound,
   history: History,
   search: Search,
   schedules: CalendarClock,

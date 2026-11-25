@@ -1,5 +1,5 @@
 import { router, usePathname } from "expo-router";
-import { CalendarClock, History, Plus, Search } from "lucide-react-native";
+import { CalendarClock, History, Plus, Search, UserRound } from "lucide-react-native";
 import { memo, useCallback, useMemo, useRef, type ComponentType, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { View, type StyleProp, type ViewStyle } from "react-native";
@@ -17,8 +17,11 @@ import {
 import { useSidebarNavItems } from "@/sidebar-nav/use-sidebar-nav-items";
 import { useKeyboardShortcutsStore } from "@/stores/keyboard-shortcuts-store";
 import { useActiveWorkspaceSelection } from "@/stores/navigation-active-workspace-store";
-import { useWorkspace } from "@/stores/session-store-hooks";
+import { useToast } from "@/contexts/toast-api-context";
+import { useHostRuntimeClient, useHosts } from "@/runtime/host-runtime";
+import { useWorkspace, useWorkspaceFields } from "@/stores/session-store-hooks";
 import {
+  buildHostWorkspaceRoute,
   buildNewWorkspaceRoute,
   buildSchedulesRoute,
   buildSessionsRoute,
@@ -130,6 +133,49 @@ const SidebarNewWorkspaceRow = memo(function SidebarNewWorkspaceRow({
   );
 });
 
+/**
+ * Opens the host's personal space, creating it on first use. The host is the one of the
+ * workspace in view, else the first saved host.
+ */
+function SidebarPersonalRow({ onBeforeNavigate }: SidebarNavRowProps) {
+  const { t } = useTranslation();
+  const toast = useToast();
+  const hosts = useHosts();
+  const activeWorkspaceSelection = useActiveWorkspaceSelection();
+  const serverId = activeWorkspaceSelection?.serverId ?? hosts[0]?.serverId ?? null;
+  const supported = useHostFeature(serverId, "personalSpace");
+  const client = useHostRuntimeClient(serverId ?? "");
+  const isActive =
+    useWorkspaceFields(
+      activeWorkspaceSelection?.serverId ?? null,
+      activeWorkspaceSelection?.workspaceId ?? null,
+      (workspace) => workspace.personal === true,
+    ) ?? false;
+  const handlePress = useCallback(async () => {
+    if (!client || !serverId) return;
+    onBeforeNavigate?.();
+    try {
+      const result = await client.ensurePersonalSpace();
+      if (result.workspace) router.push(buildHostWorkspaceRoute(serverId, result.workspace.id));
+      else toast.error(result.error ?? t("sidebar.sections.personal"));
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : String(error));
+    }
+  }, [client, onBeforeNavigate, serverId, t, toast]);
+
+  if (!supported) return null;
+  return (
+    <SidebarHeaderRow
+      icon={UserRound}
+      label={t(builtinSidebarNavLabelKey("personal"))}
+      onPress={handlePress}
+      isActive={isActive}
+      testID="sidebar-personal"
+      variant="compact"
+    />
+  );
+}
+
 function SidebarHistoryRow({ onBeforeNavigate }: SidebarNavRowProps) {
   const { t } = useTranslation();
   const pathname = usePathname();
@@ -192,6 +238,7 @@ function SidebarSchedulesRow({ onBeforeNavigate }: SidebarNavRowProps) {
 
 const BUILTIN_ROWS: Record<BuiltinSidebarNavId, ComponentType<SidebarNavRowProps>> = {
   "new-workspace": SidebarNewWorkspaceRow,
+  personal: SidebarPersonalRow,
   history: SidebarHistoryRow,
   search: SidebarSearchRow,
   schedules: SidebarSchedulesRow,
