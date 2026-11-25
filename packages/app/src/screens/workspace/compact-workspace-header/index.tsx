@@ -18,6 +18,7 @@ interface CompactWorkspaceHeaderProps {
   title: string;
   subtitle: string;
   isSubtitleDistinct: boolean;
+  isPersonal?: boolean;
   explorerAction: ReactNode;
   tabSwitcher: ReactNode;
   inDesktopTitlebar: boolean;
@@ -34,6 +35,7 @@ export function CompactWorkspaceHeader({
   title,
   subtitle,
   isSubtitleDistinct,
+  isPersonal = false,
   explorerAction,
   children,
   tabSwitcher,
@@ -49,10 +51,11 @@ export function CompactWorkspaceHeader({
       <WorkspaceHeaderProjectRow
         subtitle={subtitle}
         isSubtitleDistinct={isSubtitleDistinct}
+        isPersonal={isPersonal}
         serverId={serverId}
       />
     ),
-    [subtitle, isSubtitleDistinct, serverId],
+    [subtitle, isSubtitleDistinct, isPersonal, serverId],
   );
   const symbols = {
     "tab-count": tabSwitcher,

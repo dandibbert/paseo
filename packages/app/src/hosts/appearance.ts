@@ -124,6 +124,11 @@ export function selectHostBadges(input: {
   localHostResolutionPending?: boolean;
   detectedMachineKindByServerId?: ReadonlyMap<string, string | null>;
   enabled: boolean;
+  /**
+   * Badge every host with its name, whatever its own setting. For surfaces where picking the
+   * wrong machine sends work there, such as the personal space, which every host has.
+   */
+  alwaysNamed?: boolean;
 }): ReadonlyMap<string, HostBadgeModel> {
   const badges = new Map<string, HostBadgeModel>();
   if (!input.enabled) {
@@ -135,7 +140,7 @@ export function selectHostBadges(input: {
       isLocalHost: host.serverId === input.localServerId,
       localHostResolutionPending: input.localHostResolutionPending,
     });
-    if (display === null || display === "hidden") {
+    if (!input.alwaysNamed && (display === null || display === "hidden")) {
       continue;
     }
     badges.set(host.serverId, {
@@ -146,7 +151,7 @@ export function selectHostBadges(input: {
         appearance: host.appearance,
         detectedMachineKind: input.detectedMachineKindByServerId?.get(host.serverId) ?? null,
       }),
-      showLabel: display === "name",
+      showLabel: input.alwaysNamed === true || display === "name",
     });
   }
   return badges;

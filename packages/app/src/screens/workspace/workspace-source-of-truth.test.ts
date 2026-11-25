@@ -108,6 +108,7 @@ describe("workspace source of truth consumption", () => {
       title: "feat/workspace-sot",
       subtitle: "getpaseo/paseo",
       isSubtitleDistinct: true,
+      isPersonal: false,
       isGitCheckout: false,
       currentBranchName: null,
     });
@@ -129,6 +130,7 @@ describe("workspace source of truth consumption", () => {
       title: "notes",
       subtitle: "Local folders",
       isSubtitleDistinct: true,
+      isPersonal: false,
       isGitCheckout: false,
       currentBranchName: null,
     });
@@ -148,6 +150,7 @@ describe("workspace source of truth consumption", () => {
       title: "feat/workspace-sot",
       subtitle: "getpaseo/paseo",
       isSubtitleDistinct: true,
+      isPersonal: false,
       isGitCheckout: true,
       currentBranchName: "feat/workspace-sot",
     });
@@ -172,6 +175,7 @@ describe("workspace source of truth consumption", () => {
       title: "notes",
       subtitle: "notes",
       isSubtitleDistinct: false,
+      isPersonal: false,
       isGitCheckout: false,
       currentBranchName: null,
     });
@@ -188,6 +192,7 @@ describe("workspace source of truth consumption", () => {
       title: "feat/workspace-sot",
       subtitle: "getpaseo/paseo",
       isSubtitleDistinct: true,
+      isPersonal: false,
       isGitCheckout: false,
       currentBranchName: null,
     });

@@ -58,9 +58,19 @@ export function buildWorkspaceStructureProjects(input: {
   const projectEntries: Array<{ serverId: string; project: ProjectDescriptor }> = [];
   const keyCountsByServer = new Map<string, Map<string, number>>();
   const viewKeyByServerProjectId = new Map<string, Map<string, string>>();
+  const sessions = input.sessions.map((session) => ({
+    serverId: session.serverId,
+    projects: session.projects,
+    workspaces: Array.from(session.workspaces),
+  }));
 
-  for (const session of input.sessions) {
+  for (const session of sessions) {
+    // The personal space has its own sidebar entry; it is not a project to list or pick.
+    const personalProjectIds = new Set(
+      session.workspaces.flatMap((workspace) => (workspace.personal ? [workspace.projectId] : [])),
+    );
     for (const project of session.projects) {
+      if (personalProjectIds.has(project.projectId)) continue;
       projectEntries.push({ serverId: session.serverId, project });
       const sharedKey = project.projectKey ?? null;
       if (sharedKey) {
@@ -88,7 +98,7 @@ export function buildWorkspaceStructureProjects(input: {
     );
   }
 
-  for (const session of input.sessions) {
+  for (const session of sessions) {
     for (const workspace of session.workspaces) {
       const viewKey = viewKeyByServerProjectId.get(session.serverId)?.get(workspace.projectId);
       if (!viewKey) continue;

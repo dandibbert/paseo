@@ -40,6 +40,26 @@ function workspace(id: string, projectId: string, root: string): WorkspaceDescri
 }
 
 describe("buildWorkspaceStructureProjects", () => {
+  test("leaves out the personal space, which has its own sidebar entry", () => {
+    const result = buildWorkspaceStructureProjects({
+      sessions: [
+        {
+          serverId: "host-a",
+          projects: [
+            project({ id: "prj_app", key: null, root: "/a/app" }),
+            project({ id: "prj_personal", key: null, root: "/home/me/Paseo", name: "Paseo" }),
+          ],
+          workspaces: [
+            workspace("ws-app", "prj_app", "/a/app"),
+            { ...workspace("ws-personal", "prj_personal", "/home/me/Paseo"), personal: true },
+          ],
+        },
+      ],
+    });
+
+    expect(result.map((entry) => entry.workspaceKeys)).toEqual([["host-a:ws-app"]]);
+  });
+
   test("groups the same project key across hosts and keeps host-local ids", () => {
     const key = "remote:github.com/acme/app";
     const result = buildWorkspaceStructureProjects({

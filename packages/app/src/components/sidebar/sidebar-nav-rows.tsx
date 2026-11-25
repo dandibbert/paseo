@@ -8,7 +8,10 @@ import { SidebarHeaderRow } from "@/components/sidebar/sidebar-header-row";
 import { useShortcutKeys } from "@/hooks/use-shortcut-keys";
 import { PluginSidebarItem } from "@/plugins/sidebar-items";
 import { canCreateWorktreeForProjectKind } from "@/projects/host-projects";
-import { useHostFeature } from "@/runtime/host-features";
+import { useHostFeature, useHostFeatureMap } from "@/runtime/host-features";
+import { HostBadge } from "@/hosts/host-badge";
+import type { HostBadgeModel } from "@/hosts/appearance";
+import { useHostBadges } from "@/hosts/use-host-badges";
 import {
   builtinSidebarNavLabelKey,
   builtinSidebarNavShortcutAction,
@@ -134,44 +137,75 @@ const SidebarNewWorkspaceRow = memo(function SidebarNewWorkspaceRow({
 });
 
 /**
- * Opens the host's personal space, creating it on first use. The host is the one of the
- * workspace in view, else the first saved host.
+ * Opens a host's personal space, creating it on first use. Every host that supports it gets its
+ * own row, and with more than one host each row carries that host's badge, named, so a message
+ * never goes to the wrong machine. The personal space is not listed among the projects.
  */
 function SidebarPersonalRow({ onBeforeNavigate }: SidebarNavRowProps) {
+  const hosts = useHosts();
+  const serverIds = useMemo(() => hosts.map((host) => host.serverId), [hosts]);
+  const supportByServerId = useHostFeatureMap(serverIds, "personalSpace");
+  const supportedServerIds = useMemo(
+    () => serverIds.filter((serverId) => supportByServerId.get(serverId) === true),
+    [serverIds, supportByServerId],
+  );
+  const badges = useHostBadges({ enabled: serverIds.length > 1, alwaysNamed: true });
+
+  return (
+    <>
+      {supportedServerIds.map((serverId) => (
+        <SidebarPersonalHostRow
+          key={serverId}
+          serverId={serverId}
+          badge={badges.get(serverId) ?? null}
+          onBeforeNavigate={onBeforeNavigate}
+        />
+      ))}
+    </>
+  );
+}
+
+function SidebarPersonalHostRow({
+  serverId,
+  badge,
+  onBeforeNavigate,
+}: SidebarNavRowProps & { serverId: string; badge: HostBadgeModel | null }) {
   const { t } = useTranslation();
   const toast = useToast();
-  const hosts = useHosts();
+  const client = useHostRuntimeClient(serverId);
   const activeWorkspaceSelection = useActiveWorkspaceSelection();
-  const serverId = activeWorkspaceSelection?.serverId ?? hosts[0]?.serverId ?? null;
-  const supported = useHostFeature(serverId, "personalSpace");
-  const client = useHostRuntimeClient(serverId ?? "");
+  const activeServerId = activeWorkspaceSelection?.serverId ?? null;
   const isActive =
     useWorkspaceFields(
-      activeWorkspaceSelection?.serverId ?? null,
-      activeWorkspaceSelection?.workspaceId ?? null,
+      activeServerId === serverId ? serverId : null,
+      activeServerId === serverId ? (activeWorkspaceSelection?.workspaceId ?? null) : null,
       (workspace) => workspace.personal === true,
     ) ?? false;
+  const label = t(builtinSidebarNavLabelKey("personal"));
   const handlePress = useCallback(async () => {
-    if (!client || !serverId) return;
+    if (!client) return;
     onBeforeNavigate?.();
     try {
       const result = await client.ensurePersonalSpace();
       if (result.workspace) router.push(buildHostWorkspaceRoute(serverId, result.workspace.id));
-      else toast.error(result.error ?? t("sidebar.sections.personal"));
+      else toast.error(result.error ?? label);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : String(error));
     }
-  }, [client, onBeforeNavigate, serverId, t, toast]);
+  }, [client, label, onBeforeNavigate, serverId, toast]);
 
-  if (!supported) return null;
+  const trailing = useMemo(() => (badge ? <HostBadge badge={badge} /> : undefined), [badge]);
+
   return (
     <SidebarHeaderRow
       icon={UserRound}
-      label={t(builtinSidebarNavLabelKey("personal"))}
+      label={label}
+      accessibilityLabel={badge ? `${label} · ${badge.label}` : label}
       onPress={handlePress}
       isActive={isActive}
-      testID="sidebar-personal"
+      testID={`sidebar-personal-${serverId}`}
       variant="compact"
+      trailing={trailing}
     />
   );
 }

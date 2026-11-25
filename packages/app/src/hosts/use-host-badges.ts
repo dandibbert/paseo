@@ -13,8 +13,11 @@ import { useSessionStore } from "@/stores/session-store";
  */
 export function useHostBadges({
   enabled,
+  alwaysNamed = false,
 }: {
   enabled: boolean;
+  /** See `selectHostBadges`. */
+  alwaysNamed?: boolean;
 }): ReadonlyMap<string, HostBadgeModel> {
   const hosts = useHosts();
   const localServerId = useLocalDaemonServerId();
@@ -38,6 +41,7 @@ export function useHostBadges({
       localHostResolutionPending: localDaemon.status !== "resolved",
       detectedMachineKindByServerId,
       enabled,
+      alwaysNamed,
     });
-  }, [hosts, localDaemon.status, localServerId, detectedMachineKinds, enabled]);
+  }, [hosts, localDaemon.status, localServerId, detectedMachineKinds, enabled, alwaysNamed]);
 }

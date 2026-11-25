@@ -191,6 +191,27 @@ describe("selectHostBadges", () => {
     });
   });
 
+  it("names every host, hidden or local, when asked to always name them", () => {
+    const badges = selectHostBadges({
+      hosts: [
+        host("alpha", "Alpha"),
+        host("beta", "Beta", { color: "sky", icon: "mini", badgeDisplay: "hidden" }),
+      ],
+      localServerId: "alpha",
+      localHostResolutionPending: true,
+      enabled: true,
+      alwaysNamed: true,
+    });
+    expect(badges.get("alpha")?.showLabel).toBe(true);
+    expect(badges.get("beta")).toEqual({
+      serverId: "beta",
+      label: "Beta",
+      color: "sky",
+      icon: "mini",
+      showLabel: true,
+    });
+  });
+
   it("falls back to the server id when the label is blank", () => {
     const badges = selectHostBadges({
       hosts: [host("alpha", "   ")],

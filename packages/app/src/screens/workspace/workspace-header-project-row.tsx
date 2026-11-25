@@ -12,19 +12,27 @@ import { useHostBadges } from "@/hosts/use-host-badges";
  * badge is closed. It still follows the host's own badge setting, so a purely local setup stays
  * quiet. A project name that only repeats the workspace name is dropped on wide, where the two sit
  * side by side, and kept on compact, where the line exists for the host anyway.
+ *
+ * The personal space has no project, and one exists on every host, so its row always names the
+ * host — on every layout and whatever the badge setting — to keep a message from going to the
+ * wrong machine.
  */
 export function WorkspaceHeaderProjectRow({
   subtitle,
   isSubtitleDistinct,
+  isPersonal = false,
   serverId,
 }: {
   subtitle: string;
   isSubtitleDistinct: boolean;
+  isPersonal?: boolean;
   serverId: string;
 }) {
   const isCompact = useIsCompactFormFactor();
-  const hostBadge = useHostBadges({ enabled: isCompact }).get(serverId) ?? null;
-  const showProject = isSubtitleDistinct || isCompact;
+  const hostBadge =
+    useHostBadges({ enabled: isCompact || isPersonal, alwaysNamed: isPersonal }).get(serverId) ??
+    null;
+  const showProject = !isPersonal && (isSubtitleDistinct || isCompact);
   if (!showProject && !hostBadge) {
     return null;
   }

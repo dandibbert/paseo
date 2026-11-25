@@ -478,6 +478,7 @@ interface WorkspaceHeaderTitleBarProps {
   title: string;
   subtitle: string;
   isSubtitleDistinct: boolean;
+  isPersonal: boolean;
   currentBranchName: string | null;
   normalizedServerId: string;
   showWorkspaceSetup: boolean;
@@ -494,6 +495,7 @@ function WorkspaceHeaderTitleBar({
   title,
   subtitle,
   isSubtitleDistinct,
+  isPersonal,
   currentBranchName,
   normalizedServerId,
   showWorkspaceSetup,
@@ -517,6 +519,7 @@ function WorkspaceHeaderTitleBar({
           <WorkspaceHeaderProjectRow
             subtitle={subtitle}
             isSubtitleDistinct={isSubtitleDistinct}
+            isPersonal={isPersonal}
             serverId={normalizedServerId}
           />
         </View>
@@ -631,6 +634,7 @@ interface WorkspaceHeaderFields {
   workspaceHeaderTitle: string;
   workspaceHeaderSubtitle: string;
   isWorkspaceHeaderSubtitleDistinct: boolean;
+  isWorkspaceHeaderPersonal: boolean;
   isGitCheckout: boolean;
   currentBranchName: string | null;
 }
@@ -658,6 +662,8 @@ function buildWorkspaceHeaderCheckoutState(input: {
 function deriveWorkspaceHeaderFields(input: {
   workspace: WorkspaceDescriptor | null;
   checkoutState: WorkspaceHeaderCheckoutState;
+  /** The personal space is titled for what it is, not for its folder. */
+  personalTitle: string;
 }): WorkspaceHeaderFields {
   const renderState = resolveWorkspaceHeaderRenderState(input);
   if (renderState.kind !== "ready") {
@@ -666,15 +672,17 @@ function deriveWorkspaceHeaderFields(input: {
       workspaceHeaderTitle: "",
       workspaceHeaderSubtitle: "",
       isWorkspaceHeaderSubtitleDistinct: false,
+      isWorkspaceHeaderPersonal: false,
       isGitCheckout: false,
       currentBranchName: null,
     };
   }
   return {
     isWorkspaceHeaderLoading: false,
-    workspaceHeaderTitle: renderState.title,
+    workspaceHeaderTitle: renderState.isPersonal ? input.personalTitle : renderState.title,
     workspaceHeaderSubtitle: renderState.subtitle,
     isWorkspaceHeaderSubtitleDistinct: renderState.isSubtitleDistinct,
+    isWorkspaceHeaderPersonal: renderState.isPersonal,
     isGitCheckout: renderState.isGitCheckout,
     currentBranchName: renderState.currentBranchName,
   };
@@ -1274,11 +1282,13 @@ function WorkspaceScreenContent({
     workspaceHeaderTitle,
     workspaceHeaderSubtitle,
     isWorkspaceHeaderSubtitleDistinct,
+    isWorkspaceHeaderPersonal,
     isGitCheckout,
     currentBranchName,
   } = deriveWorkspaceHeaderFields({
     workspace: workspaceDescriptor,
     checkoutState: workspaceHeaderCheckoutState,
+    personalTitle: t("sidebar.sections.personal"),
   });
   const showMobileAgent = usePanelStore((state) => state.showMobileAgent);
 
@@ -3304,6 +3314,7 @@ function WorkspaceScreenContent({
                 title={workspaceHeaderTitle}
                 subtitle={workspaceHeaderSubtitle}
                 isSubtitleDistinct={isWorkspaceHeaderSubtitleDistinct}
+                isPersonal={isWorkspaceHeaderPersonal}
                 currentBranchName={currentBranchName}
                 normalizedServerId={normalizedServerId}
                 showWorkspaceSetup={showWorkspaceSetup}
@@ -3335,6 +3346,7 @@ function WorkspaceScreenContent({
       workspaceHeaderSubtitle,
       workspaceHeaderTitle,
       isWorkspaceHeaderSubtitleDistinct,
+      isWorkspaceHeaderPersonal,
     ],
   );
   const compactHeaderScripts = useMemo(
@@ -3416,6 +3428,7 @@ function WorkspaceScreenContent({
           title={workspaceHeaderTitle}
           subtitle={workspaceHeaderSubtitle}
           isSubtitleDistinct={isWorkspaceHeaderSubtitleDistinct}
+          isPersonal={isWorkspaceHeaderPersonal}
           serverId={normalizedServerId}
         >
           <WorkspaceHeaderMenuMobile
@@ -3459,6 +3472,7 @@ function WorkspaceScreenContent({
       isRouteFocused,
       isWorkspaceHeaderLoading,
       isWorkspaceHeaderSubtitleDistinct,
+      isWorkspaceHeaderPersonal,
       normalizedServerId,
       normalizedWorkspaceId,
       openImportSheet,

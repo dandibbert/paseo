@@ -17,6 +17,8 @@ type WorkspaceHeaderRenderState =
        * that sets them side by side drops the repeat.
        */
       isSubtitleDistinct: boolean;
+      /** The host's personal space: the header names the host instead of a project. */
+      isPersonal: boolean;
       isGitCheckout: boolean;
       currentBranchName: string | null;
     };
@@ -71,6 +73,7 @@ export function resolveWorkspaceHeaderRenderState(input: {
     title: header.title,
     subtitle: header.subtitle,
     isSubtitleDistinct: !areHeaderLabelsEquivalent(header.title, header.subtitle),
+    isPersonal: input.workspace.personal === true,
     isGitCheckout: checkout?.isGit ?? false,
     currentBranchName,
   };
