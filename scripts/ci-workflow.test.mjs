@@ -312,6 +312,7 @@ test("PR routing declares stable behavior ownership", () => {
       "packages/plugin/**",
       "plugin-examples/**",
       "public-docs/plugins/**",
+      "skills/paseo-plugin/**",
       "packages/client/**",
       "packages/highlight/**",
       "packages/protocol/**",
@@ -558,7 +559,6 @@ test("quality preserves commands and routes each domain independently after fail
     format: ["npm run format:check"],
     quality: [
       "npx --yes lockfile-lint --path package-lock.json --type npm --allowed-hosts npm --validate-https --validate-integrity",
-      "npm audit signatures",
       "npm run lint",
       "node --test scripts/oxlint/paseo-plugin.test.mjs",
     ],

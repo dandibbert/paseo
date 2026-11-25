@@ -1024,7 +1024,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
             // provider. Supply the same workspace file resolver so enhanced
             // Markdown can open file panels without replacing the whole reply.
             // Other plugin rows do not need this provider.
-            return item.sourceKind === "assistant_message" ? (
+            return item.source?.kind === "assistant_message" ? (
               <AssistantFileLinkResolverProvider
                 client={client}
                 serverId={resolvedServerId}

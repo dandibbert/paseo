@@ -187,7 +187,7 @@ export function normalizeWorkspaceDescriptor(
     workspaceKind: payload.workspaceKind,
     background: payload.background ?? false,
     ...(payload.personal ? { personal: true } : {}),
-    parentWorkspaceId: payload.parentWorkspaceId,
+    parentWorkspaceId: normalizeWorkspaceOpaqueId(payload.parentWorkspaceId) ?? undefined,
     name: payload.name,
     title: payload.title ?? null,
     pinnedAt: payload.pinnedAt ?? null,

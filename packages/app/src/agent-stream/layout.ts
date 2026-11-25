@@ -1,6 +1,6 @@
 import type { AgentMetric } from "@getpaseo/protocol/agent-types";
 import type { TurnTiming } from "@/timeline/turn-time";
-import type { StreamItem } from "@/types/stream";
+import { getAssistantReply, type StreamItem } from "@/types/stream";
 import { getAssistantMessageSpacing, getGapBetweenStreamItems } from "./spacing";
 import type { StreamFrameChildOrder, StreamStrategy } from "./strategy";
 import { continuesResponse, continuesTurn, isResponseBoundary } from "./turn-membership";
@@ -82,7 +82,7 @@ function createTurnFooterHost(input: {
 }): TurnFooterHost {
   const { item } = input.source;
   const turnMetrics =
-    item.kind === "assistant_message" || item.kind === "tool_call" ? item.turnMetrics : undefined;
+    item.kind === "tool_call" ? item.turnMetrics : getAssistantReply(item)?.turnMetrics;
   return {
     itemId: item.id,
     items: input.source.items,
@@ -120,7 +120,7 @@ function findTurnFooterSource(input: {
       if (!item || (laterItem && !continuesResponse(item, laterItem))) {
         return toolFallback;
       }
-      if (item.kind === "assistant_message") {
+      if (getAssistantReply(item)) {
         const continuation =
           canCrossBoundary &&
           input.boundaryAboveItems &&

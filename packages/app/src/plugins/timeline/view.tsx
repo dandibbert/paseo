@@ -118,7 +118,7 @@ function PluginTimelineItemBody({
   return (
     <SurfaceErrorBoundary installation={plugin} resetKey={item.data} Surface={Component}>
       <PluginInstallationProvider plugin={plugin}>
-        {item.sourceKind === "assistant_message" ? (
+        {item.source?.kind === "assistant_message" ? (
           <PluginAssistantFileLinkBridge Component={Component} {...props} />
         ) : (
           <Component {...props} />

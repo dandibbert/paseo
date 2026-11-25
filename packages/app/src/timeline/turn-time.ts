@@ -1,5 +1,5 @@
 import type { AgentTurnTelemetry } from "@getpaseo/protocol/agent-types";
-import type { StreamItem } from "@/types/stream";
+import { getAssistantReply, type StreamItem } from "@/types/stream";
 import { startsNewTurn, isTurnTrigger } from "@/agent-stream/turn-membership";
 
 export interface TurnTiming {
@@ -76,7 +76,7 @@ function walkTurns(
       telemetry = undefined;
     }
     lastItemAt = item.timestamp;
-    if (item.kind === "assistant_message") {
+    if (getAssistantReply(item)) {
       assistantIds.push(item.id);
     }
     if (item.kind !== "user_message" && item.kind !== "turn_summary" && item.telemetry) {
