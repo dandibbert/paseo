@@ -27,8 +27,10 @@ function makeDescriptor(overrides: {
   name?: string | null;
   currentBranch?: string | null;
   diffStat?: { additions: number; deletions: number } | null;
+  personal?: boolean;
 }): WorkspaceDescriptorPayload {
   return {
+    ...(overrides.personal ? { personal: true } : {}),
     id: overrides.id,
     workspaceDirectory: overrides.workspaceDirectory,
     projectKind: overrides.projectKind ?? "git",
@@ -109,6 +111,17 @@ function buildHarness(opts: { emitCwdRejects?: boolean } = {}) {
 }
 
 describe("syncObservers", () => {
+  test("never watches the personal space, even when it is a git checkout", () => {
+    const h = buildHarness();
+    h.service.syncObservers([
+      makeDescriptor({ id: "ws1", workspaceDirectory: WS1, personal: true }),
+    ]);
+    h.service.reconcileObservers([
+      makeDescriptor({ id: "ws1", workspaceDirectory: WS1, personal: true }),
+    ]);
+    expect(h.registerCalls).toEqual([]);
+  });
+
   test("registers a WorkspaceGitService subscription for a git workspace", () => {
     const h = buildHarness();
     h.service.syncObservers([makeDescriptor({ id: "ws1", workspaceDirectory: WS1 })]);

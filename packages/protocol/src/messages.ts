@@ -3675,6 +3675,13 @@ export const TerminalSecurePromptRespondRequestSchema = z.object({
   submitNewline: z.boolean().optional(),
 });
 
+// COMPAT(personalSpace): fork, added in v0.17.4. Creates the host's personal space when it is
+// missing and returns its workspace.
+export const WorkspacePersonalEnsureRequestSchema = z.object({
+  type: z.literal("workspace.personal.ensure.request"),
+  requestId: z.string(),
+});
+
 // COMPAT(agentShellCommands): fork, added in v0.17.4.
 export const AgentShellRunRequestSchema = z.object({
   type: z.literal("agent.shell.run.request"),
@@ -4100,6 +4107,7 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   AgentHistorySearchTextRequestSchema,
   TerminalSecurePromptRespondRequestSchema,
   AgentShellRunRequestSchema,
+  WorkspacePersonalEnsureRequestSchema,
   AgentShellFinishRequestSchema,
   AgentShellContextUpdateRequestSchema,
   TerminalControlListRequestSchema,
@@ -4353,6 +4361,8 @@ export const ServerInfoStatusPayloadSchema = z
         agentShellCommands: z.boolean().optional(),
         // COMPAT(terminalControl): fork, added in v0.17.4.
         terminalControl: z.boolean().optional(),
+        // COMPAT(personalSpace): fork, added in v0.17.4.
+        personalSpace: z.boolean().optional(),
         // COMPAT(managedContinuations): added in v0.4.1, remove gate after 2027-11-19.
         managedContinuations: z.boolean().optional(),
         // COMPAT(managedTasks): added in v0.4.1, remove gate after 2027-11-19.
@@ -4897,6 +4907,9 @@ export const WorkspaceDescriptorPayloadSchema = z
     // Retained for wire parsing of older daemon descriptors.
     internal: z.boolean().optional(),
     background: z.boolean().optional(),
+    // COMPAT(personalSpace): fork, added in v0.17.4. The host's personal space: a workspace that
+    // is not a project and skips file watching, git and scripts.
+    personal: z.boolean().optional(),
     archivingAt: z.string().nullable().optional().default(null),
     status: WorkspaceStateBucketSchema,
     // Best-effort workspace status entry timestamp. Old daemons omit the
@@ -7720,6 +7733,16 @@ export const TerminalSecurePromptRespondResponseSchema = z.object({
   }),
 });
 
+// COMPAT(personalSpace): fork, added in v0.17.4.
+export const WorkspacePersonalEnsureResponseSchema = z.object({
+  type: z.literal("workspace.personal.ensure.response"),
+  payload: z.object({
+    requestId: z.string(),
+    workspace: WorkspaceDescriptorPayloadSchema.nullable(),
+    error: z.string().nullable(),
+  }),
+});
+
 // COMPAT(agentShellCommands): fork, added in v0.17.4.
 export const AgentShellRunResponseSchema = z.object({
   type: z.literal("agent.shell.run.response"),
@@ -8511,6 +8534,7 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   AgentHistorySearchTextResponseSchema,
   TerminalSecurePromptRespondResponseSchema,
   AgentShellRunResponseSchema,
+  WorkspacePersonalEnsureResponseSchema,
   AgentShellFinishResponseSchema,
   AgentShellContextUpdateResponseSchema,
   TerminalControlListResponseSchema,

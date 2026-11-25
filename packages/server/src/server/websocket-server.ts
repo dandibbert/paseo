@@ -2218,6 +2218,8 @@ export class VoiceAssistantWebSocketServer {
         agentShellCommands: Boolean(this.agentShellService),
         // COMPAT(terminalControl): fork, added in v0.17.4.
         terminalControl: this.terminalControlBroker !== undefined,
+        // COMPAT(personalSpace): fork, added in v0.17.4.
+        personalSpace: true,
         // COMPAT(managedContinuations): added in v0.4.1, remove gate after 2027-11-19.
         managedContinuations: true,
         // COMPAT(managedTasks): added in v0.4.1, remove gate after 2027-11-19.

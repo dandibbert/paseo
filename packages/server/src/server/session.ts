@@ -1,4 +1,5 @@
 import { recordWorkspaceInteraction } from "./workspace-registry.js";
+import { isPersonalSpacePath, personalSpaceRoot } from "./personal-space.js";
 import { DiffSession } from "./diff/index.js";
 import { type WorkspaceRuntimeStore } from "./workspace-runtime-store/index.js";
 import type { AgentMessageBehavior, AgentMessageDelivery } from "./agent/agent-messages/index.js";
@@ -3599,6 +3600,8 @@ export class Session {
         return this.handleLegacyOpenInEditorRequest(msg);
       case "open_project_request":
         return this.handleOpenProjectRequest(msg);
+      case "workspace.personal.ensure.request":
+        return this.handleWorkspacePersonalEnsureRequest(msg);
       case "project.add.request":
         return this.handleProjectAddRequest(msg);
       case "project.create_directory.request":
@@ -4381,6 +4384,9 @@ export class Session {
 
     try {
       const project = await this.projectRegistry.get(projectId);
+      if (project && isPersonalSpacePath(project.rootPath)) {
+        throw new Error("The personal space cannot be removed");
+      }
       const resolvedProjectId = project?.projectId ?? projectId;
       const projectWorkspaces = (await this.workspaceRegistry.listActive()).filter(
         (workspace) => workspace.projectId === resolvedProjectId,
@@ -6656,6 +6662,7 @@ export class Session {
       ...(workspace.labels && workspace.labels.length > 0 ? { labels: workspace.labels } : {}),
       metadata: workspace.metadata,
       background: workspace.background,
+      ...(isPersonalSpacePath(workspace.cwd) ? { personal: true } : {}),
       parentWorkspaceId: workspace.parentWorkspaceId,
       archivingAt: null,
       status: "done",
@@ -8025,6 +8032,34 @@ export class Session {
     return descriptor;
   }
 
+  private async handleWorkspacePersonalEnsureRequest(
+    request: Extract<SessionInboundMessage, { type: "workspace.personal.ensure.request" }>,
+  ): Promise<void> {
+    const cwd = personalSpaceRoot();
+    try {
+      await mkdir(cwd, { recursive: true });
+      const workspace = await this.withCheckoutForDirectory(cwd, () =>
+        this.workspaceProvisioning.findOrCreateWorkspaceForDirectory(cwd),
+      );
+      const descriptor = await this.describeWorkspaceRecord(workspace);
+      await this.emitWorkspaceUpdateForWorkspaceId(workspace.workspaceId);
+      this.emit({
+        type: "workspace.personal.ensure.response",
+        payload: { requestId: request.requestId, workspace: descriptor, error: null },
+      });
+    } catch (error) {
+      this.sessionLogger.warn({ err: error, cwd }, "Could not open the personal space");
+      this.emit({
+        type: "workspace.personal.ensure.response",
+        payload: {
+          requestId: request.requestId,
+          workspace: null,
+          error: errorToFriendlyMessage(error),
+        },
+      });
+    }
+  }
+
   private async handleOpenProjectRequest(
     request: Extract<SessionInboundMessage, { type: "open_project_request" }>,
   ): Promise<void> {
@@ -8635,6 +8670,9 @@ export class Session {
           const existing = await this.workspaceRegistry.get(request.workspaceId);
           if (!existing) {
             throw new Error(`Workspace not found: ${request.workspaceId}`);
+          }
+          if (isPersonalSpacePath(existing.cwd)) {
+            throw new Error("The personal space cannot be archived");
           }
           return archiveByScope(
             {

@@ -7647,6 +7647,26 @@ export class DaemonClient {
     });
   }
 
+  /** Creates the host's personal space when it is missing and returns its workspace. */
+  async ensurePersonalSpace(): Promise<
+    CorrelatedResponsePayload<"workspace.personal.ensure.response">
+  > {
+    // COMPAT(personalSpace): fork, added in v0.17.4.
+    if (this.getLastServerInfoMessage()?.features?.personalSpace !== true) {
+      throw new Error("Update the host to use the personal space.");
+    }
+    const requestId = this.createRequestId();
+    return this.sendCorrelatedRequest({
+      requestId,
+      message: SessionInboundMessageSchema.parse({
+        type: "workspace.personal.ensure.request",
+        requestId,
+      }),
+      responseType: "workspace.personal.ensure.response",
+      options: { skipQueue: true },
+    });
+  }
+
   async runAgentShellCommand(input: {
     agentId: string;
     command: string;

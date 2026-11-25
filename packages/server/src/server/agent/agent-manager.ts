@@ -1,4 +1,5 @@
 import { ProviderCliUpdateError } from "./provider-cli-update.js";
+import { isPersonalSpacePath, personalSpaceSystemPrompt } from "../personal-space.js";
 import { resolveAgentBusyReason, type AgentBusyReason } from "./agent-busy.js";
 import type { AttachedAgentTool, PluginAgentToolsRuntime } from "../plugins/agent-tools.js";
 import type {
@@ -7247,6 +7248,7 @@ export class AgentManager {
           paseoToolsReachable &&
           isPaseoToolEnabled(paseoToolPolicy, "render_ui") &&
           storedConfig.internal !== true,
+        personalSpaceCwd: isPersonalSpacePath(storedConfig.cwd) ? storedConfig.cwd : null,
       },
     );
     return { storedConfig, launchConfig, paseoToolPolicy };
@@ -7254,11 +7256,12 @@ export class AgentManager {
 
   private applyDaemonAppendSystemPrompt(
     config: AgentSessionConfig,
-    options: { renderUi: boolean },
+    options: { renderUi: boolean; personalSpaceCwd: string | null },
   ): AgentSessionConfig {
     const daemonAppendSystemPrompt = [
       this.appendSystemPrompt.trim(),
       options.renderUi ? RENDER_UI_SYSTEM_PROMPT : "",
+      options.personalSpaceCwd ? personalSpaceSystemPrompt({ cwd: options.personalSpaceCwd }) : "",
     ]
       .filter((part) => part.length > 0)
       .join("\n\n");

@@ -1,4 +1,5 @@
 import { resolve } from "node:path";
+import { isPersonalSpacePath } from "./personal-space.js";
 import type pino from "pino";
 import type {
   AgentSnapshotPayload,
@@ -606,7 +607,7 @@ export class WorkspaceDirectory {
   }
 
   async listObservationTargets(): Promise<
-    Pick<WorkspaceDescriptorPayload, "id" | "workspaceDirectory" | "workspaceKind">[]
+    Pick<WorkspaceDescriptorPayload, "id" | "workspaceDirectory" | "workspaceKind" | "personal">[]
   > {
     const [workspaces, projects] = await Promise.all([
       this.deps.workspaceRegistry.listActive(),
@@ -616,6 +617,7 @@ export class WorkspaceDirectory {
       id: workspace.workspaceId,
       workspaceDirectory: workspace.cwd,
       workspaceKind: workspace.kind,
+      personal: isPersonalSpacePath(workspace.cwd),
     }));
   }
 

@@ -37,7 +37,7 @@ export interface WorkspaceGitObserverService {
   syncObservers(workspaces: Iterable<WorkspaceDescriptorPayload>): void;
   reconcileObservers(
     workspaces: Iterable<
-      Pick<WorkspaceDescriptorPayload, "id" | "workspaceDirectory" | "workspaceKind">
+      Pick<WorkspaceDescriptorPayload, "id" | "workspaceDirectory" | "workspaceKind" | "personal">
     >,
   ): void;
   recordDescriptorState(workspaceId: string, workspace: WorkspaceDescriptorPayload | null): void;
@@ -176,6 +176,8 @@ export function createWorkspaceGitObserverService(deps: {
 
   function syncObservers(workspaces: Iterable<WorkspaceDescriptorPayload>): void {
     for (const workspace of workspaces) {
+      // The personal space reaches the whole computer; Paseo never watches it.
+      if (workspace.personal) continue;
       syncObserver(workspace.workspaceDirectory, {
         isGit: workspace.workspaceKind !== "directory",
         workspaceId: workspace.id,
@@ -186,7 +188,13 @@ export function createWorkspaceGitObserverService(deps: {
 
   return {
     reconcileObservers(workspaces) {
-      const retained = new Map([...workspaces].map((workspace) => [workspace.id, workspace]));
+      // The personal space reaches the whole computer; Paseo never watches it, so an observer
+      // left from before it was recognised is removed here too.
+      const retained = new Map(
+        [...workspaces]
+          .filter((workspace) => !workspace.personal)
+          .map((workspace) => [workspace.id, workspace]),
+      );
       for (const workspaceId of workspaceStates.keys()) {
         if (!retained.has(workspaceId)) removeForWorkspaceId(workspaceId);
       }
