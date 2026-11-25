@@ -2973,6 +2973,23 @@ export const ja: TranslationResources = {
         name: {
           label: "名前",
         },
+        icon: {
+          label: "アイコン",
+          accessibilityLabel: "アイコン、{{value}}",
+          auto: "自動",
+          autoDetected: "自動 ({{icon}})",
+          options: {
+            server: "サーバー",
+            laptop: "ノート PC",
+            desktop: "デスクトップ",
+            mini: "ミニ PC",
+            workstation: "ワークステーション",
+            cloud: "クラウド",
+            container: "コンテナ",
+            board: "シングルボード PC",
+            terminal: "ターミナル",
+          },
+        },
         color: {
           label: "色",
           accessibilityLabel: "色、{{value}}",
@@ -3008,6 +3025,14 @@ export const ja: TranslationResources = {
         relay: "リレー",
         local: "ローカル",
         remoteSsh: "リモート SSH",
+      },
+      connectionKinds: {
+        local: "ローカル",
+        relay: "リレー",
+        tailscale: "Tailscale",
+        ssh: "SSH",
+        direct: "ダイレクト",
+        routed: "経由",
       },
       connections: {
         title: "接続",
