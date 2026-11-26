@@ -3343,6 +3343,11 @@ export const ko: TranslationResources = {
           whenToUse: "사용 시기",
         },
       },
+      rateLimitAutoResume: {
+        title: "속도 제한 후 자동으로 계속",
+        hint: "에이전트가 속도 제한(HTTP 429)으로 멈추면 할당량이 돌아온 뒤 계속하라는 메시지를 보냅니다. 제공자가 알려 준 시각 30초 뒤, 시각이 없으면 2·5·10분 뒤, 이후 15분마다.",
+        failed: "자동 계속 설정을 업데이트할 수 없습니다",
+      },
       agentErrorNotifications: {
         title: "에이전트 실패 시 알림",
         hint: "이 호스트의 에이전트가 오류로 멈추면 완료 때처럼 휴대폰으로 푸시하고 시스템 알림을 표시합니다.",
@@ -3667,6 +3672,10 @@ export const ko: TranslationResources = {
         cancel: "취소",
       },
     },
+  },
+  rateLimitResume: {
+    scheduled: "{{time}}에 자동으로 계속합니다 (속도 제한, {{attempt}}번째)",
+    cancel: "취소",
   },
   agentShell: en.agentShell,
   terminalControl: en.terminalControl,

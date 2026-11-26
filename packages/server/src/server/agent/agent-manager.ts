@@ -87,6 +87,7 @@ import { buildArchivedAgentRecord, type ArchivedStoredAgentRecord } from "./agen
 import type { AgentShellContextEntry } from "@getpaseo/protocol/messages";
 import type { JsonValue, ProviderOptions } from "@getpaseo/protocol/agent-types";
 import { toStoredAgentRecord } from "./agent-projections.js";
+import type { RateLimitResumeState } from "./rate-limit-resume/index.js";
 import { sanitizeAgentMetrics, withModelMetric } from "./agent-metrics.js";
 import {
   applyProviderOptionsPatch,
@@ -610,6 +611,8 @@ interface ManagedAgentBase {
   pendingShellContext?: AgentShellContextEntry[];
   /** Durable user-initiated shell timeline items merged across legacy history rehydration. */
   shellTimelineItems?: StoredShellTimelineItem[];
+  /** The continue message the daemon will send after a rate-limited turn. Not persisted. */
+  rateLimitResume?: RateLimitResumeState;
 }
 
 type ManagedAgentWithSession = ManagedAgentBase & {
@@ -1032,6 +1035,7 @@ export class AgentManager {
   private readonly inFlightAgentCloses = new Map<string, Promise<void>>();
   private readonly historySessions = new WeakSet<AgentSession>();
   private readonly reloadedSessionCloses = new WeakMap<AgentSession, Promise<void>>();
+  private rateLimitResumeCanceler: ((agentId: string) => boolean) | null = null;
   private readonly runtimeCleanupIdentities = new WeakMap<
     AgentSession,
     { readonly openedAt: number }
@@ -3809,6 +3813,25 @@ export class AgentManager {
       shellTerminalId: agent.shellTerminalId,
       pendingShellContext: [...(agent.pendingShellContext ?? [])],
     };
+  }
+
+  /** Shows or clears the pending continue message after a rate-limited turn. */
+  publishRateLimitResume(agentId: string, state: RateLimitResumeState | null): void {
+    const agent = this.agents.get(agentId);
+    if (!agent) return;
+    if (state) agent.rateLimitResume = { ...state };
+    else delete agent.rateLimitResume;
+    this.emitState(agent, { persist: false });
+  }
+
+  /** Who cancels a pending rate-limit resume; set once by the daemon. */
+  setRateLimitResumeCanceler(cancel: ((agentId: string) => boolean) | null): void {
+    this.rateLimitResumeCanceler = cancel;
+  }
+
+  /** Drops the continue message this agent is waiting to send. False when there was none. */
+  cancelRateLimitResume(agentId: string): boolean {
+    return this.rateLimitResumeCanceler?.(agentId) ?? false;
   }
 
   async setShellTerminalId(agentId: string, terminalId: string): Promise<void> {

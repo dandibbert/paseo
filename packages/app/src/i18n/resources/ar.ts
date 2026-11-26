@@ -3362,6 +3362,11 @@ export const ar: TranslationResources = {
           whenToUse: "متى يُستخدم",
         },
       },
+      rateLimitAutoResume: {
+        title: "المتابعة تلقائيًا بعد حد المعدل",
+        hint: "عندما يتوقف الوكيل بسبب حد المعدل (HTTP 429)، أرسل له رسالة للمتابعة عند عودة الحصة: بعد 30 ثانية من الوقت الذي يحدده المزود، أو بعد 2 و5 و10 دقائق ثم كل 15 دقيقة.",
+        failed: "تعذر تحديث المتابعة التلقائية",
+      },
       agentErrorNotifications: {
         title: "الإشعار عند فشل وكيل",
         hint: "يرسل إشعارًا إلى الهاتف ويعرض إشعار النظام عندما يتوقف وكيل على هذا المضيف بسبب خطأ، كما عند انتهاء الدور.",
@@ -3681,6 +3686,10 @@ export const ar: TranslationResources = {
         cancel: "يلغي",
       },
     },
+  },
+  rateLimitResume: {
+    scheduled: "سيتابع تلقائيًا في {{time}} (حد المعدل، المحاولة {{attempt}})",
+    cancel: "إلغاء",
   },
   agentShell: en.agentShell,
   terminalControl: en.terminalControl,

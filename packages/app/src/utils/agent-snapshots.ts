@@ -57,13 +57,18 @@ export function derivePendingPermissionKey(
   return `${agentId}:${fallbackId}`;
 }
 
-function projectAgentShellSnapshotFields(source: {
-  shellTerminalId?: string;
-  pendingShellContext?: Agent["pendingShellContext"];
-}): Partial<Pick<AgentSnapshotPayload, "shellTerminalId" | "pendingShellContext">> {
-  const fields: Partial<Pick<AgentSnapshotPayload, "shellTerminalId" | "pendingShellContext">> = {};
+type ForkSnapshotFields = Partial<
+  Pick<AgentSnapshotPayload, "shellTerminalId" | "pendingShellContext" | "rateLimitResume">
+>;
+
+/** Fork-only snapshot fields: the `!` shell and the pending rate-limit continue. */
+function projectAgentShellSnapshotFields(
+  source: Pick<Agent, "shellTerminalId" | "pendingShellContext" | "rateLimitResume">,
+): ForkSnapshotFields {
+  const fields: ForkSnapshotFields = {};
   if (source.shellTerminalId) fields.shellTerminalId = source.shellTerminalId;
   if (source.pendingShellContext?.length) fields.pendingShellContext = source.pendingShellContext;
+  if (source.rateLimitResume) fields.rateLimitResume = source.rateLimitResume;
   return fields;
 }
 
@@ -162,5 +167,6 @@ export function normalizeAgentSnapshot(snapshot: AgentSnapshotPayload, serverId:
     ...(snapshot.pendingShellContext?.length
       ? { pendingShellContext: snapshot.pendingShellContext }
       : {}),
+    ...(snapshot.rateLimitResume ? { rateLimitResume: snapshot.rateLimitResume } : {}),
   };
 }

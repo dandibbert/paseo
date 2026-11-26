@@ -64,6 +64,7 @@ import {
 } from "lucide-react-native";
 import type { AgentShellContextSummary } from "@getpaseo/protocol/messages";
 import { PendingShellContextBar } from "./pending-shell-context-bar";
+import { RateLimitResumeBar } from "./rate-limit-resume-bar";
 import { parseComposerShellInput, validateComposerShellSubmit } from "./shell-command";
 import * as Clipboard from "expo-clipboard";
 import { FOOTER_HEIGHT } from "@/constants/layout";
@@ -2881,6 +2882,9 @@ function ComposerContentImpl({
         >
           <View style={inputAreaContentStyle}>
             {isFullscreen ? null : queueList}
+            {isFullscreen || !hasAgent ? null : (
+              <RateLimitResumeBar serverId={serverId} agentId={agentId} />
+            )}
             {pendingShellContextSlot}
             {shellModeBanner}
             {!isFullscreen && sendErrorNode}

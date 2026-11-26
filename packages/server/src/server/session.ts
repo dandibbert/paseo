@@ -3468,6 +3468,20 @@ export class Session {
     }
   }
 
+  private handleRateLimitResumeCancelRequest(
+    msg: Extract<SessionInboundMessage, { type: "agent.rate_limit_resume.cancel.request" }>,
+  ): void {
+    const cancelled = this.agentManager.cancelRateLimitResume(msg.agentId);
+    this.emit({
+      type: "agent.rate_limit_resume.cancel.response",
+      payload: {
+        requestId: msg.requestId,
+        agentId: msg.agentId,
+        error: cancelled ? null : "Nothing is waiting to continue",
+      },
+    });
+  }
+
   private dispatchAgentShellMessage(msg: SessionInboundMessage): Promise<void> | undefined {
     switch (msg.type) {
       case "agent.shell.run.request":
@@ -3476,6 +3490,9 @@ export class Session {
         return this.handleAgentShellFinishRequest(msg);
       case "agent.shell.context.update.request":
         return this.handleAgentShellContextUpdateRequest(msg);
+      case "agent.rate_limit_resume.cancel.request":
+        this.handleRateLimitResumeCancelRequest(msg);
+        return undefined;
       default:
         return undefined;
     }

@@ -262,6 +262,8 @@ export const MutableDaemonConfigSchema = z
     // COMPAT(agentErrorNotifications): added in v0.15.3-personal, optional for older daemons, which
     // never notify on errors. Absent means on.
     notifyOnAgentErrors: z.boolean().optional(),
+    // COMPAT(rateLimitAutoResume): fork, added in v0.17.5. Absent means on.
+    autoResumeOnRateLimit: z.boolean().optional(),
     // COMPAT(idleRuntimeCleanupSetting): added in v0.13.0, keep optional while old daemons are supported.
     // Persisted host-wide value, applied live by the daemon.
     idleRuntimeCleanup: z.boolean().optional(),
@@ -296,6 +298,7 @@ export const MutableDaemonConfigPatchSchema = z
     autoArchiveAfterMerge: z.boolean().optional(),
     enableTerminalAgentHooks: z.boolean().optional(),
     notifyOnAgentErrors: z.boolean().optional(),
+    autoResumeOnRateLimit: z.boolean().optional(),
     idleRuntimeCleanup: z.boolean().optional(),
     resumeOnStartup: z.boolean().optional(),
     resumePrompt: z.string().optional(),
@@ -1035,6 +1038,11 @@ export const AgentSnapshotPayloadSchema = z.object({
   // Summaries only: agent snapshots go to every client on every change, so the output stays on
   // the daemon until it is attached to the next prompt.
   pendingShellContext: z.array(AgentShellContextSummarySchema).optional(),
+  // COMPAT(rateLimitAutoResume): fork, added in v0.17.5. Set while the daemon waits to send a
+  // continue message after a rate-limited turn.
+  rateLimitResume: z
+    .object({ dueAt: z.string(), attempt: z.number().int().nonnegative() })
+    .optional(),
 });
 
 export const AgentShellContextEntrySchema = AgentShellContextSummarySchema.extend({
@@ -3697,6 +3705,14 @@ export const TerminalSecurePromptRespondRequestSchema = z.object({
   submitNewline: z.boolean().optional(),
 });
 
+// COMPAT(rateLimitAutoResume): fork, added in v0.17.5. Drops the continue message the daemon is
+// waiting to send after a rate-limited turn.
+export const AgentRateLimitResumeCancelRequestSchema = z.object({
+  type: z.literal("agent.rate_limit_resume.cancel.request"),
+  requestId: z.string(),
+  agentId: z.string(),
+});
+
 // COMPAT(personalSpace): fork, added in v0.17.4. Creates the host's personal space when it is
 // missing and returns its workspace.
 export const WorkspacePersonalEnsureRequestSchema = z.object({
@@ -4132,6 +4148,7 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   TerminalSecurePromptRespondRequestSchema,
   AgentShellRunRequestSchema,
   WorkspacePersonalEnsureRequestSchema,
+  AgentRateLimitResumeCancelRequestSchema,
   AgentShellFinishRequestSchema,
   AgentShellContextUpdateRequestSchema,
   TerminalControlListRequestSchema,
@@ -4387,6 +4404,8 @@ export const ServerInfoStatusPayloadSchema = z
         terminalControl: z.boolean().optional(),
         // COMPAT(personalSpace): fork, added in v0.17.4.
         personalSpace: z.boolean().optional(),
+        // COMPAT(rateLimitAutoResume): fork, added in v0.17.5.
+        rateLimitAutoResume: z.boolean().optional(),
         // COMPAT(managedContinuations): added in v0.4.1, remove gate after 2027-11-19.
         managedContinuations: z.boolean().optional(),
         // COMPAT(managedTasks): added in v0.4.1, remove gate after 2027-11-19.
@@ -7790,6 +7809,16 @@ export const TerminalSecurePromptRespondResponseSchema = z.object({
   }),
 });
 
+// COMPAT(rateLimitAutoResume): fork, added in v0.17.5.
+export const AgentRateLimitResumeCancelResponseSchema = z.object({
+  type: z.literal("agent.rate_limit_resume.cancel.response"),
+  payload: z.object({
+    requestId: z.string(),
+    agentId: z.string(),
+    error: z.string().nullable(),
+  }),
+});
+
 // COMPAT(personalSpace): fork, added in v0.17.4.
 export const WorkspacePersonalEnsureResponseSchema = z.object({
   type: z.literal("workspace.personal.ensure.response"),
@@ -8628,6 +8657,7 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   TerminalSecurePromptRespondResponseSchema,
   AgentShellRunResponseSchema,
   WorkspacePersonalEnsureResponseSchema,
+  AgentRateLimitResumeCancelResponseSchema,
   AgentShellFinishResponseSchema,
   AgentShellContextUpdateResponseSchema,
   TerminalControlListResponseSchema,

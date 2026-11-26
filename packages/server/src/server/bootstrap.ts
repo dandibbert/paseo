@@ -1,4 +1,5 @@
 import { unarchiveWorkspaceAgents } from "./workspace-archive-service.js";
+import { createRateLimitResume } from "./agent/rate-limit-resume/index.js";
 import { createRestartRecovery } from "./agent/restart-recovery/index.js";
 import { sendPromptToAgent, unarchiveAgentState } from "./agent/agent-prompt.js";
 import { createChangeRequestWatches } from "./agent/change-request-watches/index.js";
@@ -402,6 +403,7 @@ export interface PaseoDaemonConfig {
   autoArchiveAfterMerge?: boolean;
   enableTerminalAgentHooks?: boolean;
   notifyOnAgentErrors?: boolean;
+  autoResumeOnRateLimit?: boolean;
   appendSystemPrompt?: string;
   genuiSystemPrompt?: boolean;
   managedBackgroundCommands?: boolean;
@@ -583,6 +585,7 @@ function createInitialMutableDaemonConfig(config: ResolvedDaemonSettings): Mutab
     autoArchiveAfterMerge: config.autoArchiveAfterMerge ?? false,
     enableTerminalAgentHooks: config.enableTerminalAgentHooks ?? false,
     notifyOnAgentErrors: config.notifyOnAgentErrors !== false,
+    autoResumeOnRateLimit: config.autoResumeOnRateLimit !== false,
     idleRuntimeCleanup: config.idleRuntimeCleanup !== false,
     resumeOnStartup: config.resumeOnStartup === true,
     resumePrompt: config.resumePrompt ?? "Resume working.",
@@ -1124,6 +1127,26 @@ export async function createPaseoDaemon(
     report: (agentId, err) => logger.error({ agentId, err }, "Agent restart recovery failed"),
   });
   await restartRecovery.prepareStartup();
+  const rateLimitResume = createRateLimitResume({
+    enabled: () => daemonConfigStore.get().autoResumeOnRateLimit !== false,
+    subscribe: (callback) => agentManager.subscribe(callback, { replayState: false }),
+    publish: (agentId, state) => agentManager.publishRateLimitResume(agentId, state),
+    isRunning: (agentId) => agentManager.getAgent(agentId)?.lifecycle === "running",
+    dispatch: (agentId, prompt) => {
+      if (!wsServer) throw new Error("Daemon is not accepting agent messages");
+      return sendPromptToAgent({
+        agentMessages: wsServer.agentMessages,
+        agentId,
+        prompt,
+        agentManager,
+        agentStorage,
+        logger,
+        unarchive: false,
+      });
+    },
+    logger: logger.child({ module: "rate-limit-resume" }),
+  });
+  agentManager.setRateLimitResumeCanceler((agentId) => rateLimitResume.cancel(agentId));
   logger.info({ elapsed: elapsed() }, "Agent storage initialized");
   await bootstrapWorkspaceRegistries({
     serverId,
@@ -2153,6 +2176,7 @@ export async function createPaseoDaemon(
     await changeRequestWatches.close();
     await finishSubscriptions.close();
     await managedContinuations?.stop({ killTasks: false });
+    rateLimitResume.stop();
     await wsServer?.agentMessages.close();
     agentManager.prepareForShutdown();
     await restartRecovery.captureRunningAgents();

@@ -119,6 +119,8 @@ export interface Agent {
   projectPlacement?: ProjectPlacementPayload | null;
   shellTerminalId?: string;
   pendingShellContext?: AgentShellContextSummary[];
+  /** The continue message the host will send after a rate-limited turn. */
+  rateLimitResume?: { dueAt: string; attempt: number };
 }
 
 export interface WorkspaceDescriptor {

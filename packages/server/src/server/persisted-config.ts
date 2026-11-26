@@ -297,6 +297,7 @@ export const PersistedConfigSchema = z
         autoArchiveAfterMerge: z.boolean().optional(),
         enableTerminalAgentHooks: z.boolean().optional(),
         notifyOnAgentErrors: z.boolean().optional(),
+        autoResumeOnRateLimit: z.boolean().optional(),
         appendSystemPrompt: z.string().optional(),
         genuiSystemPrompt: z.boolean().optional(),
         managedBackgroundCommands: z.boolean().optional(),

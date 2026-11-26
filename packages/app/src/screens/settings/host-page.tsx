@@ -296,6 +296,7 @@ export function HostAgentsPage({ serverId }: { serverId: string }) {
           <RestartRecoveryCard serverId={serverId} />
           <IdleRuntimeCleanupCard serverId={serverId} />
           <AgentErrorNotificationsCard serverId={serverId} />
+          <RateLimitAutoResumeCard serverId={serverId} />
         </SettingsSection>
       ) : (
         <View style={[settingsStyles.card, styles.emptyCard]}>
@@ -1066,6 +1067,47 @@ function AgentErrorNotificationsCard({ serverId }: { serverId: string }) {
           onValueChange={handleValueChange}
           accessibilityLabel={t("settings.host.agentErrorNotifications.title")}
           testID="host-page-agent-error-notifications-switch"
+        />
+      </View>
+    </View>
+  );
+}
+
+// COMPAT(rateLimitAutoResume): fork, added in v0.17.5. Older daemons omit the field.
+function RateLimitAutoResumeCard({ serverId }: { serverId: string }) {
+  const { t } = useTranslation();
+  const isConnected = useHostRuntimeIsConnected(serverId);
+  const { config, patchConfig } = useDaemonConfig(serverId);
+
+  const handleValueChange = useCallback(
+    (next: boolean) => {
+      void patchConfig({ autoResumeOnRateLimit: next }).catch((error) => {
+        console.error("[HostPage] Failed to update automatic continue", error);
+        Alert.alert(
+          t("settings.host.rateLimitAutoResume.failed"),
+          error instanceof Error ? error.message : String(error),
+        );
+      });
+    },
+    [patchConfig, t],
+  );
+
+  if (!isConnected || config?.autoResumeOnRateLimit === undefined) return null;
+
+  return (
+    <View style={settingsStyles.card} testID="host-page-rate-limit-auto-resume-card">
+      <View style={settingsStyles.row}>
+        <View style={settingsStyles.rowContent}>
+          <Text style={settingsStyles.rowTitle}>
+            {t("settings.host.rateLimitAutoResume.title")}
+          </Text>
+          <Text style={settingsStyles.rowHint}>{t("settings.host.rateLimitAutoResume.hint")}</Text>
+        </View>
+        <Switch
+          value={config.autoResumeOnRateLimit}
+          onValueChange={handleValueChange}
+          accessibilityLabel={t("settings.host.rateLimitAutoResume.title")}
+          testID="host-page-rate-limit-auto-resume-switch"
         />
       </View>
     </View>

@@ -7686,6 +7686,26 @@ export class DaemonClient {
     });
   }
 
+  async cancelRateLimitResume(
+    agentId: string,
+  ): Promise<CorrelatedResponsePayload<"agent.rate_limit_resume.cancel.response">> {
+    // COMPAT(rateLimitAutoResume): fork, added in v0.17.5.
+    if (this.getLastServerInfoMessage()?.features?.rateLimitAutoResume !== true) {
+      throw new Error("Update the host to cancel automatic continue.");
+    }
+    const requestId = this.createRequestId();
+    return this.sendCorrelatedRequest({
+      requestId,
+      message: SessionInboundMessageSchema.parse({
+        type: "agent.rate_limit_resume.cancel.request",
+        requestId,
+        agentId,
+      }),
+      responseType: "agent.rate_limit_resume.cancel.response",
+      options: { skipQueue: true },
+    });
+  }
+
   async runAgentShellCommand(input: {
     agentId: string;
     command: string;

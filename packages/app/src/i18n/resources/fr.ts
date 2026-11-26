@@ -3404,6 +3404,11 @@ export const fr: TranslationResources = {
           whenToUse: "Quand l’utiliser",
         },
       },
+      rateLimitAutoResume: {
+        title: "Reprendre automatiquement après une limite de débit",
+        hint: "Quand un agent s'arrête sur une limite de débit (HTTP 429), lui envoyer un message pour reprendre quand le quota revient : 30 secondes après l'heure indiquée par le fournisseur, ou après 2, 5, 10 puis toutes les 15 minutes.",
+        failed: "Impossible de mettre à jour la reprise automatique",
+      },
       agentErrorNotifications: {
         title: "Prévenir quand un agent échoue",
         hint: "Envoie une notification au téléphone et affiche une notification système quand un agent de cet hôte s’arrête sur une erreur, comme à la fin d’un tour.",
@@ -3733,6 +3738,10 @@ export const fr: TranslationResources = {
         cancel: "Annuler",
       },
     },
+  },
+  rateLimitResume: {
+    scheduled: "Reprise automatique à {{time}} (limite de débit, tentative {{attempt}})",
+    cancel: "Annuler",
   },
   agentShell: en.agentShell,
   terminalControl: en.terminalControl,

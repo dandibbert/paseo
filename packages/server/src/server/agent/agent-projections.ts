@@ -216,6 +216,7 @@ export function toAgentPayload(
     ...visibilityFlags(agent),
     ...projectSessionMetrics(agent.sessionMetrics),
     ...projectShellWireFields(agent),
+    ...(agent.rateLimitResume ? { rateLimitResume: { ...agent.rateLimitResume } } : {}),
   };
 
   const usageScopeKey = projectUsageScopeKey(agent);

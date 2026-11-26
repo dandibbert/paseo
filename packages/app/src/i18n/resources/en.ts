@@ -3508,6 +3508,11 @@ export const en = {
           whenToUse: "When to use",
         },
       },
+      rateLimitAutoResume: {
+        title: "Continue automatically after a rate limit",
+        hint: "When an agent stops on a rate limit (HTTP 429), send it a message to continue once the quota is back: at the time the provider names, plus 30 seconds, or after 2, 5, 10, then every 15 minutes.",
+        failed: "Unable to update automatic continue",
+      },
       agentErrorNotifications: {
         title: "Notify when an agent fails",
         hint: "Push to your phone and show a system notification when an agent on this host stops with an error, like a finished turn.",
@@ -3829,6 +3834,10 @@ export const en = {
         cancel: "Cancel",
       },
     },
+  },
+  rateLimitResume: {
+    scheduled: "Continues automatically at {{time}} (rate limit, attempt {{attempt}})",
+    cancel: "Cancel",
   },
   agentShell: {
     modeBadge: "Terminal mode",

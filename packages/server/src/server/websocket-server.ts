@@ -2253,6 +2253,7 @@ export class VoiceAssistantWebSocketServer {
         terminalControl: this.terminalControlBroker !== undefined,
         // COMPAT(personalSpace): fork, added in v0.17.4.
         personalSpace: true,
+        rateLimitAutoResume: true,
         // COMPAT(managedContinuations): added in v0.4.1, remove gate after 2027-11-19.
         managedContinuations: true,
         // COMPAT(managedTasks): added in v0.4.1, remove gate after 2027-11-19.

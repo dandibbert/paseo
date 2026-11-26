@@ -3393,6 +3393,11 @@ export const zhCN: TranslationResources = {
           whenToUse: "适用场景",
         },
       },
+      rateLimitAutoResume: {
+        title: "限额后自动继续",
+        hint: "agent 因限额（HTTP 429）停下时，等额度恢复后自动发消息让它继续：报错里给了时间就在那个时间后 30 秒发；没给时间就依次等 2、5、10 分钟，之后每 15 分钟一次。",
+        failed: "无法更新自动继续设置",
+      },
       agentErrorNotifications: {
         title: "agent 出错时通知",
         hint: "这台主机上的 agent 出错停止时，像完成一轮一样推送到手机并弹出系统通知。",
@@ -3700,6 +3705,10 @@ export const zhCN: TranslationResources = {
         cancel: "取消",
       },
     },
+  },
+  rateLimitResume: {
+    scheduled: "将于 {{time}} 自动继续（限额，第 {{attempt}} 次）",
+    cancel: "取消",
   },
   agentShell: {
     modeBadge: "终端命令模式",

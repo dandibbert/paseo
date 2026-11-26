@@ -600,6 +600,7 @@ export type ResolvedDaemonSettings = Pick<
   | "autoArchiveAfterMerge"
   | "enableTerminalAgentHooks"
   | "notifyOnAgentErrors"
+  | "autoResumeOnRateLimit"
   | "appendSystemPrompt"
   | "genuiSystemPrompt"
   | "managedBackgroundCommands"
@@ -681,6 +682,11 @@ function notifiesOnAgentErrors(persisted: PersistedConfig): boolean {
   return persisted.daemon?.notifyOnAgentErrors !== false;
 }
 
+// Absent means on.
+function autoResumesOnRateLimit(persisted: PersistedConfig): boolean {
+  return persisted.daemon?.autoResumeOnRateLimit !== false;
+}
+
 export function resolveReloadableConfig(
   persisted: PersistedConfig,
   options?: ResolveConfigFromPersistedOptions,
@@ -701,6 +707,7 @@ export function resolveReloadableConfig(
     git: resolveGitProcessConfig(env, persisted),
     enableTerminalAgentHooks: persisted.daemon?.enableTerminalAgentHooks ?? false,
     notifyOnAgentErrors: notifiesOnAgentErrors(persisted),
+    autoResumeOnRateLimit: autoResumesOnRateLimit(persisted),
     skillSelection: persisted.agents?.skills?.selection,
     pluginsEnabled: persisted.pluginsEnabled ?? false,
     plugins: persisted.plugins,

@@ -39,6 +39,7 @@ interface SupportedMutableConfigPatch {
   autoArchiveAfterMerge?: boolean;
   enableTerminalAgentHooks?: boolean;
   notifyOnAgentErrors?: boolean;
+  autoResumeOnRateLimit?: boolean;
   idleRuntimeCleanup?: boolean;
   resumeOnStartup?: boolean;
   resumePrompt?: string;
@@ -262,6 +263,7 @@ const RELOADABLE_PATHS = [
   "daemon.autoArchiveAfterMerge",
   "daemon.enableTerminalAgentHooks",
   "daemon.notifyOnAgentErrors",
+  "daemon.autoResumeOnRateLimit",
   "daemon.appendSystemPrompt",
   "daemon.genuiSystemPrompt",
   "daemon.managedBackgroundCommands",
@@ -293,6 +295,7 @@ const PERSISTED_TO_MUTABLE_PATH = new Map<string, string>([
   ["daemon.autoArchiveAfterMerge", "autoArchiveAfterMerge"],
   ["daemon.enableTerminalAgentHooks", "enableTerminalAgentHooks"],
   ["daemon.notifyOnAgentErrors", "notifyOnAgentErrors"],
+  ["daemon.autoResumeOnRateLimit", "autoResumeOnRateLimit"],
   ["daemon.appendSystemPrompt", "appendSystemPrompt"],
   ["daemon.genuiSystemPrompt", "genuiSystemPrompt"],
   ["daemon.managedBackgroundCommands", "managedBackgroundCommands"],
@@ -401,6 +404,9 @@ function pickSupportedPatchFields(patch: MutableDaemonConfigPatch): SupportedMut
       : {}),
     ...(patch.notifyOnAgentErrors !== undefined
       ? { notifyOnAgentErrors: patch.notifyOnAgentErrors }
+      : {}),
+    ...(patch.autoResumeOnRateLimit !== undefined
+      ? { autoResumeOnRateLimit: patch.autoResumeOnRateLimit }
       : {}),
     ...pickRestartRecoveryPatch(patch),
     ...(patch.idleRuntimeCleanup !== undefined
@@ -926,6 +932,19 @@ function mergeMutableAgentPatch(
   return Object.keys(next).length > 0 ? (next as PersistedConfig["agents"]) : undefined;
 }
 
+/** Host switches for what happens when an agent stops on an error. */
+function mergeAgentAttentionPatch(
+  next: NonNullable<PersistedConfig["daemon"]>,
+  patch: Pick<SupportedMutableConfigPatch, "notifyOnAgentErrors" | "autoResumeOnRateLimit">,
+): void {
+  if (patch.notifyOnAgentErrors !== undefined) {
+    next.notifyOnAgentErrors = patch.notifyOnAgentErrors;
+  }
+  if (patch.autoResumeOnRateLimit !== undefined) {
+    next.autoResumeOnRateLimit = patch.autoResumeOnRateLimit;
+  }
+}
+
 function mergeMutableDaemonPatch(
   persistedDaemon: PersistedConfig["daemon"],
   patch: Omit<SupportedMutableConfigPatch, "removeProviders">,
@@ -951,9 +970,7 @@ function mergeMutableDaemonPatch(
   if (patch.enableTerminalAgentHooks !== undefined) {
     next.enableTerminalAgentHooks = patch.enableTerminalAgentHooks;
   }
-  if (patch.notifyOnAgentErrors !== undefined) {
-    next.notifyOnAgentErrors = patch.notifyOnAgentErrors;
-  }
+  mergeAgentAttentionPatch(next, patch);
   if (patch.appendSystemPrompt !== undefined) next.appendSystemPrompt = patch.appendSystemPrompt;
   if (patch.genuiSystemPrompt !== undefined) next.genuiSystemPrompt = patch.genuiSystemPrompt;
   if (patch.managedBackgroundCommands !== undefined) {

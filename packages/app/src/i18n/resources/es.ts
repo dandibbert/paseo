@@ -3399,6 +3399,11 @@ export const es: TranslationResources = {
           whenToUse: "Cuándo usarlo",
         },
       },
+      rateLimitAutoResume: {
+        title: "Continuar automáticamente tras un límite de uso",
+        hint: "Cuando un agente se detiene por un límite de uso (HTTP 429), le envía un mensaje para continuar cuando vuelve la cuota: 30 segundos después de la hora que indica el proveedor, o tras 2, 5, 10 y luego cada 15 minutos.",
+        failed: "No se pudo actualizar la continuación automática",
+      },
       agentErrorNotifications: {
         title: "Avisar cuando un agente falle",
         hint: "Envía una notificación al teléfono y muestra un aviso del sistema cuando un agente de este host se detiene con un error, igual que al terminar un turno.",
@@ -3725,6 +3730,10 @@ export const es: TranslationResources = {
         cancel: "Cancelar",
       },
     },
+  },
+  rateLimitResume: {
+    scheduled: "Continuará automáticamente a las {{time}} (límite de uso, intento {{attempt}})",
+    cancel: "Cancelar",
   },
   agentShell: en.agentShell,
   terminalControl: en.terminalControl,

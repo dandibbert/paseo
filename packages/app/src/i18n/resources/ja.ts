@@ -3361,6 +3361,11 @@ export const ja: TranslationResources = {
           whenToUse: "使用場面",
         },
       },
+      rateLimitAutoResume: {
+        title: "レート制限後に自動で再開",
+        hint: "エージェントがレート制限（HTTP 429）で停止したら、クォータ回復後に続行メッセージを送ります。プロバイダーが示した時刻の 30 秒後、時刻がなければ 2・5・10 分後、その後は 15 分ごと。",
+        failed: "自動再開の設定を更新できません",
+      },
       agentErrorNotifications: {
         title: "エージェントの失敗を通知",
         hint: "このホストのエージェントがエラーで停止したとき、完了時と同じようにスマートフォンへプッシュしシステム通知を表示します。",
@@ -3685,6 +3690,10 @@ export const ja: TranslationResources = {
         cancel: "キャンセル",
       },
     },
+  },
+  rateLimitResume: {
+    scheduled: "{{time}} に自動で再開します（レート制限、{{attempt}} 回目）",
+    cancel: "キャンセル",
   },
   agentShell: en.agentShell,
   terminalControl: en.terminalControl,
