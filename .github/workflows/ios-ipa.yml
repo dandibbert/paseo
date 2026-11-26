@@ -83,6 +83,9 @@ jobs:
 
       - name: Compile unsigned Release app
         shell: bash
+        env:
+          # Metro's Release bundle outgrows Node's default heap on hosted runners.
+          NODE_OPTIONS: --max-old-space-size=6144
         run: |
           set -euo pipefail
           workspace="$(find packages/app/ios -maxdepth 1 -name '*.xcworkspace' -print -quit)"
