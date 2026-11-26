@@ -50,6 +50,7 @@ function installed(
     timelineRenderers: [],
     turnFooterItems: [],
     contextWindowItems: [],
+    notificationOpenHandlers: [],
   };
 }
 

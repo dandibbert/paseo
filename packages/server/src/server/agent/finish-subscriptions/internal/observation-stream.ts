@@ -43,6 +43,18 @@ function trackContinuationCheckpoint(
   return checkpointEdge;
 }
 
+/** A turn ended or a continuation checkpoint landed, with no continuation still running. */
+function isFinishEdge(
+  snapshot: AgentSnapshotPayload,
+  event: AgentStreamEvent | undefined,
+  continuationTracker: { lastRevision: number } | undefined,
+): boolean {
+  const terminalTurn = isTerminal(snapshot, event);
+  const checkpointEdge = trackContinuationCheckpoint(snapshot, continuationTracker);
+  if (!terminalTurn && !checkpointEdge) return false;
+  return !hasActiveContinuations(snapshot);
+}
+
 export function observeFinishState(
   buffer: ReturnType<typeof createObservationBuffer>,
   snapshot: AgentSnapshotPayload | null,
@@ -59,6 +71,12 @@ export function observeFinishState(
     return;
   }
   if (event?.type === "turn_started") return;
+  if (event?.type === "background_work") {
+    // An idle child's work can settle without another turn.
+    if (snapshot.status === "idle")
+      buffer.push({ status: "idle", final: snapshot, lastMessage, error: null, workChanged: true });
+    return;
+  }
   if (event?.type === "permission_requested") {
     buffer.push({
       status: "permission",
@@ -69,11 +87,7 @@ export function observeFinishState(
     return;
   }
 
-  const terminalTurn = isTerminal(snapshot, event);
-  const checkpointEdge = trackContinuationCheckpoint(snapshot, continuationTracker);
-
-  if (!terminalTurn && !checkpointEdge) return;
-  if (hasActiveContinuations(snapshot)) return;
+  if (!isFinishEdge(snapshot, event, continuationTracker)) return;
 
   if (snapshot.continuationState === "needs_attention") {
     buffer.push({

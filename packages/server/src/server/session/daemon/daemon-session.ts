@@ -1,3 +1,5 @@
+import type { createDaemonListeners } from "../../listeners.js";
+import type { DaemonConfigStore } from "../../daemon-config-store.js";
 import type pino from "pino";
 import type { ProviderAvailability } from "../../agent/agent-manager.js";
 import type { SessionInboundMessage, SessionOutboundMessage } from "../../messages.js";
@@ -24,6 +26,12 @@ export interface DaemonRuntimeConfig {
   worktreesRoot?: string;
   appBaseUrl?: string;
   desktopManaged?: boolean;
+  getListenStatus?: (
+    localEndpoint?: string,
+  ) =>
+    | ReturnType<ReturnType<typeof createDaemonListeners>["status"]>
+    | Promise<ReturnType<ReturnType<typeof createDaemonListeners>["status"]>>;
+  setTailscaleEnabled?: DaemonConfigStore["setTailscaleEnabled"];
   getRelayConfig(): {
     enabled: boolean;
     endpoint: string;
@@ -197,8 +205,22 @@ export class DaemonSession {
     }
   }
 
+  async handleSetTailscaleRequest(
+    msg: Extract<SessionInboundMessage, { type: "daemon.tailscale.set.request" }>,
+    localEndpoint?: string,
+  ): Promise<void> {
+    const setEnabled = this.daemonRuntimeConfig?.setTailscaleEnabled;
+    if (!setEnabled) throw new Error("Tailscale is unavailable");
+    const result = await setEnabled(msg.enabled, localEndpoint, msg.confirmed === true);
+    this.host.emit({
+      type: "daemon.tailscale.set.response",
+      payload: { requestId: msg.requestId, ...result },
+    });
+  }
+
   async handleGetStatusRequest(
     msg: Extract<SessionInboundMessage, { type: "daemon.get_status.request" }>,
+    localEndpoint?: string,
   ): Promise<void> {
     // Read outside the degraded-status fallback below: a status that cannot say whether
     // terminal cleanup finished must fail the request, not report that nothing is left.
@@ -206,9 +228,12 @@ export class DaemonSession {
       ({ pid, role, reason, detail }) => ({ pid, role, reason, detail }),
     );
     const terminalsUnavailable = this.getTerminalsUnavailable();
+    const listenStatus = await this.daemonRuntimeConfig?.getListenStatus?.(localEndpoint);
     try {
       const pidInfo = await getPidLockInfo(this.paseoHome);
-      const providers = (await this.listProviderAvailability()).map((p) => ({
+      const availability =
+        msg.includeProviders === false ? [] : await this.listProviderAvailability();
+      const providers = availability.map((p) => ({
         provider: p.provider,
         available: p.available,
         error: p.error ?? null,
@@ -226,6 +251,7 @@ export class DaemonSession {
           relay: this.daemonRuntimeConfig?.getRelayConfig() ?? null,
           providers,
           terminalCleanupUnconfirmed,
+          ...listenStatus,
           ...(terminalsUnavailable ? { terminalsUnavailable } : {}),
         },
       });
@@ -244,6 +270,7 @@ export class DaemonSession {
           relay: null,
           providers: [],
           terminalCleanupUnconfirmed,
+          ...listenStatus,
           ...(terminalsUnavailable ? { terminalsUnavailable } : {}),
         },
       });

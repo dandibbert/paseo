@@ -70,6 +70,7 @@ function plugin(): InstalledPlugin {
     timelineRenderers: [],
     turnFooterItems: [],
     contextWindowItems: [],
+    notificationOpenHandlers: [],
   };
 }
 

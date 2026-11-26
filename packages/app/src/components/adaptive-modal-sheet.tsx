@@ -20,13 +20,13 @@ import {
   IsolatedBottomSheetModal,
   SheetVisibleFrame,
   type ContextBridge,
+  useBottomSheetSafeAreaPaddingStyle,
   useIsolatedBottomSheetVisibility,
 } from "@/components/ui/isolated-bottom-sheet-modal";
-import { getCompactSheetSafeAreaPadding } from "@/components/adaptive-modal-sheet-layout";
 import { ScrollView } from "@/components/ui/scroll-view";
 import { isWeb } from "@/constants/platform";
-import { useKeyboardVisibility } from "@/hooks/use-keyboard-visibility";
 import { SafeAreaInsetsContext, useSafeAreaInsets } from "react-native-safe-area-context";
+import type { EditingTextInputHandle } from "@/components/ui/text-input";
 import { AdaptiveTextInput } from "@/components/adaptive-text-input";
 import { useDismissibleOverlay } from "@/components/ui/overlay-dismissal";
 import { DismissBackdrop } from "@/components/ui/dismiss-backdrop";
@@ -56,6 +56,7 @@ export interface SheetHeaderSearch {
   resetKey?: string | number;
   placeholder?: string;
   autoFocus?: boolean;
+  inputRef?: React.RefObject<EditingTextInputHandle | null>;
   testID?: string;
 }
 
@@ -490,6 +491,7 @@ export function SheetHeaderView({
         <View style={styles.searchRow}>
           <Search size={theme.iconSize.md} color={theme.colors.foregroundMuted} />
           <AdaptiveTextInput
+            ref={search.inputRef}
             // @ts-expect-error - outlineStyle is web-only
             style={[styles.searchInput, isWeb && { outlineStyle: "none" }]}
             placeholder={search.placeholder ?? t("common.actions.search")}
@@ -531,6 +533,7 @@ export function InlineHeaderView({ header }: { header: SheetHeader }) {
         <View style={styles.inlineSearchRow}>
           <Search size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />
           <AdaptiveTextInput
+            ref={header.search.inputRef}
             // @ts-expect-error - outlineStyle is web-only
             style={[styles.searchInput, isWeb && { outlineStyle: "none" }]}
             placeholder={header.search.placeholder ?? t("common.actions.search")}
@@ -610,8 +613,9 @@ export interface SheetKeyboard {
 }
 
 /**
- * The compact sheet's body. It renders on the far side of the sheet's portal so it reads the
- * screen's bottom inset, not the one left where the sheet was opened: inside a sheet tab, none is.
+ * The compact sheet's body. It renders on the far side of the sheet's portal so `SheetVisibleFrame`
+ * and `useBottomSheetSafeAreaPaddingStyle` read the screen's bottom inset, not the one left where
+ * the sheet was opened: inside a sheet tab, none is.
  */
 function CompactSheetBody({
   header,
@@ -619,7 +623,6 @@ function CompactSheetBody({
   onClose,
   testID,
   footer,
-  isKeyboardVisible,
   scrollable,
   bodyStyle,
   contentStyle,
@@ -630,32 +633,18 @@ function CompactSheetBody({
   onClose: () => void;
   testID?: string;
   footer: ReactNode;
-  isKeyboardVisible: boolean;
   scrollable: boolean;
   bodyStyle?: StyleProp<ViewStyle>;
   contentStyle?: StyleProp<ViewStyle>;
   children: ReactNode;
 }) {
-  const insets = useSafeAreaInsets();
-  const { contentPaddingBottom = 0, footerPaddingBottom = 0 } = getCompactSheetSafeAreaPadding({
-    isCompact: true,
-    isKeyboardVisible,
-    hasFooter: Boolean(footer),
-    safeAreaBottom: insets.bottom,
-  });
-  // Safe-area clearance is a separate layer: it must not replace the caller's
-  // padding (including an explicit zero), and the footer owns it when present.
-  const bodyClearanceStyle = { paddingBottom: contentPaddingBottom };
-  const footerClearanceStyle = useMemo(
-    () => ({ paddingBottom: footerPaddingBottom }),
-    [footerPaddingBottom],
-  );
-  const footerView = useMemo(
-    () => (footer ? <View style={footerClearanceStyle}>{footer}</View> : null),
-    [footer, footerClearanceStyle],
-  );
+  // Safe-area clearance is owned on the UI thread in lockstep with `SheetVisibleFrame`'s keyboard
+  // height: `SheetVisibleFrame` pads the frame whenever a footer or non-scrollable body is shown,
+  // while a scrollable body without a footer pads its scroll content so items scroll behind the
+  // system bar and still clear it at rest.
+  const bodyClearanceStyle = useBottomSheetSafeAreaPaddingStyle(scrollable && !footer);
   return (
-    <SheetVisibleFrame footer={footerView}>
+    <SheetVisibleFrame footer={footer} safeAreaInset={scrollable ? "footer" : "frame"}>
       {header ? (
         <SheetHeaderView
           header={header}
@@ -672,12 +661,12 @@ function CompactSheetBody({
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
           >
-            <View style={[styles.contentGrow, bodyClearanceStyle]}>
+            <Animated.View style={[SCROLL_CONTENT_GROW, bodyClearanceStyle]}>
               <SheetContent style={[styles.contentGrow, contentStyle]}>{children}</SheetContent>
-            </View>
+            </Animated.View>
           </ScrollView>
         ) : (
-          <View style={[styles.compactStaticContent, bodyClearanceStyle]}>
+          <View style={styles.compactStaticContent}>
             <SheetContent style={[styles.compactStaticContent, contentStyle]}>
               {children}
             </SheetContent>
@@ -710,7 +699,6 @@ export function AdaptiveModalSheet({
 }: AdaptiveModalSheetProps) {
   const { t } = useTranslation();
   const isMobile = useIsCompactFormFactor();
-  const isKeyboardVisible = useKeyboardVisibility(visible);
   const resolvedSnapPoints = useMemo(() => snapPoints ?? ["65%", "90%"], [snapPoints]);
   const isSheet = isMobile || !isWeb;
   // The sheet registers itself; the desktop dialog does not use it.
@@ -828,7 +816,6 @@ export function AdaptiveModalSheet({
             onClose={onClose}
             testID={testID}
             footer={footerView}
-            isKeyboardVisible={isKeyboardVisible}
             scrollable={scrollable}
             bodyStyle={bodyStyle}
             contentStyle={contentStyle}

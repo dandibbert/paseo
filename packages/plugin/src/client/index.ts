@@ -1,5 +1,6 @@
 export type {
   PluginHostProps,
+  PluginHostNavigationActions,
   PluginTab,
   PluginPanelProps,
   PluginWorkspacePanelParams,
@@ -50,6 +51,11 @@ export type {
   PluginClientSlashCommandContribution,
   SettingsState,
 } from "./contracts.js";
+export type {
+  PluginNotificationOpenEvent,
+  PluginNotificationOpenContext,
+  PluginNotificationOpenHandler,
+} from "./notifications.js";
 export type {
   PluginButton,
   PluginButtonBehavior,

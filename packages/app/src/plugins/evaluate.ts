@@ -26,6 +26,7 @@ import {
   type PluginTimelineTransformerContribution,
   type PluginTurnFooterItemContribution,
   type PluginContextWindowItemContribution,
+  type PluginNotificationOpenHandler,
   type PluginButtonRegistration,
 } from "@getpaseo/plugin/client";
 import type {
@@ -149,6 +150,7 @@ export function runPluginClientBundle(
     timelineRenderers: [],
     turnFooterItems: [],
     contextWindowItems: [],
+    notificationOpenHandlers: [],
   };
   const surfaceIds = new Set<string>();
   const sidebarViewIds = new Set<string>();
@@ -605,6 +607,12 @@ export function runPluginClientBundle(
         () => contextWindowItemIds.delete(itemId),
       );
     },
+    onNotificationOpen(handler: PluginNotificationOpenHandler) {
+      if (typeof handler !== "function") {
+        throw new Error("onNotificationOpen takes a callback function");
+      }
+      return register(collector.notificationOpenHandlers, handler, () => {});
+    },
     addComposerPill(contribution) {
       if (stopped) throw new Error("Plugin has stopped");
       return trackButton(runtime.addComposerPill(contribution));
@@ -707,5 +715,6 @@ export function runPluginClientBundle(
     timelineRenderers: collector.timelineRenderers,
     turnFooterItems: collector.turnFooterItems,
     contextWindowItems: collector.contextWindowItems,
+    notificationOpenHandlers: collector.notificationOpenHandlers,
   };
 }

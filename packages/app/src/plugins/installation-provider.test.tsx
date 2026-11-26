@@ -63,6 +63,7 @@ function installation(invoked: string[]): InstalledPlugin {
     timelineRenderers: [],
     turnFooterItems: [],
     contextWindowItems: [],
+    notificationOpenHandlers: [],
   };
 }
 

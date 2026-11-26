@@ -267,7 +267,7 @@ export function parseAssistantFileLink(
     return fileUrlTarget;
   }
 
-  const trimmed = value?.trim();
+  const trimmed = normalizeWindowsLinkPath(value?.trim(), options.workspaceRoot);
   if (!trimmed) {
     return null;
   }
@@ -278,7 +278,7 @@ export function parseAssistantFileLink(
 
   const inlinePathTarget = parseAssistantInlinePathLink(trimmed, options);
   if (inlinePathTarget) {
-    return inlinePathTarget;
+    return { ...inlinePathTarget, raw: value };
   }
 
   const windowsTarget = parseWindowsFileLink(trimmed, value, options);
@@ -355,6 +355,14 @@ export function isFileLookingAssistantToken(value: string): boolean {
   }
 
   return isPlausibleAssistantLocalPath(path);
+}
+
+// A drive-based workspace identifies the target host's path syntax, even when
+// the client runs elsewhere. Preserve the same spelling on POSIX hosts.
+function normalizeWindowsLinkPath(value: string, workspaceRoot?: string): string {
+  return /^[A-Za-z]:[\\/]/.test(workspaceRoot?.trim() ?? "") && /^\/[A-Za-z]:[\\/]/.test(value)
+    ? value.slice(1)
+    : value;
 }
 
 function parseWindowsFileLink(

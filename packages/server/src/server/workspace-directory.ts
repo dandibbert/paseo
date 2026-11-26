@@ -78,6 +78,7 @@ export interface WorkspaceDirectoryDeps {
   workspaceRegistry: {
     listActive(): Promise<PersistedWorkspaceRecord[]>;
     get(id: string): Promise<PersistedWorkspaceRecord | null>;
+    isPublicationDeferred?(workspaceId: string): boolean;
   };
   getArchivingAt(workspaceId: string): string | null;
   listAgentPayloads(workspaceIds?: Iterable<string>): Promise<AgentSnapshotPayload[]>;
@@ -240,7 +241,9 @@ export class WorkspaceDirectory {
         .filter((project) => !project.archivedAt)
         .map((project) => [project.projectId, project] as const),
     );
-    const activeRecords = activeWorkspaceRecords(persistedWorkspaces, persistedProjects);
+    const activeRecords = activeWorkspaceRecords(persistedWorkspaces, persistedProjects).filter(
+      (workspace) => !this.deps.workspaceRegistry.isPublicationDeferred?.(workspace.workspaceId),
+    );
     const descriptorsByWorkspaceId = new Map<string, WorkspaceDescriptorPayload>();
     const workspaceIds = requestedIds ? new Set(requestedIds) : null;
     const activeWorkspaceIds = new Set(activeRecords.map((workspace) => workspace.workspaceId));
@@ -587,7 +590,9 @@ export class WorkspaceDirectory {
       persistedWorkspaces
         .filter(
           (workspace) =>
-            !workspace.archivedAt && (options?.includeBackground === true || !workspace.background),
+            !workspace.archivedAt &&
+            !this.deps.workspaceRegistry.isPublicationDeferred?.(workspace.workspaceId) &&
+            (options?.includeBackground === true || !workspace.background),
         )
         .map((workspace) => workspace.projectId),
     );
@@ -613,12 +618,16 @@ export class WorkspaceDirectory {
       this.deps.workspaceRegistry.listActive(),
       this.deps.projectRegistry.list(),
     ]);
-    return activeWorkspaceRecords(workspaces, projects).map((workspace) => ({
-      id: workspace.workspaceId,
-      workspaceDirectory: workspace.cwd,
-      workspaceKind: workspace.kind,
-      personal: isPersonalSpacePath(workspace.cwd),
-    }));
+    return activeWorkspaceRecords(workspaces, projects)
+      .filter(
+        (workspace) => !this.deps.workspaceRegistry.isPublicationDeferred?.(workspace.workspaceId),
+      )
+      .map((workspace) => ({
+        id: workspace.workspaceId,
+        workspaceDirectory: workspace.cwd,
+        workspaceKind: workspace.kind,
+        personal: isPersonalSpacePath(workspace.cwd),
+      }));
   }
 
   // Every active workspace, background ones included. Callers that answer a

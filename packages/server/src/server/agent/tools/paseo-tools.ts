@@ -190,6 +190,7 @@ export interface PaseoToolHostDependencies {
   workspaceScripts?: Pick<WorkspaceScriptsService, "list" | "launch" | "stop">;
   markWorkspaceArchiving?: ArchiveDependencies["markWorkspaceArchiving"];
   clearWorkspaceArchiving?: ArchiveDependencies["clearWorkspaceArchiving"];
+  lifecycle?: ArchiveDependencies["lifecycle"];
   createPaseoWorktree?: CreatePaseoWorktreeWorkflowFn;
   // Mints a fresh directory workspace for a cwd and returns its id.
   ensureWorkspaceForCreate?: (
@@ -1406,7 +1407,7 @@ function createToolCatalog(
       .boolean()
       .optional()
       .describe(
-        "True creates a background agent: hidden from tabs, default lists, your subagent track and notifications. You still get its finish notification and can address it by id. Omit to inherit your own value (false without a caller); use it for helpers the user does not need to watch.",
+        "Hide the agent from the UI. Inherits your visibility when omitted. Omit unless the user asks for a specific value.",
       ),
   };
   const legacyCreateAgentPlacementFields = {
@@ -1653,7 +1654,7 @@ function createToolCatalog(
           .boolean()
           .optional()
           .describe(
-            "True hides the workspace from default lists and the sidebar while its contents remain durable and accessible; omit background to inherit your own visibility (true when you or your current workspace are background, false without a caller), and override it only when the user explicitly asks.",
+            "Hide the workspace from the UI. Inherits your visibility when omitted. Omit unless the user asks for a specific value.",
           ),
         mode: z
           .enum(["branch-off", "checkout-branch", "checkout-pr"])
@@ -2800,6 +2801,7 @@ function createToolCatalog(
       const workspaceId = await resolveTerminalWorkspaceId(resolvedCwd);
 
       const terminal = await terminalManager.createTerminal({
+        origin: { source: "agent" },
         cwd: resolvedCwd,
         workspaceId,
         ...(name?.trim() ? { name: name.trim() } : {}),
@@ -3840,6 +3842,7 @@ function archiveWorktreeDependencies(
     throw new Error("Checkout trust lookup is required to archive worktrees");
   }
   return {
+    lifecycle: options.lifecycle ?? null,
     paseoHome: options.paseoHome,
     paseoWorktreesBaseRoot: options.worktreesRoot,
     worktreeManagers: options.worktreeManagers,

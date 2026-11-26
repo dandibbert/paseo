@@ -39,6 +39,7 @@ function installation(): InstalledPlugin {
     timelineRenderers: [],
     turnFooterItems: [],
     contextWindowItems: [],
+    notificationOpenHandlers: [],
   };
 }
 
