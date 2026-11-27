@@ -1603,6 +1603,7 @@ export class ManagedContinuationLedger {
       continuationState,
       continuationBlockedError,
       continuationRevision: accounting?.continuationRevision ?? 0,
+      blockedContinuationsCount: blockedLeases.length,
     };
   }
 
@@ -1781,7 +1782,8 @@ export class ManagedContinuationLedger {
       !prev ||
       prev.pendingContinuationsCount !== raw.pendingContinuationsCount ||
       prev.continuationState !== raw.continuationState ||
-      prev.continuationBlockedError !== raw.continuationBlockedError;
+      prev.continuationBlockedError !== raw.continuationBlockedError ||
+      prev.blockedContinuationsCount !== raw.blockedContinuationsCount;
 
     if (!changed) {
       return raw;

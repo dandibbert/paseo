@@ -235,6 +235,8 @@ export interface AgentContinuationSummary {
   continuationState: ContinuationProjectionState;
   continuationBlockedError: string | null;
   continuationRevision: number;
+  /** Continuations that can no longer deliver; a rise means a new one was just blocked. */
+  blockedContinuationsCount?: number;
 }
 
 export interface ContinuationCheckpointEvent {

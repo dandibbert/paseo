@@ -281,4 +281,60 @@ describe("AgentManager PR A2 — Atomic Idle-Only Managed Wake Admission", () =>
 
     expect(received).toEqual([{ type: "continuation_checkpoint", agentId: agent.id, checkpoint }]);
   });
+  it("tells the user once when a continuation is blocked, but not about blocks it already knew at startup", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "paseo-a2-blocked-"));
+    tempDirs.push(cwd);
+    const attention: string[] = [];
+    const manager = new AgentManager({
+      daemonInstanceId: "daemon-a2-blocked",
+      clients: { codex: new NonSteeringTestClient() },
+      logger: createTestLogger(),
+      onAgentAttention: ({ reason }) => attention.push(reason),
+    });
+    const agent = await manager.createAgent({ provider: "codex", cwd }, undefined, {});
+    const notices: string[] = [];
+    manager.subscribe(
+      (ev) => {
+        if (
+          ev.type === "agent_stream" &&
+          ev.event.type === "timeline" &&
+          ev.event.item.type === "assistant_message"
+        ) {
+          notices.push(ev.event.item.text);
+        }
+      },
+      { agentId: agent.id, replayState: false },
+    );
+    const checkpoint = (reason: string, blocked: number): ContinuationCheckpointEvent => ({
+      type: "continuation_checkpoint",
+      agentId: agent.id,
+      revision: 1,
+      summary: {
+        pendingContinuationsCount: 0,
+        continuationState: blocked > 0 ? "needs_attention" : "none",
+        continuationBlockedError: blocked > 0 ? "autonomous_budget_exceeded" : null,
+        continuationRevision: 1,
+        blockedContinuationsCount: blocked,
+      },
+      reason,
+      emittedAt: new Date().toISOString(),
+    });
+    const settle = () => new Promise((resolve) => setTimeout(resolve, 20));
+
+    manager.emitContinuationCheckpoint(checkpoint("startup_reconcile", 1));
+    manager.emitContinuationCheckpoint(checkpoint("lease_created", 1));
+    await settle();
+    expect(notices).toEqual([]);
+    expect(attention).toEqual([]);
+
+    manager.emitContinuationCheckpoint(checkpoint("autonomous_budget_exceeded", 2));
+    await settle();
+    expect(notices).toHaveLength(1);
+    expect(notices[0]).toMatch(/^\[System Error\] A background result could not wake this agent/);
+    expect(attention).toEqual(["error"]);
+
+    manager.emitContinuationCheckpoint(checkpoint("lease_created", 2));
+    await settle();
+    expect(notices).toHaveLength(1);
+  });
 });
