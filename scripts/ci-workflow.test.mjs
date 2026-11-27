@@ -190,6 +190,14 @@ test("headless packaging filters automatic changes and always allows explicit bu
 test("published npm packages declare and ship the repository license", () => {
   const rootManifest = JSON.parse(readFileSync(new URL("package.json", repoRoot), "utf8"));
   assert.match(rootManifest.scripts["release:publish"], /scripts\/publish-release-packages\.mjs/);
+  assert.match(
+    rootManifest.scripts["release:ship"],
+    /^npm run release:push && npm run release:publish$/,
+  );
+  assert.match(
+    rootManifest.scripts["release:ship:beta"],
+    /^npm run release:push && npm run release:publish:beta$/,
+  );
   const workspaceArgs = PUBLISH_WORKSPACES.map((workspace) => `--workspace=${workspace}`);
   const packed = JSON.parse(
     execFileSync("npm", ["pack", "--dry-run", "--ignore-scripts", "--json", ...workspaceArgs], {

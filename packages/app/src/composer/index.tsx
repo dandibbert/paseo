@@ -1725,6 +1725,15 @@ function ComposerContentImpl({
     });
   }, []);
 
+  const handleImagesDropped = useCallback(
+    (images: ImageAttachment[]) => {
+      if (images.length === 0) return;
+      addImages(images);
+      focusInput();
+    },
+    [addImages, focusInput],
+  );
+
   const handleWorkspaceFileDropped = useCallback(
     (payload: WorkspaceFileDragPayload) => {
       if (!workspaceId) {
@@ -2170,6 +2179,7 @@ function ComposerContentImpl({
           toastErrorRef.current(t("composer.errors.daemonClientDisconnected"));
           return;
         }
+        focusInput();
         await uploadSelectedFiles(files);
       } catch (error) {
         console.error("[Composer] Failed to upload dropped files:", error);
@@ -2178,7 +2188,7 @@ function ComposerContentImpl({
         );
       }
     },
-    [client, isConnected, t, uploadSelectedFiles],
+    [client, focusInput, isConnected, t, uploadSelectedFiles],
   );
 
   const handleRemoveAttachment = useCallback(
@@ -2835,7 +2845,7 @@ function ComposerContentImpl({
   // backdrop and rejects the drop atomically, instead of accepting a drop with no feedback.
   useFileDrop(
     {
-      onFiles: addImages,
+      onFiles: handleImagesDropped,
       onGenericFiles: handleGenericFilesDropped,
       onWorkspaceFile: handleWorkspaceFileDropped,
     },
