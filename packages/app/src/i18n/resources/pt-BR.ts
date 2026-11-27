@@ -3383,7 +3383,7 @@ export const ptBR: TranslationResources = {
       },
       rateLimitAutoResume: {
         title: "Continuar automaticamente após limite de uso",
-        hint: "Quando um agente para por limite de uso (HTTP 429), envia uma mensagem para continuar quando a cota voltar: 30 segundos após o horário informado pelo provedor, ou após 2, 5, 10 e depois a cada 15 minutos.",
+        hint: "Quando um agente para por limite de uso (HTTP 429), envia uma mensagem para continuar quando a cota voltar: 30 segundos após o horário informado pelo provedor, ou a cada 90 segundos se nenhum for informado.",
         failed: "Não foi possível atualizar a continuação automática",
       },
       agentErrorNotifications: {

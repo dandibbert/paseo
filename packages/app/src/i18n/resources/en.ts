@@ -3510,7 +3510,7 @@ export const en = {
       },
       rateLimitAutoResume: {
         title: "Continue automatically after a rate limit",
-        hint: "When an agent stops on a rate limit (HTTP 429), send it a message to continue once the quota is back: at the time the provider names, plus 30 seconds, or after 2, 5, 10, then every 15 minutes.",
+        hint: "When an agent stops on a rate limit (HTTP 429), send it a message to continue once the quota is back: 30 seconds after the time the provider names, or every 90 seconds when it names none.",
         failed: "Unable to update automatic continue",
       },
       agentErrorNotifications: {

@@ -3401,7 +3401,7 @@ export const es: TranslationResources = {
       },
       rateLimitAutoResume: {
         title: "Continuar automáticamente tras un límite de uso",
-        hint: "Cuando un agente se detiene por un límite de uso (HTTP 429), le envía un mensaje para continuar cuando vuelve la cuota: 30 segundos después de la hora que indica el proveedor, o tras 2, 5, 10 y luego cada 15 minutos.",
+        hint: "Cuando un agente se detiene por un límite de uso (HTTP 429), le envía un mensaje para continuar cuando vuelve la cuota: 30 segundos después de la hora que indica el proveedor, o cada 90 segundos si no indica ninguna.",
         failed: "No se pudo actualizar la continuación automática",
       },
       agentErrorNotifications: {

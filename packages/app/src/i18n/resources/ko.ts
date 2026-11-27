@@ -3345,7 +3345,7 @@ export const ko: TranslationResources = {
       },
       rateLimitAutoResume: {
         title: "속도 제한 후 자동으로 계속",
-        hint: "에이전트가 속도 제한(HTTP 429)으로 멈추면 할당량이 돌아온 뒤 계속하라는 메시지를 보냅니다. 제공자가 알려 준 시각 30초 뒤, 시각이 없으면 2·5·10분 뒤, 이후 15분마다.",
+        hint: "에이전트가 속도 제한(HTTP 429)으로 멈추면 할당량이 돌아온 뒤 계속하라는 메시지를 보냅니다. 제공자가 알려 준 시각 30초 뒤, 시각이 없으면 90초마다.",
         failed: "자동 계속 설정을 업데이트할 수 없습니다",
       },
       agentErrorNotifications: {

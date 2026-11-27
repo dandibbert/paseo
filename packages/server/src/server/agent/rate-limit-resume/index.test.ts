@@ -136,7 +136,7 @@ describe("createRateLimitResume", () => {
     expect(h.published.at(-1)).toEqual(["a1", null]);
   });
 
-  it("backs off 2, 5, 10, then 15 minutes while turns keep failing", async () => {
+  it("retries every 90 seconds while turns keep failing", async () => {
     let now = 0;
     const h = createHarness(now);
     const waits: number[] = [];
@@ -150,14 +150,14 @@ describe("createRateLimitResume", () => {
       now += wait;
       h.emit(stream("a1", { type: "turn_started", provider: "claude" }));
     }
-    expect(waits).toEqual([2, 5, 10, 15, 15]);
+    expect(waits).toEqual([1.5, 1.5, 1.5, 1.5, 1.5]);
     expect(h.dispatched).toHaveLength(5);
   });
 
-  it("starts the backoff over after a turn that finishes", async () => {
+  it("starts the attempt count over after a turn that finishes", async () => {
     const h = createHarness(0);
     h.emit(stream("a1", failed(EXHAUSTED)));
-    await h.advance(2 * 60_000);
+    await h.advance(90_000);
     h.emit(stream("a1", { type: "turn_started", provider: "claude" }));
     h.emit(stream("a1", { type: "turn_completed", provider: "claude" }));
     h.emit(stream("a1", failed(EXHAUSTED)));

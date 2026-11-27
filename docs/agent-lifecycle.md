@@ -34,7 +34,7 @@ closing runtimes.
 When a turn fails on a rate limit (HTTP 429 and its usual wordings), the daemon sends the agent a
 continue message later, unless `daemon.autoResumeOnRateLimit` is off (Host settings → Agents; on by
 default). It waits until 30 seconds after a time the error names ("not asked again before 17:58
-UTC+8"), or backs off 2, 5, 10, then every 15 minutes while turns keep failing. Any other turn
+UTC+8"), or retries every 90 seconds while turns keep failing. Any other turn
 start, a finished or cancelled turn, closing or removing the agent, or the composer's Cancel drops
 the pending message. The schedule is in memory (`packages/server/src/server/agent/rate-limit-resume/`):
 a daemon restart drops it.

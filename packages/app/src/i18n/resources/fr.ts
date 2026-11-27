@@ -3406,7 +3406,7 @@ export const fr: TranslationResources = {
       },
       rateLimitAutoResume: {
         title: "Reprendre automatiquement après une limite de débit",
-        hint: "Quand un agent s'arrête sur une limite de débit (HTTP 429), lui envoyer un message pour reprendre quand le quota revient : 30 secondes après l'heure indiquée par le fournisseur, ou après 2, 5, 10 puis toutes les 15 minutes.",
+        hint: "Quand un agent s'arrête sur une limite de débit (HTTP 429), lui envoyer un message pour reprendre quand le quota revient : 30 secondes après l'heure indiquée par le fournisseur, ou toutes les 90 secondes s'il n'en indique aucune.",
         failed: "Impossible de mettre à jour la reprise automatique",
       },
       agentErrorNotifications: {

@@ -13,8 +13,8 @@ export interface RateLimitResumeState {
 
 /** Sent after a stated reset time, so a clock a little behind the provider's does not miss it. */
 export const RATE_LIMIT_RESUME_GRACE_MS = 30_000;
-/** Waits between retries when the provider names no time; the last repeats. */
-export const RATE_LIMIT_BACKOFF_MS = [2, 5, 10, 15].map((minutes) => minutes * 60_000);
+/** Wait before each retry when the provider names no time. Fixed, not growing. */
+export const RATE_LIMIT_RETRY_MS = 90_000;
 
 export const RATE_LIMIT_RESUME_PROMPT =
   "Your previous turn stopped because the model API hit its rate limit (HTTP 429). " +
@@ -51,7 +51,7 @@ const defaultTimers: Timers = {
 
 /**
  * Sends a continue message to an agent whose turn failed on a rate limit, at the time the
- * provider named or after a backoff. Anything else the agent does in the meantime (a message
+ * provider named or 90 seconds later. Anything else the agent does in the meantime (a message
  * from the user, a finished turn, archiving) cancels the pending message. The schedule lives in
  * memory: a daemon restart drops it.
  */
@@ -86,7 +86,7 @@ export function createRateLimitResume(deps: Dependencies) {
     const dueAtMs =
       retry.kind === "at"
         ? Math.max(retry.at.getTime(), now) + RATE_LIMIT_RESUME_GRACE_MS
-        : now + RATE_LIMIT_BACKOFF_MS[Math.min(attempt, RATE_LIMIT_BACKOFF_MS.length) - 1];
+        : now + RATE_LIMIT_RETRY_MS;
     cancel(agentId);
     const state = { dueAt: new Date(dueAtMs).toISOString(), attempt };
     const handle = timers.set(() => void fire(agentId), dueAtMs - now);
