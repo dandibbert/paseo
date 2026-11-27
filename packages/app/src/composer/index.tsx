@@ -2905,7 +2905,7 @@ function ComposerContentImpl({
               recall={recall}
               inputRef={messageInputRef}
               anchorStyle={messageInputContainerStyle}
-              show={mode.showAutocomplete && !isFullscreen && !isShellDraft}
+              show={mode.showAutocomplete && !isFullscreen && !isShellDraft && !isComposerLocked}
               ref={autocompleteRef}
               configuration={autocompleteConfiguration}
             >
