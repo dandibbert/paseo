@@ -3,6 +3,7 @@ import type { JsonValue } from "@getpaseo/protocol/agent-types";
 import type { PluginLifecycle } from "../../plugins/lifecycle/index.js";
 import { describeHookWorkspace } from "../../plugins/lifecycle/index.js";
 import { basename, resolve } from "node:path";
+import { isPersonalSpacePath } from "../../personal-space.js";
 import type { ProjectCheckoutLitePayload } from "@getpaseo/protocol/messages";
 import type { Logger } from "pino";
 import {
@@ -418,6 +419,11 @@ export function createWorkspaceProvisioningService(deps: {
   ): Promise<string> {
     if (input.createdWorktree) return input.createdWorktree.workspace.workspaceId;
     if (input.requestedWorkspaceId) return input.requestedWorkspaceId;
+    // The personal space is one workspace: an agent started there without naming it joins it,
+    // so its status shows on the personal space instead of a hidden sibling.
+    if (!input.background && isPersonalSpacePath(input.cwd)) {
+      return (await findOrCreateWorkspaceForDirectory(input.cwd)).workspaceId;
+    }
     return (
       await createWorkspaceForDirectory(input.cwd, input.initialTitle, undefined, {
         expectsInitialAgent: true,
