@@ -137,3 +137,38 @@ jobs:
             artifacts/SHA256SUMS.txt
           if-no-files-found: error
           retention-days: 14
+
+  # The M1 build publishes to the same personal-ios release, so the download link always
+  # points at the newest IPA whichever machine built it.
+  publish-unsigned-ipa:
+    name: Publish to personal-ios
+    needs: build-unsigned-ipa
+    if: github.repository == 'dandibbert/paseo'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: paseo-ios-unsigned-ipa
+          path: artifacts
+      - name: Replace the personal-ios release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          SOURCE_REVISION: ${{ github.sha }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          cd artifacts
+          awk '{print $1"  Paseo-unsigned.ipa"}' SHA256SUMS.txt | sha256sum -c -
+          printf '%s\n' "$SOURCE_REVISION" > SOURCE_REVISION.txt
+          printf 'Unsigned iPhoneOS IPA built on a GitHub-hosted runner.\nSource: %s\nRun: %s\n' \
+            "$SOURCE_REVISION" "$RUN_URL" > BUILD_NOTES.txt
+          if ! gh release view personal-ios --repo "$REPO" > /dev/null 2>&1; then
+            gh release create personal-ios --repo "$REPO" --prerelease --target "$SOURCE_REVISION" \
+              --title "iOS unsigned IPA" --notes "Unsigned iPhoneOS IPA for sideloading."
+          fi
+          gh release upload personal-ios --repo "$REPO" --clobber \
+            Paseo-unsigned.ipa SHA256SUMS.txt SOURCE_REVISION.txt BUILD_NOTES.txt
