@@ -3,6 +3,8 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { ServerInfoStatusPayloadSchema } from "@getpaseo/protocol/messages";
+import type { AgentManagerEvent } from "../agent/agent-manager.js";
+import { formatAgentMessage } from "../agent/agent-messages/envelope.js";
 import type {
   PaseoToolConfig,
   PaseoToolExecutionContext,
@@ -171,4 +173,62 @@ describe("Managed Continuations PR D — Protocol Capabilities, Runtime Lifecycl
       expect(stopRes.canceledTaskIds).toHaveLength(0);
     },
   );
+  it("starts the autonomous turn budget over when a person sends the agent a message", async () => {
+    let listener: ((event: AgentManagerEvent) => void) | undefined;
+    const runtime = new ManagedContinuationsRuntime({
+      paseoHome: tmpHome,
+      daemonInstanceId: "daemon-d-budget",
+      bootId: "boot-d-budget",
+      clock,
+      reconcileIntervalMs: 0,
+      platform: "win32",
+      agentManager: {
+        tryReserveManagedWake: async () => ({ status: "busy" }),
+        commitManagedWake: async () => {
+          throw new Error("unused");
+        },
+        releaseManagedWake: async () => undefined,
+        emitContinuationCheckpoint: () => undefined,
+        subscribe: (callback) => {
+          listener = callback;
+          return () => {
+            listener = undefined;
+          };
+        },
+      },
+    });
+    await runtime.start({
+      restartRecoveryBarrier: async () => undefined,
+      receiptProbe: () => ({ status: "not_submitted" }),
+    });
+    const accounting = await runtime.ledger.recordHumanBudgetReset("agent-budget", "seed");
+    await runtime.ledgerStore.writeAccounting({ ...accounting, consecutiveAutonomousTurns: 20 });
+    const said = (text: string) =>
+      listener?.({
+        type: "agent_stream",
+        agentId: "agent-budget",
+        event: { type: "timeline", provider: "codex", item: { type: "user_message", text } },
+      });
+    const used = async () =>
+      (await runtime.ledgerStore.readAccounting("agent-budget"))?.consecutiveAutonomousTurns;
+
+    said(
+      formatAgentMessage({
+        id: "msg-wake",
+        source: {
+          kind: "managed-continuation",
+          agentId: "agent-budget",
+          eventIds: ["ev-1"],
+          origin: "managed-command",
+        },
+        text: "Task finished.",
+      }),
+    );
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(await used()).toBe(20);
+
+    said("keep going");
+    await expect.poll(used).toBe(0);
+    await runtime.stop();
+  });
 });

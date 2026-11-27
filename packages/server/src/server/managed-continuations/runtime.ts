@@ -13,6 +13,16 @@ import {
 } from "./tasks/worker.js";
 import { ManagedContinuationToolsService } from "./tools-service.js";
 import type { StartupReconcileReport } from "./types.js";
+import { parseAgentMessage } from "../agent/agent-messages/envelope.js";
+import type { AgentTimelineItem } from "../agent/agent-sdk-types.js";
+
+/** A prompt a person typed: wakes and agent messages arrive wrapped in a paseo-system envelope. */
+function isHumanPrompt(item: AgentTimelineItem): boolean {
+  if (item.type !== "user_message") return false;
+  if (!item.text.startsWith("<paseo-system")) return true;
+  // An envelope counts only when it says the user wrote it; anything else is the daemon's.
+  return parseAgentMessage(item.text)?.source === null;
+}
 
 export interface ManagedContinuationsRuntimeOptions {
   paseoHome: string;
@@ -190,6 +200,13 @@ export class ManagedContinuationsRuntime {
   private async handleAgentManagerEvent(event: AgentManagerEvent): Promise<void> {
     if (event.type === "agent_stream") {
       const streamEv = event.event;
+      if (streamEv.type === "timeline" && isHumanPrompt(streamEv.item)) {
+        // A person stepped in, so the agent's run of autonomous wake turns starts over.
+        await this.ledger
+          .recordHumanBudgetReset(event.agentId, "user_message")
+          .catch(() => undefined);
+        return;
+      }
       if (streamEv.type !== "turn_completed" && streamEv.type !== "turn_canceled") return;
       const turnId =
         "turnId" in streamEv && typeof streamEv.turnId === "string" ? streamEv.turnId : null;
