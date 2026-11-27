@@ -720,6 +720,24 @@ export const es: TranslationResources = {
         invalidUrl: "Navegador no válidoURL",
         unsupportedProtocol: "Navegador bloqueado no compatibleURL:{{protocol}}",
       },
+      routing: {
+        tooltipHost: "Navegando a través de {{hostName}}. Haz clic para navegar localmente.",
+        tooltipLocal: "Navegando localmente. Haz clic para navegar a través de {{hostName}}.",
+        switchToLocal: "Cambiar el enrutamiento del navegador de {{hostName}} a Local",
+        switchToHost: "Cambiar el enrutamiento del navegador de Local a {{hostName}}",
+      },
+      proxy: {
+        connecting: "Conectando con {{hostName}}...",
+        reconnecting: "Reconectando con {{hostName}}...",
+        updateTitle: "Actualiza {{hostName}} para navegar a través de este host",
+        updateDescription: "Este host todavía no admite el proxy del navegador.",
+        routedTitle: "El proxy del navegador no está disponible para hosts enrutados",
+        routedDescription: "Conéctate directamente a este host o navega localmente.",
+        offlineTitle: "{{hostName}} está desconectado",
+        offlineDescription: "Espera a que el host se reconecte o navega localmente.",
+        errorTitle: "No se pudo conectar el proxy del navegador",
+        browseLocally: "Navegar localmente",
+      },
     },
     terminal: {
       hostDisconnected: "Hostno está conectado",
@@ -2570,7 +2588,7 @@ export const es: TranslationResources = {
     title: "Ajustes",
     loading: "Cargando configuración...",
     groups: {
-      app: "Aplicación",
+      app: "Este dispositivo",
       host: "Host",
     },
     hostPicker: {
@@ -2588,7 +2606,9 @@ export const es: TranslationResources = {
     groupInfo: "Acerca de{{title}}",
     sections: {
       general: "General",
+      hosts: "Hosts",
       chat: "Chat",
+      chatAndPanes: "Chat y paneles",
       appearance: "Apariencia",
       sidebar: "Barra lateral",
       terminal: "Terminal",
@@ -2601,6 +2621,16 @@ export const es: TranslationResources = {
       permissions: "Permisos",
       diagnostics: "Diagnóstico",
       about: "Acerca de",
+    },
+    clientHosts: {
+      title: "Hosts guardados",
+      info: "Hosts a los que se conecta este dispositivo. Los nombres, iconos, insignias y rutas aquí solo afectan a este dispositivo.",
+      backToHosts: "Volver a hosts",
+      routesTitle: "Cómo se conecta este dispositivo",
+      routesInfo:
+        "Rutas guardadas que usa este dispositivo para llegar a este host. Paseo elige la más rápida disponible.",
+      addRoute: "Añadir ruta",
+      activeRoute: "Activa",
     },
     layout: en.settings.layout,
     editor: {
@@ -2681,6 +2711,7 @@ export const es: TranslationResources = {
       projects: "Proyectos",
       connections: "Conexiones",
       agents: "Agents",
+      tools: "Herramientas e instrucciones",
       agentProfiles: "Perfiles de agente",
       metadata: "Metadatos",
       voice: "Voz",
@@ -2690,6 +2721,7 @@ export const es: TranslationResources = {
       terminals: "Terminals",
       plugins: "Plugins",
       host: "Resumen",
+      daemon: "Daemon",
     },
     plugins: pluginSettings.es,
     metadataGeneration: {
@@ -3243,6 +3275,10 @@ export const es: TranslationResources = {
           delete: "Eliminar habilidad",
         },
       },
+      tools: {
+        instructionsTitle: "Instrucciones",
+        toolsTitle: "Herramientas de agentes",
+      },
       orchestration: {
         title: "Orquestación",
         unavailable: "Conéctese a este host para administrar la orquestación",
@@ -3410,6 +3446,7 @@ export const es: TranslationResources = {
         failed: "No se pudo actualizar el aviso de errores",
       },
       daemon: {
+        runtimeTitle: "Ejecución de agentes",
         rename: {
           editLabel: "Editar etiqueta",
           title: "Cambiar nombre de host",

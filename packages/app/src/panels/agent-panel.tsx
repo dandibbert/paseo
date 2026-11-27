@@ -1731,7 +1731,7 @@ function ActiveAgentComposer({
         return;
       }
       if (command.kind === "open-agent-settings") {
-        router.push(buildSettingsHostSectionRoute(serverId, "agents"));
+        router.push(buildSettingsHostSectionRoute(serverId, "tools"));
         return;
       }
       if (command.kind === "open-provider-skills") {
