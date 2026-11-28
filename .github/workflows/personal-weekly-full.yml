@@ -1,0 +1,61 @@
+name: Personal weekly full regression
+
+# The upstream CI workflow (ci.yml) is disabled in this fork, and a disabled workflow
+# cannot be dispatched. Once a week this enables it, dispatches one full run on main
+# (manual runs skip the path filter and execute every job), then disables it again.
+# Skips the scheduled run when main has not moved since the last full run.
+on:
+  schedule:
+    # Sunday 03:13 Asia/Shanghai.
+    - cron: "13 19 * * 6"
+  workflow_dispatch:
+
+permissions:
+  actions: write
+  contents: read
+
+concurrency:
+  group: personal-weekly-full
+  cancel-in-progress: false
+
+jobs:
+  run-upstream-ci:
+    name: Dispatch upstream CI on main
+    if: github.repository == 'dandibbert/paseo'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - name: Skip when main has no new commits since the last full run
+        id: guard
+        shell: bash
+        run: |
+          set -euo pipefail
+          head=$(gh api "repos/$GH_REPO/commits/main" --jq .sha)
+          last=$(gh api "repos/$GH_REPO/actions/workflows/ci.yml/runs?event=workflow_dispatch&per_page=1" --jq '.workflow_runs[0].head_sha // ""')
+          if [ "$head" = "$last" ] && [ "$GITHUB_EVENT_NAME" = schedule ]; then
+            echo "main is still at $head, which already has a full run."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Enable, dispatch, and disable upstream CI
+        if: steps.guard.outputs.skip != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh workflow enable ci.yml
+          trap 'gh workflow disable ci.yml' EXIT
+          gh workflow run ci.yml --ref main
+          # Wait until the dispatched run exists before disabling the workflow again.
+          for attempt in $(seq 1 12); do
+            run=$(gh api "repos/$GH_REPO/actions/workflows/ci.yml/runs?event=workflow_dispatch&per_page=1" --jq '.workflow_runs[0] | select(.created_at > (now - 120 | todate)) | .html_url' || true)
+            if [ -n "$run" ]; then
+              echo "Dispatched: $run"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "The dispatched CI run did not appear within a minute." >&2
+          exit 1

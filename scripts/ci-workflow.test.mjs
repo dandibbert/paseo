@@ -148,6 +148,10 @@ test("routine pushes and pull requests only schedule CI and headless packaging",
     } else if (file === "headless-linux.yml") {
       assert.match(trigger, /push:\s*\n\s+branches: \[main/);
       assert.match(trigger, /pull_request:\s*\n\s+branches: \[main\]/);
+    } else if (file === "personal-ci.yml") {
+      // Fork-only replacement for the disabled upstream ci.yml.
+      assert.match(trigger, /push:\s*\n\s+branches: \[main\]/);
+      assert.match(trigger, /^  pull_request:$/m);
     } else {
       assert.doesNotMatch(trigger, /^\s+branches:/m, file);
       assert.doesNotMatch(trigger, /^  (pull_request|release):/m, file);

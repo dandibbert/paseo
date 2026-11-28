@@ -194,25 +194,26 @@ jobs:
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
-      # Test builds still pass the validate and installed jobs; only Stable waits on CI.
-      - name: Require green CI for the installer source
+      # Test builds still pass the validate and installed jobs; only Stable waits on Personal CI.
+      # The upstream CI workflow (ci.yml) is disabled in this fork; personal-ci.yml replaces it.
+      - name: Require green Personal CI for the installer source
         if: ${{ !inputs.test_release }}
         shell: bash
         run: |
           set -euo pipefail
           for attempt in $(seq 1 60); do
-            runs=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?head_sha=$SOURCE_REVISION&per_page=100")
+            runs=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/personal-ci.yml/runs?head_sha=$SOURCE_REVISION&per_page=100")
             latest=$(jq -c --arg sha "$SOURCE_REVISION" '[.workflow_runs[] | select(.head_sha == $sha)] | sort_by(.run_number) | last' <<< "$runs")
             test "$latest" != null
             if [ "$(jq -r .status <<< "$latest")" = completed ]; then
               test "$(jq -r .conclusion <<< "$latest")" = success
-              echo "Source CI passed: $(jq -r .html_url <<< "$latest")"
+              echo "Personal CI passed: $(jq -r .html_url <<< "$latest")"
               exit 0
             fi
-            echo "Waiting for source CI: $(jq -r .html_url <<< "$latest")"
+            echo "Waiting for Personal CI: $(jq -r .html_url <<< "$latest")"
             sleep 30
           done
-          echo 'Source CI did not finish within 30 minutes.' >&2
+          echo 'Personal CI did not finish within 30 minutes.' >&2
           exit 1
       - uses: actions/download-artifact@v4
         with:
