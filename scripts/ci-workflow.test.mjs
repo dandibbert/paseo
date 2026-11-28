@@ -116,6 +116,7 @@ test("gated checks are statically named jobs with real job-level gating", () => 
 
 // Desktop packaging stays manual in this fork (docs/release.md, Personal fork Actions).
 test("pull-request checks run for every base branch, including stacked PRs", () => {
+  // Nix and desktop packages stay manual in the fork (see the manual-dispatch test below).
   for (const workflowPath of [ciWorkflowPath]) {
     const trigger = readFileSync(workflowPath, "utf8").split("jobs:", 1)[0];
     const pullRequest = trigger.match(/^  pull_request:\n((?:    .*\n)*)/m);
@@ -354,7 +355,7 @@ test("PR routing declares stable behavior ownership", () => {
       "packages/react-native-enriched-markdown/**",
     ],
     relay: ["packages/relay/**"],
-    cli: ["packages/cli/**"],
+    cli: ["packages/cli/**", "packages/server/**", "plugins/**"],
     headless: [
       ".github/ci-paths.yml",
       ".github/workflows/headless-linux.yml",

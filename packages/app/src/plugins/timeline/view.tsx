@@ -1,5 +1,5 @@
 import { useAssistantFileLinkActions } from "@/assistant-file-links";
-import { MarkdownLinkMenu, useOpenLinkMenu } from "@/components/markdown/link-menu";
+import { MarkdownLinkMenu, useOpenLinkMenu } from "@/components/markdown/link-action-menu";
 import type { PluginTimelineItemProps } from "@getpaseo/plugin/client";
 import type { PluginTheme } from "@getpaseo/plugin";
 import React, { type ComponentType, useMemo } from "react";

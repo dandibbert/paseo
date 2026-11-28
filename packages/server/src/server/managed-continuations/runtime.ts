@@ -13,15 +13,15 @@ import {
 } from "./tasks/worker.js";
 import { ManagedContinuationToolsService } from "./tools-service.js";
 import type { StartupReconcileReport } from "./types.js";
-import { parseAgentMessage } from "../agent/agent-messages/envelope.js";
+import { parseAgentMessages } from "../agent/agent-messages/envelope.js";
 import type { AgentTimelineItem } from "../agent/agent-sdk-types.js";
 
-/** A prompt a person typed: wakes and agent messages arrive wrapped in a paseo-system envelope. */
+/** A prompt a person typed: wakes, agent messages and schedule fires arrive as marked messages. */
 function isHumanPrompt(item: AgentTimelineItem): boolean {
   if (item.type !== "user_message") return false;
-  if (!item.text.startsWith("<paseo-system")) return true;
-  // An envelope counts only when it says the user wrote it; anything else is the daemon's.
-  return parseAgentMessage(item.text)?.source === null;
+  const messages = parseAgentMessages(item.text);
+  // Unmarked text is typed; a marked message counts only when it says the user wrote it.
+  return messages === null || messages.every((message) => message.source === null);
 }
 
 export interface ManagedContinuationsRuntimeOptions {

@@ -568,8 +568,21 @@ export const ar: TranslationResources = {
       copyBranchName: "نسخ اسم الفرع",
       copied: "تم النسخ",
     },
+    linkActions: {
+      openInPaseo: "فتح في Paseo",
+      openInDefaultBrowser: "فتح في المتصفح الافتراضي",
+      copyLink: "نسخ الرابط",
+      linkCopiedLabel: "الرابط",
+    },
     fileActions: {
       openFolder: "فتح المجلد",
+      revealInFiles: "إظهار في الملفات",
+      openInDefaultApp: "فتح بالتطبيق الافتراضي",
+      pathCopiedLabel: "المسار",
+      relativePathCopiedLabel: "المسار النسبي",
+      openInDefaultAppFailed: "تعذر فتح الملف بالتطبيق الافتراضي",
+      outsideWorkspace: "هذا الملف خارج مساحة العمل",
+      notFoundInFiles: "لم يُعثر على الملف في الملفات",
       openFile: "افتح الملف",
       openIn: "فتح في {{target}}",
       openToSide: "فتح إلى الجانب",
@@ -602,6 +615,12 @@ export const ar: TranslationResources = {
       },
     },
     fileExplorer: {
+      filter: {
+        placeholder: "البحث في الملفات",
+        clear: "مسح البحث",
+        loading: "جارٍ البحث في الملفات...",
+        empty: "لا توجد ملفات مطابقة",
+      },
       sort: {
         name: "اسم",
         modified: "معدل",
@@ -813,7 +832,6 @@ export const ar: TranslationResources = {
         agentIdCopiedLabel: "AgentID",
         terminalIdCopiedLabel: "معرف المحطة",
         resumeCommandCopiedLabel: "أمر الاستئناف",
-        filePathCopiedLabel: "File path",
         resumeIdUnavailable: "السيرة الذاتية ID غير متوفرة",
         resumeCommandUnavailable: "أمر الاستئناف غير متوفر",
         reloadingAgent: "وكيل إعادة التحميل...",

@@ -174,7 +174,7 @@ async function drainWakeTurnAndSettle(
 
 /**
  * Bridges durable pending `WakeEvent`s -> immutable `DispatchBatch` -> `AgentManager`
- * idle-only atomic admission -> XML-escaped `<paseo-system kind="managed-continuation">` turn.
+ * idle-only atomic admission -> a turn marked `kind="managed-continuation"` (agent-messages/envelope.ts).
  */
 export class ManagedContinuationOutboxService {
   private readonly ledger: ManagedContinuationLedger;

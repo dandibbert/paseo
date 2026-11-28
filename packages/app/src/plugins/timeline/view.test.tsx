@@ -13,7 +13,7 @@ vi.mock("@/assistant-file-links", () => ({
   useAssistantFileLinkActions: () => ({ open: fileLinkOpener }),
 }));
 const linkMenuOpener = vi.hoisted(() => vi.fn());
-vi.mock("@/components/markdown/link-menu", () => ({
+vi.mock("@/components/markdown/link-action-menu", () => ({
   MarkdownLinkMenu: ({ children }: { children: React.ReactNode }) => children,
   useOpenLinkMenu: () => linkMenuOpener,
 }));
