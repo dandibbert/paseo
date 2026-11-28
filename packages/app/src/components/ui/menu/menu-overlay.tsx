@@ -155,7 +155,7 @@ export function useAnchoredPosition({
     // coordinate space that starts at the screen top; no status bar offset applies.
     void measureElement(anchorRef.current).then((rect) => {
       if (cancelled) return undefined;
-      setTriggerRect(rect);
+      setTriggerRect(rect.width > 0 && rect.height > 0 ? rect : null);
       return undefined;
     });
 

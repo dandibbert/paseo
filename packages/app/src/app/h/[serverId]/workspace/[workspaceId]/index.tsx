@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from "react";
-import { useNavigation } from "expo-router/react-navigation";
+import { useIsFocused, useNavigation } from "expo-router/react-navigation";
 import { StyleSheet, View } from "react-native";
 import { useLocalSearchParams } from "expo-router";
 import { HostRouteBootstrapBoundary } from "@/components/host-route-bootstrap-boundary";
@@ -147,7 +147,9 @@ function HostWorkspaceRouteContent() {
 }
 
 function WorkspaceDeck() {
-  const activeSelection = useActiveWorkspaceSelection();
+  const isScreenFocused = useIsFocused();
+  const routeActiveSelection = useActiveWorkspaceSelection();
+  const activeSelection = isScreenFocused ? routeActiveSelection : null;
   const [retainedSelections, setRetainedSelections] = useState<RetainedWorkspaceSelection[]>(() =>
     activeSelection ? [{ selection: activeSelection, inactiveSince: null }] : [],
   );

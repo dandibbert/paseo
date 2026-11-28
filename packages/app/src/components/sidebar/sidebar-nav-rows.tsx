@@ -25,12 +25,14 @@ import {
 } from "@/sidebar-nav/model";
 import { useSidebarNavItems } from "@/sidebar-nav/use-sidebar-nav-items";
 import { useKeyboardShortcutsStore } from "@/stores/keyboard-shortcuts-store";
-import { useActiveWorkspaceSelection } from "@/stores/navigation-active-workspace-store";
+import {
+  navigateToWorkspace,
+  useActiveWorkspaceSelection,
+} from "@/stores/navigation-active-workspace-store";
 import { useToast } from "@/contexts/toast-api-context";
 import { useHostRuntimeClient, useHosts } from "@/runtime/host-runtime";
 import { useWorkspace, useWorkspaceFields } from "@/stores/session-store-hooks";
 import {
-  buildHostWorkspaceRoute,
   buildNewWorkspaceRoute,
   buildSchedulesRoute,
   buildSessionsRoute,
@@ -194,7 +196,7 @@ function SidebarPersonalHostRow({
     onBeforeNavigate?.();
     try {
       const result = await client.ensurePersonalSpace();
-      if (result.workspace) router.push(buildHostWorkspaceRoute(serverId, result.workspace.id));
+      if (result.workspace) navigateToWorkspace({ serverId, workspaceId: result.workspace.id });
       else toast.error(result.error ?? label);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : String(error));
