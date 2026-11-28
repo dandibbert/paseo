@@ -140,13 +140,10 @@ export class PluginButtonStore {
     if (open && (!entry.button.visible || entry.button.disabled || entry.pending)) return;
     if (open) {
       this.publish(
-        this.entries.map((candidate) =>
-          candidate.key === key
-            ? { ...candidate, open: true }
-            : candidate.open
-              ? { ...candidate, open: false }
-              : candidate,
-        ),
+        this.entries.map((candidate) => {
+          if (candidate.key === key) return { ...candidate, open: true };
+          return candidate.open ? { ...candidate, open: false } : candidate;
+        }),
       );
       return;
     }
