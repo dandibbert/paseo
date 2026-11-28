@@ -967,3 +967,80 @@ it("defers layout fit until all replay chunks commit", async () => {
   mounted.runtime.resize({ shouldClaim: true, forceClaim: true });
   expect(getBrowserTerminal().cols).toBe(latestSize(mounted.sizes).cols);
 });
+
+describe("shell command line mouse editing", () => {
+  // The zsh integration prints A before the prompt and B where the command line starts.
+  const PROMPT = "\x1b]633;A\x07$ \x1b]633;B\x07";
+
+  async function mountWithOutput(output: string): Promise<MountedTerminal> {
+    const mounted = createTerminalHost({ width: 720, height: 360 });
+    await waitFor({ predicate: () => window.__paseoTerminal !== undefined });
+    await settleMountRefits();
+    await new Promise<void>((resolve) => {
+      mounted.runtime.write({ data: terminalOutput(output), onCommitted: resolve });
+    });
+    mounted.inputs.length = 0;
+    return mounted;
+  }
+
+  async function clickCell(mounted: MountedTerminal, cell: { row: number; col: number }) {
+    const terminal = getBrowserTerminal();
+    const screen = mounted.host.querySelector<HTMLElement>(".xterm-screen");
+    if (!screen) throw new Error("Expected xterm screen to be mounted");
+    await userEvent.click(screen, {
+      position: {
+        x: (cell.col + 0.5) * (screen.clientWidth / terminal.cols),
+        y: (cell.row + 0.5) * (screen.clientHeight / terminal.rows),
+      },
+    });
+  }
+
+  function selectCells(start: { row: number; col: number }, length: number): void {
+    const terminal = window.__paseoTerminal as unknown as {
+      select(column: number, row: number, length: number): void;
+    };
+    terminal.select(start.col, start.row, length);
+  }
+
+  it("moves the shell cursor to a clicked character on the command line", async () => {
+    const mounted = await mountWithOutput(`${PROMPT}echo hello world`);
+
+    await clickCell(mounted, { row: 0, col: 9 });
+
+    // The cursor sits after "world" (column 18); column 9 is nine characters to the left.
+    await waitFor({ predicate: () => mounted.inputs.length > 0 });
+    expect(mounted.inputs.join("")).toBe("\x1b[D".repeat(9));
+  });
+
+  it("leaves clicks alone without the shell integration's command line mark", async () => {
+    const mounted = await mountWithOutput("$ echo hello world");
+
+    await clickCell(mounted, { row: 0, col: 9 });
+    await nextFrame();
+
+    expect(mounted.inputs).toEqual([]);
+  });
+
+  it("deletes a selection on the command line with Backspace", async () => {
+    const mounted = await mountWithOutput(`${PROMPT}echo hello world`);
+    // "hello " occupies columns 7 to 12.
+    selectCells({ row: 0, col: 7 }, 6);
+
+    dispatchTerminalKey({ host: mounted.host, key: "Backspace", keyCode: 8 });
+
+    // Move from the end (column 18) to the selection's end (column 13), then remove six characters.
+    expect(mounted.inputs.join("")).toBe("\x1b[D".repeat(5) + "\x7f".repeat(6));
+    expect((window.__paseoTerminal as unknown as { hasSelection(): boolean }).hasSelection()).toBe(
+      false,
+    );
+  });
+
+  it("keeps Backspace as one keystroke when the selection is in the output", async () => {
+    const mounted = await mountWithOutput(`old output\r\n${PROMPT}echo hi`);
+    selectCells({ row: 0, col: 0 }, 3);
+
+    dispatchTerminalKey({ host: mounted.host, key: "Backspace", keyCode: 8 });
+
+    expect(mounted.inputs.join("")).toBe("\x7f");
+  });
+});

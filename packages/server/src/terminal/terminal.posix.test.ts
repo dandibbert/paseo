@@ -666,6 +666,47 @@ describe.skipIf(isPlatform("win32"))("terminal POSIX-only", () => {
       expect(result.stdout.split(/\r?\n/)).toContain("PASEO_CUSTOM_PROMPT> ");
     });
 
+    it.skipIf(!hasZsh)("marks where the zsh command line starts after each prompt", async () => {
+      const homeDir = mkdtempSync(join(tmpdir(), "terminal-zsh-command-line-home-"));
+      temporaryDirs.push(homeDir);
+      const realZdotdir = join(homeDir, ".config", "zsh");
+      mkdirSync(realZdotdir, { recursive: true });
+      writeFileSync(join(realZdotdir, ".zshenv"), "");
+      writeFileSync(join(realZdotdir, ".zshrc"), "PS1='$ '\n");
+
+      const session = trackSession(
+        await createTerminal({
+          workspaceId: "ws-test",
+          cwd: homeDir,
+          shell: "/bin/zsh",
+          env: { HOME: homeDir, ZDOTDIR: realZdotdir },
+        }),
+      );
+      let output = "";
+      const unsubscribe = session.subscribe((message) => {
+        if (message.type === "output") output += message.data;
+      });
+
+      await waitForLines(session, ["$"]);
+      session.send({ type: "input", data: "echo marked\r" });
+      // The first prompt printed before the subscription, so wait for the one after the command.
+      const mark = (kind: string) => `\x1b]633;${kind}`;
+      await waitForState(session, () => {
+        const prompt = output.indexOf(mark("A"));
+        return prompt >= 0 && output.indexOf(mark("B\x07"), prompt) >= 0;
+      });
+
+      // Clients read the command line as the text after B, so B follows the prompt and the
+      // command runs (C) only after it.
+      const marks = output
+        .split(mark(""))
+        .slice(1)
+        .map((part) => part[0]);
+      expect(marks).toEqual(["C", "D", "A", "B"]);
+      expect(output).toContain(`$ \x1b[K${mark("B\x07")}`);
+      unsubscribe();
+    });
+
     it.skipIf(!hasZsh)("emits zsh shell integration command completion", async () => {
       const homeDir = mkdtempSync(join(tmpdir(), "terminal-zsh-command-finished-home-"));
       temporaryDirs.push(homeDir);
