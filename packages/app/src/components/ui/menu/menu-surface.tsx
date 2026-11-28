@@ -407,8 +407,12 @@ function MenuSheetSurface({
     handleSheetDismiss();
     if (!isWeb) return;
     // Closing the portal can discard focus restored earlier by the overlay registry.
-    // Restore it after the sheet has actually left the DOM.
+    // Restore it after the sheet has actually left the DOM, but only when focus was lost:
+    // a sheet closed because something else took focus, such as a plugin focusing the
+    // composer, keeps that focus.
     setTimeout(() => {
+      const active = document.activeElement;
+      if (active && active !== document.body && document.contains(active)) return;
       const trigger = menu.triggerRef.current;
       if (trigger instanceof HTMLElement && document.contains(trigger)) trigger.focus();
     }, 0);

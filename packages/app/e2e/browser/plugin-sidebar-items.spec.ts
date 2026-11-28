@@ -578,6 +578,9 @@ test.describe("Plugin sidebar items", () => {
       await page.setViewportSize(COMPACT);
       await page.getByRole("button", { name: "Open menu", exact: true }).first().click();
       await expect(botRow(page, "bot-1")).toBeInViewport();
+      // The nav block caps at half the sidebar and scrolls inside the cap, so the
+      // last group row can sit below the fold on a phone-sized screen.
+      await botRow(page, "status").scrollIntoViewIfNeeded();
       await expect(botRow(page, "status")).toBeInViewport();
       await qaScreenshot(page, "phase6-compact-sidebar-bots");
     });

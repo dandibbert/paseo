@@ -320,7 +320,7 @@ describe("ProviderSnapshotManager background refresh", () => {
       await harness.manager.refreshSettingsSnapshot({ providers: ["codex"] });
       expect(harness.globalEntry("codex")).toMatchObject({
         status: "error",
-        error: "network unreachable",
+        error: "network unreachable. Using the last successful model catalog.",
       });
     } finally {
       harness.manager.destroy();
@@ -369,7 +369,7 @@ describe("ProviderSnapshotManager background refresh", () => {
       expect(harness.provider("codex").forces).toEqual([false, true]);
       expect(harness.globalEntry("codex")).toMatchObject({
         status: "error",
-        error: "network unreachable",
+        error: "network unreachable. Using the last successful model catalog.",
       });
     } finally {
       harness.manager.destroy();

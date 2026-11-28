@@ -207,6 +207,8 @@ interface WebSocketServerConfig {
   getHostnames?: () => HostnamesConfig | undefined;
   daemonStatusRpc?: boolean;
   relayConfig?: boolean;
+  /** Tests stand in for a daemon older than the install-update RPC by turning this off. */
+  installUpdate?: boolean;
   startPaused?: boolean;
 }
 
@@ -682,6 +684,7 @@ export class VoiceAssistantWebSocketServer {
   private readonly hubRelationships: HubRelationshipManagement | null;
   private connectionLifecycle: "starting" | "accepting" | "stopping" = "accepting";
   private readonly advertiseDaemonStatusRpc: boolean;
+  private readonly advertiseInstallUpdate: boolean;
   private readonly advertiseRelayConfig: boolean;
   private readonly directorySync = new DirectorySyncService();
   private readonly pluginRuntime: SessionOptions["pluginRuntime"];
@@ -766,6 +769,7 @@ export class VoiceAssistantWebSocketServer {
     this.workspaceSetupRuntime = workspaceSetupRuntime;
     this.workspaceArchiveOperations = resolveWorkspaceArchiveOperations(workspaceArchiveOperations);
     this.advertiseDaemonStatusRpc = wsConfig.daemonStatusRpc !== false;
+    this.advertiseInstallUpdate = wsConfig.installUpdate !== false;
     this.advertiseRelayConfig = wsConfig.relayConfig !== false;
     this.connectionLifecycle = wsConfig.startPaused === true ? "starting" : "accepting";
     this.serverId = serverId;
@@ -2311,7 +2315,7 @@ export class VoiceAssistantWebSocketServer {
         // COMPAT(filePut): added in v0.15.0, remove gate after 2027-05-05.
         filePut: true,
         // COMPAT(installUpdate): added in v0.15.2, remove gate after 2027-05-05.
-        installUpdate: true,
+        ...(this.advertiseInstallUpdate ? { installUpdate: true } : {}),
         // COMPAT(providerUsageList): added in v0.1.98, drop the gate when daemon floor >= v0.1.98.
         providerUsageList: true,
         // COMPAT(agentDetach): added in v0.1.98, remove gate after 2026-12-19 once daemon floor >= v0.1.98.
