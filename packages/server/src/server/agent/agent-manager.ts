@@ -102,6 +102,11 @@ import {
 import type { AgentStorage, StoredAgentRecord, StoredShellTimelineItem } from "./agent-storage.js";
 import type { AgentOwner } from "./agent-owner.js";
 import {
+  buildUnattendedHubPermissionDenyResponse,
+  isUnattendedHubExecutionAgent,
+  type UnattendedPermissionPolicyAgent,
+} from "./unattended-permission-policy.js";
+import {
   InMemoryAgentTimelineStore,
   type SeedAgentTimelineOptions,
 } from "./agent-timeline-store.js";
@@ -150,7 +155,8 @@ import { withTimeout } from "../../utils/promise-timeout.js";
 import { buildSessionConfig, extractAttention } from "../persistence-hooks.js";
 
 const RELOAD_SESSION_CLOSE_TIMEOUT_MS = 3_000;
-const INTERRUPT_SESSION_TIMEOUT_MS = 2_000;
+const INTERRUPT_SESSION_TIMEOUT_MS = 15_000;
+const INTERRUPT_SETTLEMENT_TIMEOUT_MS = 2_000;
 const IMPORTABLE_SESSION_LIST_TIMEOUT_MS = 90_000;
 const STORED_AGENT_CAPABILITIES: AgentCapabilityFlags = {
   supportsStreaming: false,
@@ -192,6 +198,17 @@ function trimStoredShellOutput(
       output: `[...earlier output truncated...]\n${detail.output.slice(-MAX_STORED_SHELL_OUTPUT_CHARS)}`,
     },
   };
+}
+
+function submittedPromptImages(
+  prompt: AgentPromptInput,
+): import("@getpaseo/protocol/agent-types").UploadedImage[] {
+  if (typeof prompt === "string") {
+    return [];
+  }
+  return prompt.flatMap((block) =>
+    block.type === "image" && block.uploadedImage ? [block.uploadedImage] : [],
+  );
 }
 
 export class AgentManagerShuttingDownError extends Error {
@@ -342,6 +359,11 @@ export type {
   AgentTimelineRow,
   AgentTimelineWindow,
 } from "./agent-timeline-store-types.js";
+
+export type UsageObservedListener = (
+  agentId: string,
+  observation: Extract<AgentStreamEvent, { type: "usage_observed" }>,
+) => void;
 
 export type AgentManagerEvent =
   | { type: "agent_state"; agent: ManagedAgent }
@@ -1025,6 +1047,7 @@ export class AgentManager {
   private activeManagedWakeCommitAgentId: string | null = null;
   private readonly subscribers = new Set<SubscriptionRecord>();
   private readonly stopListeners = new Set<(agentId: string) => void>();
+  private readonly usageListeners = new Set<UsageObservedListener>();
   private readonly idFactory: () => string;
   private readonly registry?: AgentStorage;
   private readonly durableTimelineStore?: AgentTimelineStore;
@@ -1547,6 +1570,12 @@ export class AgentManager {
       }
       this.managedWakeReservationsById.delete(reservationId);
     });
+  }
+
+  /** Account usage an agent's provider observed while working (see `usage_observed`). */
+  onUsageObserved(listener: UsageObservedListener): () => void {
+    this.usageListeners.add(listener);
+    return () => this.usageListeners.delete(listener);
   }
 
   subscribe(callback: AgentSubscriber, options?: SubscribeOptions): () => void {
@@ -3699,6 +3728,26 @@ export class AgentManager {
     prompt: AgentPromptInput,
     options?: AgentRunOptions,
   ): Promise<AgentRunResult> {
+    try {
+      return await this.runAgentOnce(agentId, prompt, options);
+    } catch (error) {
+      if (!isStaleProviderSessionError(error)) {
+        throw error;
+      }
+      this.logger.info(
+        { agentId, err: error },
+        "Provider session went stale during runAgent; reopening from persistence",
+      );
+      await this.reloadAgentSession(agentId);
+      return await this.runAgentOnce(agentId, prompt, options);
+    }
+  }
+
+  private async runAgentOnce(
+    agentId: string,
+    prompt: AgentPromptInput,
+    options?: AgentRunOptions,
+  ): Promise<AgentRunResult> {
     const events = this.streamAgent(agentId, prompt, options);
     const timeline: AgentTimelineItem[] = [];
     let finalText = "";
@@ -4606,7 +4655,10 @@ export class AgentManager {
       }
       const started = await this.waitWithTimeout({
         operation: Promise.race([admission.run.turnStartedPromise, admission.run.settledPromise]),
-        timeoutMs: this.rescueTimeouts.interruptSessionMs,
+        timeoutMs: Math.min(
+          INTERRUPT_SETTLEMENT_TIMEOUT_MS,
+          this.rescueTimeouts.interruptSessionMs,
+        ),
       });
       if (started === "timed_out") {
         stalledStart = admission.run;
@@ -4766,6 +4818,7 @@ export class AgentManager {
       } catch {
         // Ignore refresh errors - state sync after permission approval is best effort.
       }
+      agent.pendingPermissions.delete(requestId);
 
       this.touchUpdatedAt(agent);
       await this.persistSnapshot(agent);
@@ -4825,9 +4878,7 @@ export class AgentManager {
     const interruptAcknowledged = await this.interruptSession(agent.session, agentId);
     const settlement = await this.waitWithTimeout({
       operation: run.settledPromise,
-      timeoutMs: interruptAcknowledged
-        ? INTERRUPT_SESSION_TIMEOUT_MS
-        : this.rescueTimeouts.interruptSessionMs,
+      timeoutMs: Math.min(INTERRUPT_SETTLEMENT_TIMEOUT_MS, this.rescueTimeouts.interruptSessionMs),
     });
 
     if (!interruptAcknowledged) {
@@ -5812,6 +5863,10 @@ export class AgentManager {
       this.dispatch({ type: "provider_subagent", event: update });
       return;
     }
+    if (event.type === "usage_observed") {
+      for (const listener of this.usageListeners) listener(agent.id, event);
+      return;
+    }
     if (event.type === "background_work") {
       const items =
         event.items === null
@@ -6510,8 +6565,7 @@ export class AgentManager {
         this.onStreamTurnStarted({ agent, eventTurnId, isForegroundEvent, flags });
         return undefined;
       case "permission_requested":
-        this.onStreamPermissionRequested(agent, event);
-        return undefined;
+        return this.onStreamPermissionRequested({ agent, event, options, flags });
       case "permission_resolved":
         this.onStreamPermissionResolved({ agent, event, options, flags });
         return undefined;
@@ -6812,10 +6866,65 @@ export class AgentManager {
     this.emitState(agent);
   }
 
-  private onStreamPermissionRequested(
-    agent: ActiveManagedAgent,
-    event: Extract<AgentStreamEvent, { type: "permission_requested" }>,
-  ): void {
+  private lookupAgentForPermissionPolicy(
+    agentId: string,
+  ): UnattendedPermissionPolicyAgent | null | Promise<UnattendedPermissionPolicyAgent | null> {
+    const live = this.agents.get(agentId);
+    if (live) {
+      return live;
+    }
+    return this.registry?.get(agentId) ?? null;
+  }
+
+  private async onStreamPermissionRequested(params: {
+    agent: ActiveManagedAgent;
+    event: Extract<AgentStreamEvent, { type: "permission_requested" }>;
+    options: HandleStreamEventOptions | undefined;
+    flags: StreamEventFlags;
+  }): Promise<void> {
+    const { agent, event, options, flags } = params;
+    if (
+      !options?.fromHistory &&
+      (await isUnattendedHubExecutionAgent(agent, (agentId) =>
+        this.lookupAgentForPermissionPolicy(agentId),
+      ))
+    ) {
+      const denyResponse = buildUnattendedHubPermissionDenyResponse();
+      try {
+        await this.respondToPermission(agent.id, event.request.id, denyResponse);
+        flags.shouldDispatchEvent = false;
+        flags.shouldNotifyWaiters = false;
+        this.logger.info(
+          {
+            agentId: agent.id,
+            provider: agent.provider,
+            requestId: event.request.id,
+            kind: event.request.kind,
+            name: event.request.name,
+          },
+          "Auto-denied unexpected permission request for unattended Hub execution",
+        );
+        return;
+      } catch (error) {
+        this.logger.warn(
+          {
+            err: error,
+            agentId: agent.id,
+            provider: agent.provider,
+            requestId: event.request.id,
+            kind: event.request.kind,
+            name: event.request.name,
+          },
+          "Failed to auto-deny unexpected permission request for unattended Hub execution",
+        );
+        if (this.agents.get(agent.id) !== agent) {
+          flags.shouldDispatchEvent = false;
+          flags.shouldNotifyWaiters = false;
+          return;
+        }
+      }
+    }
+
     const hadPendingPermissions = agent.pendingPermissions.size > 0;
     agent.pendingPermissions.set(event.request.id, event.request);
     this.refreshSessionPersistence(agent);
@@ -6903,10 +7012,12 @@ export class AgentManager {
     outcome: "accepted" | "rejected",
     options?: { messageId?: string; providerMessageId?: string; turnId?: string },
   ): void {
+    const images = submittedPromptImages(prompt);
     const items = projectAgentMessages({
       type: "user_message",
       text: submittedPromptText(prompt),
       clientMessageId,
+      ...(images.length > 0 ? { images } : {}),
       ...(options?.messageId ? { messageId: options.messageId } : {}),
     });
     for (const item of items) {

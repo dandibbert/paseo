@@ -34,12 +34,16 @@ import {
   createDaemonListeners,
   parseListenString,
   formatListenTarget,
-  formatHostForHttpUrl,
   splitListen,
   type ListenTarget,
   type TailscaleNetwork,
 } from "./listeners.js";
 export { parseListenString, formatListenTarget, type ListenTarget } from "./listeners.js";
+import {
+  createLoopbackAgentEndpoint,
+  isLoopbackRemoteAddress,
+  type LoopbackAgentEndpoint,
+} from "./loopback-agent-endpoint.js";
 
 function resolveBoundListenTarget(
   listenTarget: ListenTarget,
@@ -225,6 +229,7 @@ import {
 } from "./hub/relationship-remote.js";
 import { DaemonExecutions } from "./hub/daemon-executions.js";
 import { PluginService } from "./plugins/index.js";
+import { TunnelManager } from "./tunnels/index.js";
 import { BuiltinPluginLoader } from "./plugins/builtin/index.js";
 import { ManagedPluginSources } from "./plugins/managed-source.js";
 
@@ -232,38 +237,6 @@ const MCP_DEBUG_BATCH_LIMIT = 10;
 const MCP_DEBUG_SECRET = "[redacted]";
 const DOWNLOAD_OPEN_FLAGS =
   process.platform === "win32" ? constants.O_RDONLY : constants.O_RDONLY | constants.O_NOFOLLOW;
-
-function resolveAgentMcpClientHost(host: string): string {
-  if (host === "0.0.0.0") {
-    return "127.0.0.1";
-  }
-  if (host === "::" || host === "[::]") {
-    return "::1";
-  }
-  return host;
-}
-
-function createAgentMcpBaseUrl(listenTarget: ListenTarget | null): string | null {
-  if (!listenTarget || listenTarget.type !== "tcp") {
-    return null;
-  }
-  const host = resolveAgentMcpClientHost(listenTarget.host);
-  return new URL(
-    "/mcp/agents",
-    `http://${formatHostForHttpUrl(host)}:${listenTarget.port}`,
-  ).toString();
-}
-
-function createTerminalActivityUrl(listenTarget: ListenTarget | null): string | null {
-  if (!listenTarget || listenTarget.type !== "tcp") {
-    return null;
-  }
-  const host = resolveAgentMcpClientHost(listenTarget.host);
-  return new URL(
-    "/api/terminal-activity",
-    `http://${formatHostForHttpUrl(host)}:${listenTarget.port}`,
-  ).toString();
-}
 
 const TerminalActivityReportSchema = z.object({
   terminalId: z.string().min(1),
@@ -276,12 +249,6 @@ const TERMINAL_ACTIVITY_STATE_MAP = {
   idle: "idle",
   "needs-input": "attention",
 } as const;
-
-const LOOPBACK_REMOTE_ADDRESSES = new Set(["127.0.0.1", "::1", "::ffff:127.0.0.1"]);
-
-function isLoopbackRemoteAddress(remoteAddress: string | undefined): boolean {
-  return remoteAddress !== undefined && LOOPBACK_REMOTE_ADDRESSES.has(remoteAddress);
-}
 
 export function createTerminalActivityRouteHandler(
   terminalManager: TerminalManager,
@@ -477,6 +444,7 @@ export interface PaseoDaemon {
   agentStorage: AgentStorage;
   terminalManager: TerminalManager;
   serviceProxy: ServiceProxySubsystem;
+  tunnelManager: TunnelManager;
   scriptRuntimeStore: WorkspaceScriptRuntimeStore;
   browserToolsBroker: BrowserToolsBroker;
   start(): Promise<void>;
@@ -676,10 +644,13 @@ export async function createPaseoDaemon(
   });
   const browserToolsPolicy = new DaemonConfigBrowserToolsPolicy(daemonConfigStore);
   const browserToolsBroker = new BrowserToolsBroker({});
+  const tunnelManager = new TunnelManager({ logger });
   const pluginRuntime: PluginService = new PluginService(logger, daemonConfigStore, daemonVersion, {
+    tunnelManager,
     usageAgents: {
       hasAgent: (id) => agentManager.getAgent(id) !== null,
       usageSession: (id) => agentManager.usageSession(id),
+      providerEnvironments: () => providerSnapshotManager.listProviderEnvironments(),
       resolveLaunch: (provider) => providerSnapshotManager.resolveUsageLaunch(provider),
       isProviderActive: (provider, options) =>
         providerSnapshotManager.isProviderActiveForUsage(provider, options),
@@ -727,13 +698,14 @@ export async function createPaseoDaemon(
     app.set("trust proxy", value ?? ["loopback"]);
   });
   let boundListenTarget: ListenTarget | null = null;
+  let loopbackAgentEndpoint: LoopbackAgentEndpoint | null = null;
   let workspaceRegistry: FileBackedWorkspaceRegistry | null = null;
   const terminalManager = withTerminalCreateHook(
     await startWorkerTerminalManager({
       paseoHome: config.paseoHome,
       paseoVersion: daemonVersion,
       logger,
-      getTerminalActivityUrl: () => createTerminalActivityUrl(boundListenTarget),
+      getTerminalActivityUrl: () => loopbackAgentEndpoint?.getTerminalActivityUrl() ?? null,
       eagerLaunch: !dependencies.lazyTerminalWorker,
     }),
     pluginRuntime,
@@ -854,12 +826,10 @@ export async function createPaseoDaemon(
     next();
   });
 
+  const handleTerminalActivityRequest = createTerminalActivityRouteHandler(terminalManager);
+
   // Local, harmless, and token-gated; deliberately skips daemon auth.
-  app.post(
-    "/api/terminal-activity",
-    express.json(),
-    createTerminalActivityRouteHandler(terminalManager),
-  );
+  app.post("/api/terminal-activity", express.json(), handleTerminalActivityRequest);
 
   // Serve the bundled browser web UI when enabled. Mounted after service-proxy
   // classification and host/CORS handling, but before daemon bearer auth, so
@@ -1107,6 +1077,9 @@ export async function createPaseoDaemon(
   };
   const unsubscribePluginProviders =
     pluginRuntime.subscribeProviderRegistrations(syncPluginProviders);
+  const unsubscribeObservedUsage = agentManager.onUsageObserved((agentId, observation) =>
+    pluginRuntime.observeUsage(agentId, observation),
+  );
 
   const detachAgentStoragePersistence = attachAgentStoragePersistence(
     logger,
@@ -1902,6 +1875,11 @@ export async function createPaseoDaemon(
     app.get(agentMcpRoute, handleAgentMcpRequest);
     app.delete(agentMcpRoute, handleAgentMcpRequest);
     logger.info({ route: agentMcpRoute, enabled: mcpEnabled }, "Agent MCP route mounted");
+
+    loopbackAgentEndpoint = createLoopbackAgentEndpoint({
+      handleAgentMcpRequest,
+      handleTerminalActivityRequest,
+    });
   }
 
   logger.info({ elapsed: elapsed() }, "Bootstrap complete, ready to start listening");
@@ -1949,7 +1927,21 @@ export async function createPaseoDaemon(
           mainStarted = true;
           const logAndResolve = async () => {
             boundListenTarget = resolveBoundListenTarget(listenTarget, httpServer);
-            const mcpBaseUrl = createAgentMcpBaseUrl(boundListenTarget);
+            if (!loopbackAgentEndpoint) {
+              throw new Error("Loopback agent endpoint was not initialized");
+            }
+            const startedAgentEndpoint = await loopbackAgentEndpoint.start(boundListenTarget);
+            if (startedAgentEndpoint.dedicated) {
+              logger.info(
+                {
+                  host: startedAgentEndpoint.target.host,
+                  port: startedAgentEndpoint.target.port,
+                  elapsed: elapsed(),
+                },
+                `Internal loopback agent endpoint listening on http://${startedAgentEndpoint.target.host}:${startedAgentEndpoint.target.port}`,
+              );
+            }
+            const mcpBaseUrl = loopbackAgentEndpoint.getMcpBaseUrl();
             agentMcpBaseUrl =
               !mcpEnabled || config.mcpInjectIntoAgents === false ? null : mcpBaseUrl;
             agentManager.setMcpBaseUrl(agentMcpBaseUrl);
@@ -2083,6 +2075,7 @@ export async function createPaseoDaemon(
               terminalControlBroker,
               agentShellService,
               config.pushNotifications,
+              tunnelManager,
             );
             pluginRuntime.bindPaseoSessionHost(wsServer);
             await pluginRuntime.start();
@@ -2155,10 +2148,13 @@ export async function createPaseoDaemon(
       localCredential = null;
       await deleteLocalCredential(config.paseoHome);
       unsubscribePluginProviders();
+      await tunnelManager.closeAll().catch(() => undefined);
+      unsubscribeObservedUsage();
       await pluginRuntime.stopAllPlugins().catch(() => undefined);
       await serviceProxy.stopStandalone().catch(() => undefined);
       await agentProviderRuntime.shutdown().catch(() => undefined);
       await listeners.stop();
+      await loopbackAgentEndpoint?.stop().catch(() => undefined);
       if (mainStarted) {
         httpServer.closeAllConnections();
         await new Promise<void>((resolve) => httpServer.close(() => resolve()));
@@ -2177,6 +2173,7 @@ export async function createPaseoDaemon(
     // that is still open. Plugins themselves are stopped once every session
     // they serve has been closed, further down.
     unsubscribePluginProviders();
+    unsubscribeObservedUsage();
     await hubRelationships.stop();
     workspaceReconciliation.dispose();
     scriptHealthMonitor.stop();
@@ -2223,6 +2220,11 @@ export async function createPaseoDaemon(
       );
       await agentStorage.flush().catch(() => undefined);
     }
+    await withTimeout({
+      promise: tunnelManager.closeAll(),
+      timeoutMs: AGENT_CLOSE_TIMEOUT_MS,
+      label: "close active tunnels",
+    }).catch((error) => logger.warn({ err: error }, "Failed to close active tunnels"));
     await pluginRuntime.stopAllPlugins();
     try {
       if (keepTerminals) {
@@ -2246,6 +2248,7 @@ export async function createPaseoDaemon(
     }
     forgeResolver.dispose();
     await serviceProxy.stopStandalone();
+    await loopbackAgentEndpoint?.stop();
     // Force-drop remaining sockets so httpServer.close() resolves promptly.
     // We've already closed wsServer (which sent ws-layer close frames) and
     // stopped every other service, so anything still attached is a TCP
@@ -2272,6 +2275,7 @@ export async function createPaseoDaemon(
     agentStorage,
     terminalManager,
     serviceProxy,
+    tunnelManager,
     scriptRuntimeStore,
     browserToolsBroker,
     start,

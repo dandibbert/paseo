@@ -11,6 +11,7 @@ import {
   FolderMinus,
   FolderOpen,
   FolderPlus,
+  FolderTree,
   MessageSquarePlus,
   Pencil,
   Trash2,
@@ -59,6 +60,8 @@ interface FileActionsContextMenuContentProps {
   onOpenInEditor?: () => void;
   editorTargetName?: string;
   onOpenToSide?: () => void;
+  /** Only for a row listed outside the tree, such as a filter match. */
+  onRevealInFiles?: () => void;
   onCopyPath?: () => void;
   onCopyRelativePath?: () => void;
   onReveal?: () => void;
@@ -88,6 +91,7 @@ export function FileActionsContextMenuContent({
   onOpenInEditor,
   editorTargetName,
   onOpenToSide,
+  onRevealInFiles,
   onCopyPath,
   onCopyRelativePath,
   onReveal,
@@ -168,6 +172,12 @@ export function FileActionsContextMenuContent({
         group: "open",
         label: t("workspace.fileActions.openToSide"),
         icon: ArrowRightToLine,
+      }),
+      optionalFileAction(true, onRevealInFiles, {
+        key: "reveal-in-files",
+        group: "open",
+        label: t("workspace.fileActions.revealInFiles"),
+        icon: FolderTree,
       }),
       onCopyPath
         ? {
@@ -278,6 +288,7 @@ export function FileActionsContextMenuContent({
     onOpenToSide,
     onRename,
     onReveal,
+    onRevealInFiles,
     onRevert,
     revealTargetName,
     t,

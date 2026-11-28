@@ -147,6 +147,7 @@ export interface WorkspaceDescriptor {
   title?: string | null;
   pinnedAt?: string | null;
   labels?: string[];
+  metadata?: Record<string, JsonValue>;
   status: WorkspaceDescriptorPayload["status"];
   statusEnteredAt: Date | null;
   archivingAt: string | null;
@@ -157,6 +158,11 @@ export interface WorkspaceDescriptor {
   forge?: WorkspaceDescriptorPayload["forge"];
   forgeWeb?: WorkspaceDescriptorPayload["forgeWeb"];
   project?: ProjectPlacementPayload;
+}
+
+/** The personal space flag (fork), only on the host's personal space. */
+function personalWorkspaceFlag(payload: WorkspaceDescriptorPayload): { personal?: true } {
+  return payload.personal ? { personal: true } : {};
 }
 
 export function normalizeWorkspaceDescriptor(
@@ -189,13 +195,14 @@ export function normalizeWorkspaceDescriptor(
     projectKind: payload.projectKind,
     workspaceKind: payload.workspaceKind,
     background: payload.background ?? false,
-    ...(payload.personal ? { personal: true } : {}),
+    ...personalWorkspaceFlag(payload),
     parentWorkspaceId: normalizeWorkspaceOpaqueId(payload.parentWorkspaceId) ?? undefined,
     name: payload.name,
     title: payload.title ?? null,
     pinnedAt: payload.pinnedAt ?? null,
     // COMPAT(workspaceLabels): old daemons omit assignments.
     labels: payload.labels ?? [],
+    metadata: payload.metadata ?? {},
     status: payload.status,
     statusEnteredAt,
     archivingAt: payload.archivingAt ?? null,

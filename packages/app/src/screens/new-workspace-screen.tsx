@@ -1,7 +1,7 @@
 import { useAddHost } from "@/hosts/add-host";
 import type { CreateWorkspaceRequestOptions } from "@getpaseo/client/internal/daemon-client";
 import type { AgentSnapshotPayload, CreationSnapshot } from "@getpaseo/protocol/messages";
-import { encodeImages } from "@/utils/encode-images";
+import { uploadImageAttachments } from "@/attachments/service";
 import { getHostRuntimeStore } from "@/runtime/host-runtime";
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
@@ -36,6 +36,7 @@ import { resolveTerminalProfiles } from "@getpaseo/protocol/terminal-profiles";
 import type { TerminalProfile } from "@getpaseo/protocol/messages";
 import { resolveLaunchTarget, type LaunchTarget } from "@/new-workspace-launch/target";
 import { useTerminalComposerState } from "@/new-workspace-launch/composer-state";
+import { getActiveTerminalDefaultColors } from "@/utils/terminal-default-colors";
 import { runCreateTerminalWorkspace } from "./new-workspace-terminal";
 import {
   useHostRuntimeClient,
@@ -519,7 +520,14 @@ async function createWorkspaceChatAgent(input: CreateChatAgentInput): Promise<Su
   const wirePayload = splitComposerAttachmentsForSubmit(attachments, {
     format: attachmentSubmitFormat,
   });
-  const images = await encodeImages(wirePayload.images);
+  const uploadedImageAttachments =
+    wirePayload.images.length > 0
+      ? await uploadImageAttachments({ client: input.resolveClient(), images: wirePayload.images })
+      : undefined;
+  const mergedAttachments = [
+    ...(wirePayload.attachments ?? []),
+    ...(uploadedImageAttachments ?? []),
+  ];
   let navigated = false;
   const delivery: { outcome: SubmitOutcome } = { outcome: "background" };
   const initialAgent: NonNullable<CreateWorkspaceRequestOptions["agent"]> = {
@@ -537,8 +545,7 @@ async function createWorkspaceChatAgent(input: CreateChatAgentInput): Promise<Su
     ...(Object.keys(composerState.metadata).length > 0 ? { metadata: composerState.metadata } : {}),
     initialPrompt: text,
     clientMessageId: `${input.draftId}:initial-message`,
-    images: images?.length ? images : undefined,
-    attachments: wirePayload.attachments?.length ? wirePayload.attachments : undefined,
+    attachments: mergedAttachments.length > 0 ? mergedAttachments : undefined,
   };
   const execute = async (): Promise<AgentSnapshotPayload> => {
     const { agent } = await ensureWorkspace({
@@ -1486,7 +1493,12 @@ export function NewWorkspaceScreen({
             input.workspaceDirectory,
             input.name,
             undefined,
-            { command: input.command, args: input.args, workspaceId: input.workspaceId },
+            {
+              command: input.command,
+              args: input.args,
+              workspaceId: input.workspaceId,
+              defaultColors: getActiveTerminalDefaultColors(),
+            },
           );
           const terminal = createdTerminal.terminal;
           if (!terminal) {

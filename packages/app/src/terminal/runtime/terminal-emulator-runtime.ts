@@ -33,6 +33,7 @@ import {
 import { isFindShortcut, type FindShortcutPlatform } from "@/pane-find/find-shortcut";
 import { isMacUserAgent } from "@/utils/mac-user-agent";
 import { resolveTerminalFontFamily, resolveTerminalFontSize } from "./terminal-font";
+import { ShellCommandLineEditor } from "./terminal-prompt-editing";
 import { imageExtension, readTerminalFile, type TerminalFile } from "../file-paste";
 
 export type TerminalOutputData = Uint8Array;
@@ -124,6 +125,7 @@ interface TerminalEmulatorRuntimeDisposables {
   clearFitTimeouts: () => void;
   removeFontListeners: () => void;
   removeFilePasteListener: () => void;
+  disposeCommandLineEditor: () => void;
   removeUserInputListeners: () => void;
   restoreDocumentStyles: () => void;
   restoreViewportStyles: () => void;
@@ -162,6 +164,8 @@ const EMPTY_TERMINAL_OUTPUT = new Uint8Array(0);
 // replay: until the snapshot restores bracketed paste mode, a multi-line paste would run
 // line by line in the shell.
 const USER_INPUT_EVENT_TYPES = ["keydown", "keypress", "input"] as const;
+/** A press that moves less than this is a click, not the start of a selection drag. */
+const COMMAND_LINE_CLICK_SLOP_PX = 4;
 const RESET_TERMINAL_OUTPUT = new Uint8Array([0x1b, 0x63]);
 const terminalOutputEncoder = new TextEncoder();
 
@@ -257,6 +261,7 @@ export class TerminalEmulatorRuntime {
   };
   private characterWidths: TerminalCharacterWidths = "graphemes";
   private terminal: Terminal | null = null;
+  private commandLineEditor: ShellCommandLineEditor | null = null;
   private fitAddon: FitAddon | null = null;
   private searchAddon: SearchAddon | null = null;
   private findResult = { resultIndex: -1, resultCount: 0 };
@@ -396,6 +401,8 @@ export class TerminalEmulatorRuntime {
 
       if (this.handleFindShortcut(event)) return false;
 
+      if (this.deleteCommandLineSelection(event)) return false;
+
       if (
         !this.options.isMac &&
         event.ctrlKey &&
@@ -450,6 +457,16 @@ export class TerminalEmulatorRuntime {
       event.stopPropagation();
       return false;
     });
+  }
+
+  /** Backspace or Delete over a selection on the shell command line removes the selection. */
+  private deleteCommandLineSelection(event: KeyboardEvent): boolean {
+    if (event.key !== "Backspace" && event.key !== "Delete") return false;
+    if (event.ctrlKey || event.altKey || event.metaKey || event.shiftKey) return false;
+    if (!this.commandLineEditor?.deleteSelection()) return false;
+    event.preventDefault();
+    event.stopPropagation();
+    return true;
   }
 
   /** Returns true when a non-Mac Ctrl+C / Ctrl+V clipboard shortcut was handled. */
@@ -696,6 +713,34 @@ export class TerminalEmulatorRuntime {
     this.terminal = terminal;
     this.fitAddon = fitAddon;
     window.__paseoTerminal = terminal;
+    const commandLineEditor = new ShellCommandLineEditor(terminal);
+    this.commandLineEditor = commandLineEditor;
+
+    // A plain click on the shell command line moves the shell's cursor there. Drags still
+    // select, double-clicks still select words, and Alt+click keeps xterm's own cursor move.
+    let commandLinePress: { x: number; y: number } | null = null;
+    const commandLineMouseDown = (event: MouseEvent): void => {
+      const plain = !event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey;
+      commandLinePress =
+        event.button === 0 && event.detail === 1 && plain
+          ? { x: event.clientX, y: event.clientY }
+          : null;
+    };
+    const commandLineMouseUp = (event: MouseEvent): void => {
+      const press = commandLinePress;
+      commandLinePress = null;
+      if (
+        !press ||
+        event.button !== 0 ||
+        Math.hypot(event.clientX - press.x, event.clientY - press.y) > COMMAND_LINE_CLICK_SLOP_PX ||
+        terminal.hasSelection()
+      ) {
+        return;
+      }
+      commandLineEditor.moveCursorToPoint(event.clientX, event.clientY);
+    };
+    input.host.addEventListener("mousedown", commandLineMouseDown);
+    input.host.addEventListener("mouseup", commandLineMouseUp);
 
     const fitAndEmitResize = (resizeInput?: TerminalResizeRequest): void => {
       if (this.deferReplayResize(resizeInput)) return;
@@ -860,6 +905,12 @@ export class TerminalEmulatorRuntime {
       removeFilePasteListener: () => {
         input.host.removeEventListener("paste", filePasteHandler, true);
       },
+      disposeCommandLineEditor: () => {
+        input.host.removeEventListener("mousedown", commandLineMouseDown);
+        input.host.removeEventListener("mouseup", commandLineMouseUp);
+        commandLineEditor.dispose();
+        this.commandLineEditor = null;
+      },
       removeUserInputListeners: () => {
         for (const type of USER_INPUT_EVENT_TYPES) {
           input.host.removeEventListener(type, recordUserInputEvent, true);
@@ -895,6 +946,7 @@ export class TerminalEmulatorRuntime {
       disposables.clearFitTimeouts();
       disposables.removeFontListeners();
       disposables.removeFilePasteListener();
+      disposables.disposeCommandLineEditor();
       disposables.removeUserInputListeners();
       disposables.disposeFitAddon();
       disposables.disposeWebglAddon();

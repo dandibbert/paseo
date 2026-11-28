@@ -1,27 +1,25 @@
-import { memo, useMemo, useState } from "react";
-import {
-  EnrichedMarkdownText,
-  type LinkLongPressEvent,
-  type LinkPressEvent,
-} from "react-native-enriched-markdown";
+import { memo, useMemo, useRef, useState, type ComponentProps } from "react";
+import { EnrichedMarkdownText, type LinkPressEvent } from "react-native-enriched-markdown";
+import type { GestureResponderEvent } from "react-native";
 import { withUnistyles } from "react-native-unistyles";
 import {
   useAssistantFileLinkActions,
   useAssistantFileLinkEnvironment,
+  type AssistantFileLinkSource,
 } from "@/assistant-file-links";
 import { useStableEvent } from "@/hooks/use-stable-event";
 import { matchCommandLink, useAgentCommandHints, type CommandHints } from "@/agent-commands";
 import { useForgeShorthand } from "@/git/forge-shorthand";
 import { pluginOverviewUrl } from "@getpaseo/protocol/plugin-overview";
+import { isHttpUrl } from "@/utils/http-url";
 import { openExternalUrl } from "@/utils/open-external-url";
-import { MarkdownLinkMenu, useOpenLinkMenu } from "./link-menu";
-import { describeMarkdownLink } from "./link-target";
-import { useMarkdownScrollGuard } from "./scroll-guard";
 import { AttachmentLightbox, type ImageLightboxSource } from "@/components/attachment-lightbox";
 import type { Theme } from "@/styles/theme";
 import { isNative, isWeb } from "@/constants/platform";
 import { density, resolveDensity } from "@/styles/density";
 import { MarkdownBlockStack } from "./block-stack";
+import { LinkMenu, useLinkMenuLongPress, useOpenLinkMenu, type LinkMenuSubject } from "./link-menu";
+import { useMarkdownScrollGuard } from "./scroll-guard";
 import { WEB_RENDERERS } from "./renderers";
 import { createMarkdownStyles } from "./styles";
 import { PENDING_MARKDOWN_IMAGE } from "./source";
@@ -80,20 +78,12 @@ export const MarkdownRenderer = memo(function MarkdownRenderer(props: MarkdownRe
     [completeLines],
   );
   const Part = props.agentCommands ? CommandMarkdownPart : MarkdownPart;
-  if (!streaming || boundary === 0) {
-    return (
-      <MarkdownLinkMenu>
-        <Part {...props} />
-      </MarkdownLinkMenu>
-    );
-  }
+  if (!streaming || boundary === 0) return <Part {...props} />;
   return (
-    <MarkdownLinkMenu>
-      <MarkdownBlockStack>
-        <Part {...props} text={props.text.slice(0, boundary)} />
-        <Part {...props} text={props.text.slice(boundary)} />
-      </MarkdownBlockStack>
-    </MarkdownLinkMenu>
+    <MarkdownBlockStack>
+      <Part {...props} text={props.text.slice(0, boundary)} />
+      <Part {...props} text={props.text.slice(boundary)} />
+    </MarkdownBlockStack>
   );
 });
 
@@ -101,6 +91,45 @@ const CommandMarkdownPart = memo(function CommandMarkdownPart(props: MarkdownRen
   const commandHints = useAgentCommandHints();
   return <MarkdownPart {...props} commandHints={commandHints} />;
 });
+
+type ReadMarkdownLink =
+  | { kind: "web"; url: string }
+  | { kind: "command"; command: string }
+  | { kind: "source"; source: AssistantFileLinkSource }
+  | { kind: "inert" };
+
+/**
+ * The text view, with the long press its menu needs on native. On native a tap on a link that
+ * `confirmsLink` picks opens the same menu, so a stray tap does not leave the app.
+ */
+function MarkdownText({
+  confirmsLink,
+  onLinkPress,
+  ...props
+}: ComponentProps<typeof ThemedMarkdown> & {
+  markdown: string;
+  confirmsLink?: (event: LinkPressEvent) => boolean;
+}) {
+  const longPress = useLinkMenuLongPress(props.markdown);
+  const openLinkMenu = useOpenLinkMenu();
+  const touch = useRef({ x: 0, y: 0 });
+  const onTouchStart = useStableEvent((event: GestureResponderEvent) => {
+    touch.current = { x: event.nativeEvent.pageX, y: event.nativeEvent.pageY };
+    longPress?.onTouchStart(event);
+  });
+  const pressLink = useStableEvent((event: LinkPressEvent) => {
+    if (confirmsLink?.(event) && openLinkMenu?.(event, touch.current)) return;
+    onLinkPress?.(event);
+  });
+  return (
+    <ThemedMarkdown
+      {...props}
+      {...longPress}
+      onTouchStart={longPress ? onTouchStart : undefined}
+      onLinkPress={pressLink}
+    />
+  );
+}
 
 const MarkdownPart = memo(function MarkdownPart({
   text,
@@ -118,15 +147,17 @@ const MarkdownPart = memo(function MarkdownPart({
   const actions = useAssistantFileLinkActions();
   const workspaceForgeShorthand = useForgeShorthand();
   const forgeShorthand = external ? null : workspaceForgeShorthand;
+  const environmentMatchesHost =
+    !imageContext.serverId || imageContext.serverId === environment.serverId;
   const client =
     imageContext.client ??
-    (environment.client?.readFile
+    (environmentMatchesHost && environment.client?.readFile
       ? { readFile: environment.client.readFile.bind(environment.client) }
       : undefined);
   const { markdown, imageSources, linkRecognition, linkSource } = useMarkdownSource(
     text,
     {
-      workspaceRoot: environment.workspaceRoot,
+      workspaceRoot: environmentMatchesHost ? environment.workspaceRoot : undefined,
       serverId: environment.serverId,
       ...imageContext,
       client,
@@ -138,56 +169,54 @@ const MarkdownPart = memo(function MarkdownPart({
     },
   );
   const [image, setImage] = useState<ImageLightboxSource | null>(null);
-  const openLinkMenu = useOpenLinkMenu();
-  const scrollGuard = useMarkdownScrollGuard();
-  const pressLink = useStableEvent(({ url, sourceType }: LinkPressEvent) => {
-    if (scrollGuard?.isSuppressed()) return;
+  // What a link is, for pressing it and for its menu alike.
+  const readLink = useStableEvent(({ url, sourceType }: LinkPressEvent): ReadMarkdownLink => {
     if (external) {
       // The parser still autolinks bare http, www and email text; only https links open.
       const safe = pluginOverviewUrl(url);
-      if (safe) void openExternalUrl(safe);
-      return;
+      return safe ? { kind: "web", url: safe } : { kind: "inert" };
     }
     const command = commandHints && matchCommandLink(url, sourceType, commandHints.names);
-    if (command) {
-      commandHints.insert(command);
-      return;
-    }
+    if (command) return { kind: "command", command };
     const forgeUrl = sourceType === "text" ? forgeShorthand?.resolve(url) : null;
-    if (forgeUrl) {
-      if (isNative && openLinkMenu) {
-        openLinkMenu({ source: { href: forgeUrl, text: url }, point: null });
-      } else {
-        void openExternalUrl(forgeUrl);
-      }
-      return;
-    }
-    const source = linkSource(url, sourceType);
-    if (onLinkPress && !actions.canResolveFile(source)) {
-      onLinkPress(url);
-      return;
-    }
-    const isExternalUrlTarget =
-      isNative &&
-      openLinkMenu &&
-      describeMarkdownLink(source, {
-        workspaceRoot: environment.workspaceRoot,
-        relativePathBase: environment.relativePathBase,
-      })?.kind === "url";
-    if (isExternalUrlTarget) {
-      openLinkMenu({ source, point: null });
-      return;
-    }
-    actions.open(source, "preferred");
+    if (forgeUrl) return { kind: "web", url: forgeUrl };
+    return { kind: "source", source: linkSource(url, sourceType) };
   });
-  // Web opens the menu from the link's own right click (WebLink) with the pointer position.
-  const longPressLink = useStableEvent(({ url }: LinkLongPressEvent) => {
-    openLinkMenu?.({ source: linkSource(url, undefined), point: null });
+  // A press that ends a scroll is not a tap on what lies under the finger.
+  const scrollGuard = useMarkdownScrollGuard();
+  const pressLink = useStableEvent((event: LinkPressEvent) => {
+    if (scrollGuard?.isSuppressed()) return;
+    const link = readLink(event);
+    if (link.kind === "web") {
+      void openExternalUrl(link.url);
+    } else if (link.kind === "command") {
+      commandHints?.insert(link.command);
+    } else if (link.kind === "source") {
+      if (onLinkPress && !actions.canResolveFile(link.source)) onLinkPress(event.url);
+      else actions.open(link.source, "preferred");
+    }
   });
+  const describeLink = useStableEvent((pressed: LinkPressEvent): LinkMenuSubject | null => {
+    const link = readLink(pressed);
+    const { serverId, workspaceId, workspaceRoot } = environment;
+    const workspace =
+      !external && serverId && workspaceRoot ? { serverId, workspaceId, workspaceRoot } : null;
+    const web = (url: string) =>
+      isHttpUrl(url) ? ({ kind: "web", url, workspace } as const) : null;
+    if (link.kind === "web") return web(link.url);
+    if (link.kind !== "source") return null;
+    const inspection = actions.inspect(link.source);
+    if (inspection?.kind === "url") return web(inspection.url);
+    if (!inspection || !workspace) return null;
+    return { kind: "path", source: link.source, inspection, workspace };
+  });
+  // Native taps on web links confirm in the link menu instead of leaving the app at once.
+  const confirmsLink = useStableEvent(
+    (event: LinkPressEvent) =>
+      isNative && !scrollGuard?.isSuppressed() && describeLink(event)?.kind === "web",
+  );
   const pressImage = useStableEvent(({ url }: { url: string }) => {
-    if (scrollGuard?.isSuppressed()) {
-      return;
-    }
+    if (scrollGuard?.isSuppressed()) return;
     if (url !== PENDING_MARKDOWN_IMAGE) setImage({ type: "uri", uri: url });
   });
   const closeImage = useStableEvent(() => setImage(null));
@@ -198,32 +227,34 @@ const MarkdownPart = memo(function MarkdownPart({
   );
   return (
     <MermaidStreamingContext.Provider value={streaming}>
-      <MarkdownBlockStack imageSources={imageSources}>
-        {segments.map((segment) =>
-          segment.kind === "mermaid" ? (
-            <MermaidFence key={`${segment.kind}:${segment.id}`} code={segment.source} />
-          ) : (
-            <ThemedMarkdown
-              key={`${segment.kind}:${segment.id}`}
-              markdown={segment.source}
-              uniProps={pickMarkdownStyle(compact, muted)}
-              flavor="github"
-              selectable={selectable}
-              md4cFlags={external ? EXTERNAL_MD4C_FLAGS : MD4C_FLAGS}
-              linkRecognition={linkRecognition}
-              enableTaskListItemToggle={false}
-              enableLinkPreview={false}
-              enableBlockContextMenu={false}
-              // JS reveal owns pacing; native fade animation is a separate experiment.
-              streamingAnimation={false}
-              onLinkPress={pressLink}
-              onLinkLongPress={isWeb ? undefined : longPressLink}
-              onImagePress={pressImage}
-              renderers={isWeb ? WEB_RENDERERS : undefined}
-            />
-          ),
-        )}
-      </MarkdownBlockStack>
+      <LinkMenu describeLink={describeLink}>
+        <MarkdownBlockStack imageSources={imageSources}>
+          {segments.map((segment) =>
+            segment.kind === "mermaid" ? (
+              <MermaidFence key={`${segment.kind}:${segment.id}`} code={segment.source} />
+            ) : (
+              <MarkdownText
+                key={`${segment.kind}:${segment.id}`}
+                markdown={segment.source}
+                uniProps={pickMarkdownStyle(compact, muted)}
+                flavor="github"
+                selectable={selectable}
+                md4cFlags={external ? EXTERNAL_MD4C_FLAGS : MD4C_FLAGS}
+                linkRecognition={linkRecognition}
+                enableTaskListItemToggle={false}
+                enableLinkPreview={false}
+                enableBlockContextMenu={false}
+                // JS reveal owns pacing; native fade animation is a separate experiment.
+                streamingAnimation={false}
+                onLinkPress={pressLink}
+                confirmsLink={confirmsLink}
+                onImagePress={pressImage}
+                renderers={isWeb ? WEB_RENDERERS : undefined}
+              />
+            ),
+          )}
+        </MarkdownBlockStack>
+      </LinkMenu>
       {image ? <AttachmentLightbox source={image} onClose={closeImage} /> : null}
     </MermaidStreamingContext.Provider>
   );

@@ -575,8 +575,21 @@ export const ptBR: TranslationResources = {
       copyBranchName: "Copiar nome da branch",
       copied: "Copiado",
     },
+    linkActions: {
+      openInPaseo: "Abrir no Paseo",
+      openInDefaultBrowser: "Abrir no navegador padrão",
+      copyLink: "Copiar link",
+      linkCopiedLabel: "Link",
+    },
     fileActions: {
       openFolder: "Abrir pasta",
+      revealInFiles: "Mostrar em Arquivos",
+      openInDefaultApp: "Abrir no app padrão",
+      pathCopiedLabel: "Caminho",
+      relativePathCopiedLabel: "Caminho relativo",
+      openInDefaultAppFailed: "Não foi possível abrir o arquivo no app padrão",
+      outsideWorkspace: "Este arquivo está fora do workspace",
+      notFoundInFiles: "Arquivo não encontrado em Arquivos",
       openFile: "Abrir arquivo",
       openIn: "Abrir no {{target}}",
       openToSide: "Abrir ao lado",
@@ -609,6 +622,12 @@ export const ptBR: TranslationResources = {
       },
     },
     fileExplorer: {
+      filter: {
+        placeholder: "Buscar arquivos",
+        clear: "Limpar busca",
+        loading: "Buscando arquivos...",
+        empty: "Nenhum arquivo correspondente",
+      },
       sort: {
         name: "Nome",
         modified: "Modificado",
@@ -820,7 +839,6 @@ export const ptBR: TranslationResources = {
         agentIdCopiedLabel: "ID do agente",
         terminalIdCopiedLabel: "ID do terminal",
         resumeCommandCopiedLabel: "comando de retomada",
-        filePathCopiedLabel: "Caminho do arquivo",
         resumeIdUnavailable: "ID de retomada indisponível",
         resumeCommandUnavailable: "Comando de retomada indisponível",
         reloadingAgent: "Recarregando agente...",
