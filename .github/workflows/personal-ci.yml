@@ -1,0 +1,195 @@
+name: Personal CI
+
+# Fork-only checks. The upstream CI workflow (ci.yml) stays byte-identical to upstream
+# and is disabled in this fork's Actions settings; upstream already verified its own
+# commits, so this workflow only proves the personal changes on Linux. Each job copies
+# the steps of the matching upstream job. The full upstream matrix runs weekly from
+# personal-weekly-full.yml and by hand before a Stable release.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      run_windows:
+        description: "Also run server tests on Windows"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+# Pull requests: a newer commit cancels the running check.
+# main: the running check finishes and GitHub keeps only the newest pending run, because
+# the Stable gate in combined-provider-repair.yml needs a completed green run for the
+# released commit.
+concurrency:
+  group: personal-ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  # Same as upstream ci.yml: CI does not use the CUDA execution provider, and the
+  # onnxruntime-node postinstall download is large enough to make npm ci flaky.
+  ONNXRUNTIME_NODE_INSTALL: skip
+  NPM_CONFIG_AUDIT: "false"
+
+jobs:
+  checks:
+    name: format, lint, typecheck
+    if: github.repository == 'dandibbert/paseo'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: node scripts/npm-retry.mjs ci
+
+      - name: Check formatting
+        run: npm run format:check
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build server stack
+        run: npm run build:server
+
+      - name: Typecheck
+        run: npm run typecheck
+
+  server-tests:
+    name: server-tests (ubuntu-24.04)
+    if: github.repository == 'dandibbert/paseo'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - name: Fetch origin/main (worktree tests)
+        run: git fetch --no-tags origin main:refs/remotes/origin/main
+
+      - name: Install dependencies
+        run: node scripts/npm-retry.mjs ci
+
+      - name: Install agent CLIs for provider tests
+        run: node scripts/npm-retry.mjs install -g @anthropic-ai/claude-code opencode-ai
+
+      - name: Build server dependencies
+        run: npm run build:server-deps
+
+      # No provider API secrets: tests that need them skip, as they do on upstream fork PRs.
+      - name: Run server tests
+        run: npm run test --workspace=@getpaseo/server
+
+      - name: Run built-in plugin tests
+        run: npm run test --workspace=@getpaseo/builtin-plugins
+
+  app-tests:
+    name: app-tests
+    if: github.repository == 'dandibbert/paseo'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: node scripts/npm-retry.mjs ci
+
+      - name: Install Playwright browsers
+        timeout-minutes: 10
+        run: npx playwright install chromium
+
+      - name: Build app dependencies
+        run: npm run build:app-deps
+
+      - name: Run app unit tests
+        run: npm run test --workspace=@getpaseo/app
+
+  desktop-tests:
+    name: desktop-tests (ubuntu-24.04)
+    if: github.repository == 'dandibbert/paseo'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: node scripts/npm-retry.mjs ci
+
+      - name: Build server stack
+        run: npm run build:server
+
+      - name: Run desktop tests
+        run: npm run test --workspace=@getpaseo/desktop
+
+      - name: Install virtual display
+        run: sudo apt-get update && sudo apt-get install -y xvfb xauth xdotool
+
+      - name: Install Playwright browser
+        run: npx playwright install chromium
+
+      - name: Run desktop lifecycle E2E
+        run: xvfb-run -a --server-args="-screen 0 1280x800x24" npm run test:e2e:lifecycle --workspace=@getpaseo/desktop
+        env:
+          PASEO_DESKTOP_LIFECYCLE_ARTIFACT_DIR: ${{ runner.temp }}/desktop-lifecycle
+
+      - name: Upload desktop lifecycle screenshots
+        uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: desktop-lifecycle
+          path: ${{ runner.temp }}/desktop-lifecycle
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Run desktop renderer E2E
+        run: npm run test:e2e:renderer --workspace=@getpaseo/desktop
+
+  windows-server-tests:
+    name: server-tests (windows-latest)
+    if: github.repository == 'dandibbert/paseo' && github.event_name == 'workflow_dispatch' && inputs.run_windows
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - name: Fetch origin/main (worktree tests)
+        run: git fetch --no-tags origin main:refs/remotes/origin/main
+
+      - name: Install dependencies
+        run: node scripts/npm-retry.mjs ci
+
+      - name: Build server dependencies
+        run: npm run build:server-deps
+
+      - name: Run server tests
+        run: npm run test --workspace=@getpaseo/server

@@ -391,11 +391,12 @@ async function verifyBrowserHostRouting({ page, client, targetUrl, workspaceKey 
     assert(secondHost?.label && secondHost.label !== firstHost.label, "Windows share a host label");
     await expectBrowserHostNameInCommandCenter(secondWindow, secondHost.label);
 
-    const ambiguous = await client.callTool({ name: "browser_new_tab", args: { url: targetUrl } });
-    expect(ambiguous.structuredContent).toMatchObject({
-      ok: false,
-      error: { code: "browser_host_ambiguous", browserHosts: [firstHost, secondHost] },
-    });
+    // With several windows able to open tabs, the one ranked above the rest by activity (visible,
+    // showing this agent or workspace, most recently active) takes the tab instead of asking the
+    // agent to choose. See preferredHostByActivity in browser-tools/broker.ts.
+    const preferred = await callBrowserTool(client, "browser_new_tab", { url: targetUrl });
+    expect([firstHost, secondHost]).toContainEqual(preferred.browserHost);
+    await callBrowserTool(client, "browser_close_tab", { browserId: preferred.browserId });
     expect((await callBrowserTool(client, "browser_list_tabs")).tabs).toEqual([]);
 
     const { browserId, browserHost } = await callBrowserTool(client, "browser_new_tab", {

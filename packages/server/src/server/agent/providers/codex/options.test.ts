@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { approveAutoApprovedPaseoTools } from "./options.js";
 
 describe("approveAutoApprovedPaseoTools", () => {
-  it("approves render_ui on the Paseo MCP server and keeps its connection config", () => {
+  it("approves the auto-approved Paseo tools on the Paseo MCP server and keeps its connection config", () => {
     expect(
       approveAutoApprovedPaseoTools({
         paseo: { url: "http://127.0.0.1:6767/mcp/agents" },
@@ -13,7 +13,10 @@ describe("approveAutoApprovedPaseoTools", () => {
         url: "http://127.0.0.1:6767/mcp/agents",
         // Outlasts a secure input request, which waits for a human for up to ten minutes.
         tool_timeout_sec: 660,
-        tools: { render_ui: { approval_mode: "approve" } },
+        tools: {
+          render_ui: { approval_mode: "approve" },
+          request_terminal_control: { approval_mode: "approve" },
+        },
       },
       other: { command: "other-mcp" },
     });

@@ -162,6 +162,7 @@ test.describe("Sidebar items in Appearance settings", () => {
       await setSidebarNavItemVisible(page, "history", false);
       await expectStoredSidebarNav(page, [
         { key: "new-workspace", visible: true },
+        { key: "personal", visible: true },
         { key: "schedules", visible: true },
         { key: "history", visible: false },
         { key: "search", visible: true },
@@ -182,6 +183,7 @@ test.describe("Sidebar items in Appearance settings", () => {
   test("renders no top-level items when every one is turned off", async ({ page }) => {
     await seedSidebarNavPreferences(page, [
       { key: "new-workspace", visible: false },
+      { key: "personal", visible: false },
       { key: "history", visible: false },
       { key: "search", visible: false },
       { key: "schedules", visible: false },
@@ -193,6 +195,7 @@ test.describe("Sidebar items in Appearance settings", () => {
       timeout: 30_000,
     });
     await expectSidebarItemHidden(page, "new-workspace");
+    await expectSidebarItemHidden(page, "personal");
     await expectSidebarItemHidden(page, "history");
     await expectSidebarItemHidden(page, "search");
     await expectSidebarItemHidden(page, "schedules");
