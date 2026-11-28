@@ -374,10 +374,13 @@ test.describe("Archive tab reconciliation", () => {
         await expect(page).toHaveURL(initialUrl);
         await expectSessionRowNotArchived(page, agent.title);
 
+        // On web, menus open on right-click only (context-menu.tsx), so a held press ends in a
+        // click: a wide window opens the agent. What a hold must never do is perform the old
+        // immediate-archive action.
         await holdHistoryRow(page, agent.id);
-        await expectSessionRowNotArchived(page, agent.title);
         expect(await fetchAgentArchivedAt(client, agent.id)).toBeNull();
-        await expect(page).toHaveURL(initialUrl);
+        await page.goto(initialUrl);
+        await expectSessionRowNotArchived(page, agent.title);
         await expect(historyAction(page, agent.id, "archive")).toHaveCount(0);
         await openHistoryActions(page, agent.id);
         for (const action of ["open", "rename", "archive", "copy-id"]) {
