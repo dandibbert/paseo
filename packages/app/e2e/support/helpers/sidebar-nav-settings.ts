@@ -6,14 +6,17 @@ import { clickSettingsBackToWorkspace, openSettingsSection } from "./settings";
 const APP_SETTINGS_KEY = "@paseo:app-settings";
 
 /** Persisted nav key -> the testID the app shell renders that item with. */
-const SHELL_ROW_TEST_IDS = {
-  "new-workspace": "sidebar-global-new-workspace",
-  history: "sidebar-sessions",
-  search: "sidebar-search",
-  schedules: "sidebar-schedules",
+// Attribute selectors for each top-level sidebar row. The personal space row carries
+// its host's serverId, so it matches by prefix.
+const SHELL_ROW_SELECTORS = {
+  "new-workspace": '[data-testid="sidebar-global-new-workspace"]',
+  personal: '[data-testid^="sidebar-personal-"]',
+  history: '[data-testid="sidebar-sessions"]',
+  search: '[data-testid="sidebar-search"]',
+  schedules: '[data-testid="sidebar-schedules"]',
 } as const;
 
-export type SidebarNavKey = keyof typeof SHELL_ROW_TEST_IDS;
+export type SidebarNavKey = keyof typeof SHELL_ROW_SELECTORS;
 
 export interface SidebarNavPreference {
   key: string;
@@ -23,7 +26,7 @@ export interface SidebarNavPreference {
 function shellRow(page: Page, key: SidebarNavKey): Locator {
   // `:visible` rather than a plain testID: the shell keeps a compact copy of the
   // sidebar mounted, so the pinned row is the first visible match.
-  return page.locator(`[data-testid="${SHELL_ROW_TEST_IDS[key]}"]:visible`).first();
+  return page.locator(`${SHELL_ROW_SELECTORS[key]}:visible`).first();
 }
 
 function settingsRow(page: Page, key: SidebarNavKey): Locator {
@@ -33,6 +36,7 @@ function settingsRow(page: Page, key: SidebarNavKey): Locator {
 function itemLabel(key: SidebarNavKey): string {
   return {
     "new-workspace": "New workspace",
+    personal: "Personal",
     history: "History",
     search: "Search",
     schedules: "Schedules",
@@ -123,7 +127,7 @@ export async function expectSidebarOrder(page: Page, keys: SidebarNavKey[]): Pro
 }
 
 export async function expectSidebarItemHidden(page: Page, key: SidebarNavKey): Promise<void> {
-  await expect(page.locator(`[data-testid="${SHELL_ROW_TEST_IDS[key]}"]:visible`)).toHaveCount(0);
+  await expect(page.locator(`${SHELL_ROW_SELECTORS[key]}:visible`)).toHaveCount(0);
 }
 
 export async function expectStoredSidebarNav(
