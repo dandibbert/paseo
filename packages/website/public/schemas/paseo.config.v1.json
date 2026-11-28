@@ -112,6 +112,9 @@
         "notifyOnAgentErrors": {
           "type": "boolean"
         },
+        "autoResumeOnRateLimit": {
+          "type": "boolean"
+        },
         "appendSystemPrompt": {
           "type": "string"
         },

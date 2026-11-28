@@ -824,7 +824,12 @@ test("Git observation targets exclude archived records without hydrating app des
     isProviderVisibleToClient: () => true,
   });
   expect(await directory.listObservationTargets()).toEqual([
-    { id: "observed", workspaceDirectory: "/workspace/observed", workspaceKind: "local_checkout" },
+    {
+      id: "observed",
+      workspaceDirectory: "/workspace/observed",
+      workspaceKind: "local_checkout",
+      personal: false,
+    },
   ]);
 });
 
