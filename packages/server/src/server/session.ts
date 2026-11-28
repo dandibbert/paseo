@@ -169,7 +169,7 @@ import {
 } from "./agent/agent-timeline-content.js";
 import { parsePluginClientId } from "./plugins/plugin-session-identity.js";
 import { buildAgentForkContextAttachment } from "./agent/activity-curator.js";
-import { buildAgentPrompt } from "./agent/prompt-attachments.js";
+import { buildAgentPrompt, resolveAgentPrompt } from "./agent/prompt-attachments.js";
 import type { StructuredGenerationDaemonConfig } from "./agent/structured-generation-providers.js";
 import {
   getAgentStreamEventTurnId,
@@ -750,7 +750,7 @@ function hasInitialCreationPrompt(
   return Boolean(
     request &&
     buildAgentPrompt(request.initialPrompt?.trim() ?? "", request.images, request.attachments)
-      .length,
+      .length > 0,
   );
 }
 
@@ -9767,7 +9767,12 @@ export class Session {
         msg.attachments,
         pendingShell?.attachment ?? null,
       );
-      const prompt = buildAgentPrompt(msg.text, msg.images, effectiveAttachments);
+      const prompt = await resolveAgentPrompt({
+        paseoHome: this.paseoHome,
+        text: msg.text,
+        images: msg.images,
+        attachments: effectiveAttachments,
+      });
       this.sessionLogger.trace(
         {
           agentId,

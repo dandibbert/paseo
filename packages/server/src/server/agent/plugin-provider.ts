@@ -76,6 +76,7 @@ import {
   resolveProviderLaunch,
   checkProviderLaunchAvailable,
   createProviderEnv,
+  sanitizeProviderEnvOverlay,
   type ProviderRuntimeSettings,
 } from "./provider-launch-config.js";
 import { ImportedHistory } from "./provider-session-import.js";
@@ -2271,7 +2272,7 @@ function mapSessionConfig(
 ): ProviderSessionConfig {
   return {
     cwd: config.cwd,
-    env: createProviderEnv({ baseEnv: {}, overlays: [launchContext?.env] }),
+    env: sanitizeProviderEnvOverlay(launchContext?.env),
     systemPrompt: combineSystemPrompts(
       config.systemPrompt,
       config.daemonAppendSystemPrompt,

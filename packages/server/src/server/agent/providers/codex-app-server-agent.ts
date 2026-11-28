@@ -6529,12 +6529,26 @@ export class CodexAppServerAgentSession implements AgentSession {
     if (configuredModelConfig) {
       Object.assign(innerConfig, configuredModelConfig);
     }
-    if (this.config.mcpServers) {
+    const mcpEntries = Object.entries(this.config.mcpServers ?? {});
+    if (mcpEntries.length > 0) {
       const mcpServers: Record<string, CodexMcpServerConfig> = {};
-      for (const [name, serverConfig] of Object.entries(this.config.mcpServers)) {
+      for (const [name, serverConfig] of mcpEntries) {
         mcpServers[name] = toCodexMcpConfig(serverConfig);
       }
-      innerConfig.mcp_servers = approveAutoApprovedPaseoTools(mcpServers);
+      const approvedMcpServers = approveAutoApprovedPaseoTools(mcpServers);
+      // Emit per-server dotted overrides (`mcp_servers.<name>`) instead of a
+      // whole-table `mcp_servers` object so alias-level `-c mcp_servers.*` CLI
+      // overrides survive in Codex's `build_cli_overrides_layer`. Fall back to
+      // a whole table only when a server name contains `.`, which Codex's
+      // `path.split('.')` cannot address as a single segment.
+      const hasDottedServerName = mcpEntries.some(([name]) => name.includes("."));
+      if (hasDottedServerName) {
+        innerConfig.mcp_servers = approvedMcpServers;
+      } else {
+        for (const [name, serverConfig] of Object.entries(approvedMcpServers)) {
+          innerConfig[`mcp_servers.${name}`] = serverConfig;
+        }
+      }
     }
     const configured = applyCodexToolPolicy(innerConfig, this.config.toolPolicy);
     return Object.keys(configured).length > 0 ? configured : null;

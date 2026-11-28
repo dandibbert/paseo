@@ -177,7 +177,6 @@ function FollowUpButtons({
           agentId: target.agentId,
           text: action.prompt,
           attachments: [],
-          encodeImages: async () => [],
           submission: createMessageSubmissionWriter(target.serverId),
         });
         setSentLabel(action.label);
