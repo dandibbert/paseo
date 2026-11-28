@@ -1896,11 +1896,14 @@ describe("fetchCatalog", () => {
         claude: { models: [{ id: "manual-model", label: "Manual Model" }] },
       },
     });
-    const client = registry.claude.createClient(logger);
     const failure = new Error("Configured models API is unavailable");
-    client.fetchCatalog = vi.fn(async () => {
-      throw failure;
-    });
+    // A client the registry did not wrap is fetched directly, so its failure is the discovery's.
+    const client = {
+      ...registry.claude.createClient(logger),
+      fetchCatalog: vi.fn(async () => {
+        throw failure;
+      }),
+    };
 
     await expect(
       registry.claude.fetchCatalog({ scope: "global", force: true }, client),

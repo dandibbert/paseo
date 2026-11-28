@@ -12,6 +12,12 @@ import { useHostFeature, useHostFeatureMap } from "@/runtime/host-features";
 import { HostBadge } from "@/hosts/host-badge";
 import type { HostBadgeModel } from "@/hosts/appearance";
 import { useHostBadges } from "@/hosts/use-host-badges";
+import { StatusRing } from "@/components/status-ring";
+import { useCreateFlowStore } from "@/stores/create-flow-store";
+import { useSessionStore } from "@/stores/session-store";
+import { derivePersonalSpaceStatus } from "@/sidebar-nav/personal-status";
+import type { SidebarStateBucket } from "@/utils/sidebar-agent-state";
+import { STATUS_INDICATOR_FILLED_DOT_SIZE } from "@/utils/status-indicator-geometry";
 import {
   builtinSidebarNavLabelKey,
   builtinSidebarNavShortcutAction,
@@ -182,6 +188,7 @@ function SidebarPersonalHostRow({
       (workspace) => workspace.personal === true,
     ) ?? false;
   const label = t(builtinSidebarNavLabelKey("personal"));
+  const statusBucket = usePersonalSpaceStatusBucket(serverId);
   const handlePress = useCallback(async () => {
     if (!client) return;
     onBeforeNavigate?.();
@@ -194,7 +201,16 @@ function SidebarPersonalHostRow({
     }
   }, [client, label, onBeforeNavigate, serverId, toast]);
 
-  const trailing = useMemo(() => (badge ? <HostBadge badge={badge} /> : undefined), [badge]);
+  const trailing = useMemo(
+    () =>
+      badge || statusBucket !== "done" ? (
+        <View style={styles.personalTrailing}>
+          <PersonalStatusIndicator bucket={statusBucket} />
+          {badge ? <HostBadge badge={badge} /> : null}
+        </View>
+      ) : undefined,
+    [badge, statusBucket],
+  );
 
   return (
     <SidebarHeaderRow
@@ -209,6 +225,50 @@ function SidebarPersonalHostRow({
     />
   );
 }
+
+/**
+ * Most urgent status across the host's personal project. Agents started in the personal folder
+ * without naming the workspace used to get workspaces of their own in that project, and those are
+ * hidden from the project list, so all of them count here.
+ */
+function usePersonalSpaceStatusBucket(serverId: string): SidebarStateBucket {
+  const pendingCreateAttempts = useCreateFlowStore((state) => state.pendingByDraftId);
+  return useSessionStore((state) =>
+    derivePersonalSpaceStatus({
+      serverId,
+      session: state.sessions[serverId],
+      pendingCreateAttempts,
+    }),
+  );
+}
+
+function PersonalStatusIndicator({ bucket }: { bucket: SidebarStateBucket }) {
+  if (bucket === "running") {
+    return (
+      <View style={styles.personalStatus} testID="sidebar-personal-status-running">
+        <StatusRing />
+      </View>
+    );
+  }
+  const dotStyle = PERSONAL_STATUS_DOT_STYLE[bucket];
+  if (!dotStyle) return null;
+  return (
+    <View style={styles.personalStatus} testID={`sidebar-personal-status-${bucket}`}>
+      <View style={[styles.personalStatusDot, styles[dotStyle]]} />
+    </View>
+  );
+}
+
+const PERSONAL_STATUS_DOT_STYLE: Record<
+  SidebarStateBucket,
+  "dotNeedsInput" | "dotFailed" | "dotAttention" | null
+> = {
+  needs_input: "dotNeedsInput",
+  failed: "dotFailed",
+  attention: "dotAttention",
+  running: null,
+  done: null,
+};
 
 function SidebarHistoryRow({ onBeforeNavigate }: SidebarNavRowProps) {
   const { t } = useTranslation();
@@ -278,7 +338,26 @@ const BUILTIN_ROWS: Record<BuiltinSidebarNavId, ComponentType<SidebarNavRowProps
   schedules: SidebarSchedulesRow,
 };
 
-const styles = StyleSheet.create({
+const styles = StyleSheet.create((theme) => ({
+  personalTrailing: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[1.5],
+  },
+  personalStatus: {
+    width: 14,
+    height: 14,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  personalStatusDot: {
+    width: STATUS_INDICATOR_FILLED_DOT_SIZE,
+    height: STATUS_INDICATOR_FILLED_DOT_SIZE,
+    borderRadius: theme.borderRadius.full,
+  },
+  dotNeedsInput: { backgroundColor: theme.colors.statusDotWarning },
+  dotFailed: { backgroundColor: theme.colors.statusDotDanger },
+  dotAttention: { backgroundColor: theme.colors.statusDotSuccess },
   firstRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -287,4 +366,4 @@ const styles = StyleSheet.create({
     flex: 1,
     minWidth: 0,
   },
-});
+}));

@@ -6,6 +6,8 @@ import type { AgentSessionConfig } from "../agent/agent-sdk-types.js";
 import { DaemonClient } from "../test-utils/daemon-client.js";
 import { createTestAgentClients } from "../test-utils/fake-agent-client.js";
 import { createTestPaseoDaemon } from "../test-utils/paseo-daemon.js";
+import { createDaemonTestContext } from "../test-utils/index.js";
+import { MockLoadTestAgentClient } from "../agent/providers/mock-load-test-agent.js";
 
 let root: string;
 let previousDir: string | undefined;
@@ -57,7 +59,14 @@ test("the personal space is created once, cannot be archived, and briefs its age
     expect((await client.ensurePersonalSpace()).workspace?.id).toBe(workspaceId);
 
     // Agents in the personal space are told they are a general assistant; others are not.
-    await client.createAgent({ provider: "claude", cwd: path.join(root, "Paseo"), title: "P" });
+    const personalAgent = await client.createAgent({
+      provider: "claude",
+      cwd: path.join(root, "Paseo"),
+      title: "P",
+    });
+    // Started in the personal folder without naming a workspace, it still joins the personal
+    // space, so its status shows there.
+    expect(personalAgent.workspaceId).toBe(workspaceId);
     const projectDir = path.join(root, "project");
     await import("node:fs/promises").then((fs) => fs.mkdir(projectDir));
     await client.createAgent({ provider: "claude", cwd: projectDir, title: "Q" });
@@ -67,5 +76,49 @@ test("the personal space is created once, cannot be archived, and briefs its age
   } finally {
     await client.close().catch(() => undefined);
     await daemon.close().catch(() => undefined);
+  }
+}, 60_000);
+
+test("a running agent in the personal space shows the personal space as running", async () => {
+  const ctx = await createDaemonTestContext({
+    agentClients: { mock: new MockLoadTestAgentClient() },
+    mcpEnabled: false,
+    isDev: true,
+  });
+  try {
+    const pushed = new Map<string, string>();
+    ctx.client.subscribe((event) => {
+      if (event.type === "workspace_update" && event.payload.kind === "upsert") {
+        pushed.set(event.payload.workspace.id, event.payload.workspace.status);
+      }
+    });
+    await ctx.client.fetchAgents({ subscribe: {} });
+    await ctx.client.fetchWorkspaces({ subscribe: {} });
+    const personal = await ctx.client.ensurePersonalSpace();
+    const workspaceId = String(personal.workspace?.id);
+    const other = await ctx.client.createWorkspace({
+      source: { kind: "directory", path: ctx.daemon.staticDir },
+    });
+    const otherId = String(other.workspace?.id);
+    for (const [id, cwd] of [
+      [workspaceId, path.join(root, "Paseo")],
+      [otherId, ctx.daemon.staticDir],
+    ] as const) {
+      await ctx.client.createAgent({
+        workspaceId: id,
+        provider: "mock",
+        cwd,
+        initialPrompt: "Work on this task",
+      });
+    }
+    const statusOf = async (id: string) =>
+      (await ctx.client.fetchWorkspaces()).entries.find((entry) => entry.id === id)?.status;
+    await expect.poll(() => statusOf(otherId)).toBe("running");
+    expect(await statusOf(workspaceId)).toBe("running");
+    // The app keeps status from pushed updates, not from fetches.
+    await expect.poll(() => pushed.get(otherId)).toBe("running");
+    await expect.poll(() => pushed.get(workspaceId)).toBe("running");
+  } finally {
+    await ctx.cleanup();
   }
 }, 60_000);

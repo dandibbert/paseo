@@ -1036,6 +1036,8 @@ export class AgentManager {
   private readonly historySessions = new WeakSet<AgentSession>();
   private readonly reloadedSessionCloses = new WeakMap<AgentSession, Promise<void>>();
   private rateLimitResumeCanceler: ((agentId: string) => boolean) | null = null;
+  /** Blocked continuations per agent already told to the user. */
+  private readonly reportedBlockedContinuations = new Map<string, number>();
   private readonly runtimeCleanupIdentities = new WeakMap<
     AgentSession,
     { readonly openedAt: number }
@@ -1397,6 +1399,44 @@ export class AgentManager {
       agentId: checkpoint.agentId,
       checkpoint,
     });
+    const blocked = checkpoint.summary.blockedContinuationsCount ?? 0;
+    const reported = this.reportedBlockedContinuations.get(checkpoint.agentId);
+    this.reportedBlockedContinuations.set(checkpoint.agentId, blocked);
+    // The first checkpoint after a restart re-reads old blocks: it sets the baseline. After that,
+    // only a block that happens while the daemon runs is news.
+    const newlyBlocked =
+      checkpoint.reason === "autonomous_budget_exceeded" ||
+      (reported !== undefined && checkpoint.reason !== "startup_reconcile" && blocked > reported);
+    if (newlyBlocked) {
+      void this.reportBlockedContinuation(
+        checkpoint.agentId,
+        checkpoint.summary.continuationBlockedError,
+      );
+    }
+  }
+
+  /**
+   * A blocked wake leaves the agent idle with nobody told. Say so in the conversation and raise
+   * error attention, which notifies like a failed turn.
+   */
+  private async reportBlockedContinuation(agentId: string, reason: string | null): Promise<void> {
+    const agent = this.agents.get(agentId);
+    if (!agent) return;
+    const detail =
+      reason === "autonomous_budget_exceeded"
+        ? "the agent ran out of automatic turns without a message from you"
+        : (reason ?? "an internal error");
+    try {
+      await this.appendSystemErrorTimelineMessage(
+        agent,
+        agent.provider,
+        `A background result could not wake this agent: ${detail}. Send a message to continue.`,
+      );
+    } catch (err) {
+      this.logger.warn({ err, agentId }, "Failed to record a blocked continuation");
+    }
+    this.raiseErrorAttention(agent);
+    this.emitState(agent);
   }
 
   private async evaluateManagedWakeRejectionLocked(

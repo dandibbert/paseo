@@ -281,6 +281,10 @@ export class T3Session {
     let selectionChanged = false;
     if (changes.model !== undefined) {
       const ref = changes.model ? parseModelId(changes.model) : undefined;
+      // An account added in T3 after this session started is missing from its copy.
+      if (ref && !findModel(this.instances, ref)) {
+        this.instances = await this.options.environment.instances();
+      }
       if (!ref || !findModel(this.instances, ref)) {
         throw new T3SessionError(
           `T3 has no Antigravity model ${changes.model}.`,

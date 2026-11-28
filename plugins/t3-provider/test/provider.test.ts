@@ -11,7 +11,7 @@ import {
 import { parsePairOutput } from "../server/auth.js";
 import { createT3Provider } from "../server/provider.js";
 import { reportFromT3 } from "../server/usage.js";
-import { FakeT3, projection, run, turnItem } from "./fake-t3.js";
+import { ANTIGRAVITY_PROVIDERS, FakeT3, projection, run, turnItem } from "./fake-t3.js";
 
 // Each test runs a real HTTP and WebSocket server; CI runs every plugin suite at once.
 vi.setConfig({ testTimeout: 30_000 });
@@ -641,6 +641,23 @@ test("switches the model and permission mode on the T3 thread", async () => {
   expect(h.t3.commands("thread.runtime-mode.set")[0]).toMatchObject({
     runtimeMode: "approval-required",
   });
+  expect(h.t3.commands("thread.model-selection.set")[0]).toMatchObject({
+    modelSelection: { instanceId: "antigravity-work", model: "gemini-4-pro" },
+  });
+});
+
+test("switches to an account added in T3 after the session started", async () => {
+  const providers: unknown[] = [ANTIGRAVITY_PROVIDERS[0]];
+  const h = await harness({ providers });
+  await h.open({ persistence: { version: 1, data: { threadId: "thread-1" } } });
+  providers.push(ANTIGRAVITY_PROVIDERS[1]);
+  await h.send({
+    type: "session.configure",
+    requestId: "cfg",
+    sessionId: "s1",
+    changes: { model: "antigravity-work::gemini-4-pro" },
+  });
+  await h.waitFor((event) => event.type === "request.completed" && event.requestId === "cfg");
   expect(h.t3.commands("thread.model-selection.set")[0]).toMatchObject({
     modelSelection: { instanceId: "antigravity-work", model: "gemini-4-pro" },
   });
