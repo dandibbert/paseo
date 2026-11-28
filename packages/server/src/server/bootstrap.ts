@@ -496,6 +496,7 @@ export interface PaseoDaemonDependencies {
   serverFeatureOverrides?: {
     daemonStatusRpc?: boolean;
     relayConfig?: boolean;
+    installUpdate?: boolean;
   };
 }
 
@@ -2006,6 +2007,7 @@ export async function createPaseoDaemon(
                 getHostnames: () => configuredHostnames,
                 daemonStatusRpc: dependencies.serverFeatureOverrides?.daemonStatusRpc,
                 relayConfig: dependencies.serverFeatureOverrides?.relayConfig,
+                installUpdate: dependencies.serverFeatureOverrides?.installUpdate,
                 startPaused: true,
               },
               workspaceAutoName,

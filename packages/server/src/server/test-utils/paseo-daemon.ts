@@ -36,6 +36,7 @@ interface TestPaseoDaemonOptions {
   relayRequireProtectedSecurity?: boolean;
   daemonStatusRpcCapability?: boolean;
   relayConfigCapability?: boolean;
+  installUpdateCapability?: boolean;
   agentClients?: Partial<Record<AgentProvider, AgentClient>>;
   providerOverrides?: PaseoDaemonConfig["providerOverrides"];
   providerCatalogRefreshTimeoutMs?: PaseoDaemonConfig["providerCatalogRefreshTimeoutMs"];
@@ -121,6 +122,7 @@ export async function createTestPaseoDaemon(
       serverFeatureOverrides: {
         daemonStatusRpc: options.daemonStatusRpcCapability,
         relayConfig: options.relayConfigCapability,
+        installUpdate: options.installUpdateCapability,
       },
     });
     try {
