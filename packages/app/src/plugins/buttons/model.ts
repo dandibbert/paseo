@@ -138,6 +138,18 @@ export class PluginButtonStore {
     const entry = this.entries.find((candidate) => candidate.key === key);
     if (!entry) return;
     if (open && (!entry.button.visible || entry.button.disabled || entry.pending)) return;
+    if (open) {
+      this.publish(
+        this.entries.map((candidate) =>
+          candidate.key === key
+            ? { ...candidate, open: true }
+            : candidate.open
+              ? { ...candidate, open: false }
+              : candidate,
+        ),
+      );
+      return;
+    }
     this.replace(key, { open });
   }
 

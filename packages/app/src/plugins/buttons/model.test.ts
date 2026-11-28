@@ -264,3 +264,25 @@ it("keeps the previous descriptor after rejecting an invalid update", () => {
   registration.remove();
   plugin.i18n.dispose();
 });
+
+it("closes any previously open plugin button when another button opens", () => {
+  const buttons = store();
+  const plugin = installation();
+  buttons.addComposerPill(plugin, {
+    id: "review",
+    workspaceId: "workspace",
+    agentId: "agent-1",
+    button: button(),
+  });
+  buttons.addComposerPill(plugin, {
+    id: "review",
+    workspaceId: "workspace",
+    agentId: "agent-2",
+    button: button(),
+  });
+  const [first, second] = buttons.getSnapshot();
+  buttons.setOpen(first.key, true);
+  expect(buttons.getSnapshot().map((entry) => entry.open)).toEqual([true, false]);
+  buttons.setOpen(second.key, true);
+  expect(buttons.getSnapshot().map((entry) => entry.open)).toEqual([false, true]);
+});
